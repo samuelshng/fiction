@@ -412,6 +412,146 @@ namespace fiction
     return std::vector<kitty::dynamic_truth_table>{table1, table2};
 }
 /**
+ * Creates and returns a vector of truth tables for a PASS_LEFT_XOR multi-output function.
+ *
+ * First output propagates input A, second output computes XOR(A, B).
+ *
+ * @return Vector of truth tables representing the PASS_LEFT_XOR function.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_pass_left_xor_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1100";  // Output 1 (A)
+    static constexpr const char* truth_table_string2 = "0110";  // Output 2 (XOR)
+
+    kitty::dynamic_truth_table table1{2};
+    kitty::dynamic_truth_table table2{2};
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a PASS_LEFT_AND multi-output function.
+ *
+ * First output propagates input A, second output computes AND(A, B).
+ *
+ * @return Vector of truth tables representing the PASS_LEFT_AND function.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_pass_left_and_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1100";  // Output 1 (A)
+    static constexpr const char* truth_table_string2 = "1000";  // Output 2 (AND)
+
+    kitty::dynamic_truth_table table1{2};
+    kitty::dynamic_truth_table table2{2};
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a PASS_LEFT_OR multi-output function.
+ *
+ * First output propagates input A, second output computes OR(A, B).
+ *
+ * @return Vector of truth tables representing the PASS_LEFT_OR function.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_pass_left_or_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1100";  // Output 1 (A)
+    static constexpr const char* truth_table_string2 = "1110";  // Output 2 (OR)
+
+    kitty::dynamic_truth_table table1{2};
+    kitty::dynamic_truth_table table2{2};
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for an AND_OR multi-output function.
+ *
+ * Outputs compute AND(A, B) and OR(A, B), respectively.
+ *
+ * @return Vector of truth tables representing the AND_OR function.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_and_or_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1000";  // Output 1 (AND)
+    static constexpr const char* truth_table_string2 = "1110";  // Output 2 (OR)
+
+    kitty::dynamic_truth_table table1{2};
+    kitty::dynamic_truth_table table2{2};
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a DEMUX_A_BY_B multi-output function.
+ *
+ * Outputs compute A&!B and A&B, respectively.
+ *
+ * @return Vector of truth tables representing the DEMUX_A_BY_B function.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_demux_a_by_b_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0100";  // Output 1 (A&!B)
+    static constexpr const char* truth_table_string2 = "1000";  // Output 2 (A&B)
+
+    kitty::dynamic_truth_table table1{2};
+    kitty::dynamic_truth_table table2{2};
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a GT_LT multi-output function.
+ *
+ * Outputs compute A&!B (greater-than) and !A&B (less-than), respectively.
+ *
+ * @return Vector of truth tables representing the GT_LT function.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_gt_lt_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0100";  // Output 1 (A&!B)
+    static constexpr const char* truth_table_string2 = "0010";  // Output 2 (!A&B)
+
+    kitty::dynamic_truth_table table1{2};
+    kitty::dynamic_truth_table table2{2};
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for an A_NOT_A multi-output function.
+ *
+ * Outputs propagate A and !A, respectively.
+ *
+ * @return Vector of truth tables representing the A_NOT_A function.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_a_not_a_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1100";  // Output 1 (A)
+    static constexpr const char* truth_table_string2 = "0011";  // Output 2 (!A)
+
+    kitty::dynamic_truth_table table1{2};
+    kitty::dynamic_truth_table table2{2};
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
  * Creates and returns a vector of truth tables for a FALSE (constant 0) gate with fanout.
  * 
  * This function generates a vector of truth tables, each representing one of the outputs of
