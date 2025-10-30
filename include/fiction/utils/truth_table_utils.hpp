@@ -410,7 +410,360 @@ namespace fiction
     kitty::create_from_binary_string(table2, truth_table_string2);
 
     return std::vector<kitty::dynamic_truth_table>{table1, table2};
-};
+}
+/**
+ * Creates and returns a vector of truth tables for a FALSE (constant 0) gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a FALSE gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a FALSE gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_false_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0000";  // Output 1
+    static constexpr const char* truth_table_string2 = "0000";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a NOR gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a NOR gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a NOR gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_nor_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0001";  // Output 1
+    static constexpr const char* truth_table_string2 = "0001";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a NOT_A_AND_B (!A&B) gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a NOT_A_AND_B gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a NOT_A_AND_B gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_not_a_and_b_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0010";  // Output 1
+    static constexpr const char* truth_table_string2 = "0010";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a NOT_A (!A) gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a NOT_A gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a NOT_A gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_not_a_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0011";  // Output 1
+    static constexpr const char* truth_table_string2 = "0011";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for an A_AND_NOT_B (A&!B) gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * an A_AND_NOT_B gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of an A_AND_NOT_B gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_a_and_not_b_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0100";  // Output 1
+    static constexpr const char* truth_table_string2 = "0100";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a NOT_B (!B) gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a NOT_B gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a NOT_B gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_not_b_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0101";  // Output 1
+    static constexpr const char* truth_table_string2 = "0101";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a XOR gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a XOR gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a XOR gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_xor_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0110";  // Output 1
+    static constexpr const char* truth_table_string2 = "0110";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a NAND gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a NAND gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a NAND gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_nand_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "0111";  // Output 1
+    static constexpr const char* truth_table_string2 = "0111";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for an AND gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * an AND gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of an AND gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_and_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1000";  // Output 1
+    static constexpr const char* truth_table_string2 = "1000";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a XNOR gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a XNOR gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a XNOR gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_xnor_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1001";  // Output 1
+    static constexpr const char* truth_table_string2 = "1001";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a B gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a B gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a B gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_b_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1010";  // Output 1
+    static constexpr const char* truth_table_string2 = "1010";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a NOT_A_OR_B (!A|B) gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a NOT_A_OR_B gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a NOT_A_OR_B gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_not_a_or_b_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1011";  // Output 1
+    static constexpr const char* truth_table_string2 = "1011";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for an A gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * an A gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of an A gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_a_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1100";  // Output 1
+    static constexpr const char* truth_table_string2 = "1100";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for an A_OR_NOT_B (A|!B) gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * an A_OR_NOT_B gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of an A_OR_NOT_B gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_a_or_not_b_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1101";  // Output 1
+    static constexpr const char* truth_table_string2 = "1101";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for an OR gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * an OR gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of an OR gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_or_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1110";  // Output 1
+    static constexpr const char* truth_table_string2 = "1110";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+/**
+ * Creates and returns a vector of truth tables for a TRUE (constant 1) gate with fanout.
+ * 
+ * This function generates a vector of truth tables, each representing one of the outputs of
+ * a TRUE gate with the output fanned out. The function returns a vector containing two truth
+ * tables.
+ * 
+ * @return Vector of truth tables, each representing an output of a TRUE gate.
+ */
+[[nodiscard]] inline std::vector<kitty::dynamic_truth_table> create_true_fan_out_tt() noexcept
+{
+    static constexpr const char* truth_table_string1 = "1111";  // Output 1
+    static constexpr const char* truth_table_string2 = "1111";  // Output 2
+                                                                
+    kitty::dynamic_truth_table table1{2};  // 2 input variables for Output 1
+    kitty::dynamic_truth_table table2{2};  // 2 input variables for Output 2
+
+    kitty::create_from_binary_string(table1, truth_table_string1);
+    kitty::create_from_binary_string(table2, truth_table_string2);
+
+    return std::vector<kitty::dynamic_truth_table>{table1, table2};
+}
+
 /**
  * This function evaluates the given multi-output truth table at the given input index.
  *
