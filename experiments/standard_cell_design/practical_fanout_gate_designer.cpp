@@ -54,33 +54,42 @@ int main(int argc, char* argv[])  // NOLINT
         }
     }
 
-    std::cout << "SiDB Fanout Gate Designer\n";
+    std::cout << "BitPlanarNet Gate Library Designer\n";
     std::cout << "Mode: " << (find_all_solutions ? "Find all optimal gates" : "Find first optimal gate") << "\n";
     std::cout << "Save to file: " << (save_to_file ? "Yes" : "No") << "\n\n";
 
     // Define which gates to design (you can modify this list)
-    // const std::vector<std::pair<std::vector<tt>, std::string>> gates_to_design = {
-    //     {create_false_fan_out_tt(), "false_fanout"},
-    //     {create_nor_fan_out_tt(), "nor_fanout"},
-    //     // {create_not_a_and_b_fan_out_tt(), "not_a_and_b_fanout"}, // MIRROR OF A AND NOT B
-    //     {create_not_a_fan_out_tt(), "not_a_fanout"},
-    //     {create_a_and_not_b_fan_out_tt(), "a_and_not_b_fanout"},
-    //     // {create_not_b_fan_out_tt(), "not_b_fanout"}, // MIRROR OF NOT A
-    //     {create_xor_fan_out_tt(), "xor_fanout"},
-    //     {create_nand_fan_out_tt(), "nand_fanout"},
-    //     {create_and_fan_out_tt(), "and_fanout"},
-    //     {create_xnor_fan_out_tt(), "xnor_fanout"},
-    //     // {create_b_fan_out_tt(), "b_fanout"}, // MIRROR OF A
-    //     // {create_not_a_or_b_fan_out_tt(), "not_a_or_b_fanout"}, // MIRROR OF A OR NOT B
-    //     {create_a_fan_out_tt(), "a_fanout"},
-    //     {create_a_or_not_b_fan_out_tt(), "a_or_not_b_fanout"},
-    //     {create_or_fan_out_tt(), "or_fanout"},
-    //     {create_true_fan_out_tt(), "true_fanout"}
-    // };
     const std::vector<std::pair<std::vector<tt>, std::string>> gates_to_design = {
-        {create_a_and_not_b_fan_out_tt(), "a_and_not_b_fanout"},
-        {create_xor_fan_out_tt(), "xor_fanout"},
+        {create_false_fan_out_tt(), "false_fanout"},
+        // {create_nor_fan_out_tt(), "nor_fanout"},
+        // // {create_not_a_and_b_fan_out_tt(), "not_a_and_b_fanout"}, // MIRROR OF A AND NOT B
+        // {create_not_a_fan_out_tt(), "not_a_fanout"},
+        // {create_a_and_not_b_fan_out_tt(), "a_and_not_b_fanout"},
+        // // {create_not_b_fan_out_tt(), "not_b_fanout"}, // MIRROR OF NOT A
+        // {create_xor_fan_out_tt(), "xor_fanout"},
+        // {create_nand_fan_out_tt(), "nand_fanout"},
+        // {create_and_fan_out_tt(), "and_fanout"},
+        // {create_xnor_fan_out_tt(), "xnor_fanout"},
+        // // {create_b_fan_out_tt(), "b_fanout"}, // MIRROR OF A
+        // // {create_not_a_or_b_fan_out_tt(), "not_a_or_b_fanout"}, // MIRROR OF A OR NOT B
+        // {create_a_fan_out_tt(), "a_fanout"},
+        // {create_a_or_not_b_fan_out_tt(), "a_or_not_b_fanout"},
+        // {create_or_fan_out_tt(), "or_fanout"},
+        // {create_true_fan_out_tt(), "true_fanout"},
+        // {create_half_adder_tt(), "half_adder"},
+        // {create_pass_left_and_tt(), "pass_left_and"},
+        // {create_pass_left_or_tt(), "pass_left_or"},
+        // {create_and_or_tt(), "and_or"},
+        // {create_demux_a_by_b_tt(), "demux_a_by_b"},
+        // {create_gt_lt_tt(), "gt_lt"},
+        // {create_a_not_a_tt(), "a_not_a"}
     };
+    // Needs 4 SiDBs
+    // const std::vector<std::pair<std::vector<tt>, std::string>> gates_to_design = {
+    //     {create_a_and_not_b_fan_out_tt(), "a_and_not_b_fanout"},
+    //     {create_xor_fan_out_tt(), "xor_fanout"},
+    //     {create_pass_left_xor_tt(), "pass_left_xor"}, // not found in 3 SiDBs
+    // };
 
     static const std::string folder = fmt::format("{}/gate_skeletons/skeleton_bestagons_with_tags/", EXPERIMENTS_PATH);
 
@@ -95,7 +104,7 @@ int main(int argc, char* argv[])  // NOLINT
                               is_operational_params::operational_condition::REJECT_KINKS},
         design_sidb_gates_params<fiction::cell<sidb_100_cell_clk_lyt_siqad>>::design_sidb_gates_mode::QUICKCELL,
         {{14, 6, 0}, {24, 14, 0}},  // Canvas area
-        4,  // Number of SiDBs to place
+        3,  // Number of SiDBs to place
         find_all_solutions ? 
             design_sidb_gates_params<fiction::cell<sidb_100_cell_clk_lyt_siqad>>::termination_condition::ALL_COMBINATIONS_ENUMERATED :
             design_sidb_gates_params<fiction::cell<sidb_100_cell_clk_lyt_siqad>>::termination_condition::AFTER_FIRST_SOLUTION
