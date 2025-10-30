@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <mutex>
+#include <numeric>
 #include <optional>
 #include <random>
 #include <thread>
@@ -187,9 +188,10 @@ class design_sidb_gates_impl
                                               bdl_wire_selection::OUTPUT)},
             number_of_input_wires{input_bdl_wires.size()},
             number_of_output_wires{output_bdl_wires.size()},
-            all_canvas_layouts{determine_all_possible_canvas_layouts()}
+            total_canvas_layouts{compute_total_canvas_layouts(all_sidbs_in_canvas.size(),
+                                                              params.number_of_canvas_sidbs)}
     {
-        stats.number_of_layouts = all_canvas_layouts.size();
+        stats.number_of_layouts = total_canvas_layouts;
         stats.sim_engine        = params.operational_params.sim_engine;
     }
 
@@ -207,27 +209,25 @@ class design_sidb_gates_impl
     {
         mockturtle::stopwatch stop{stats.time_total};
 
-        auto all_combinations = determine_all_combinations_of_distributing_k_entities_on_n_positions(
-            params.number_of_canvas_sidbs, static_cast<std::size_t>(all_sidbs_in_canvas.size()));
+        std::vector<Lyt> designed_gate_layouts{};
 
-        std::vector<Lyt> designed_gate_layouts = {};
-
-        if (all_combinations.empty())
+        if (total_canvas_layouts == 0)
         {
             return designed_gate_layouts;
         }
+
+        combination_generator generator{all_sidbs_in_canvas.size(), params.number_of_canvas_sidbs};
 
         std::mutex mutex_to_protect_designed_gate_layouts{};
 
         std::atomic<bool> solution_found = false;
 
-        // Shuffle the combinations before dividing them among threads
-        std::shuffle(all_combinations.begin(), all_combinations.end(),
-                     std::default_random_engine(std::random_device{}()));
+        const auto requested_threads = number_of_threads == 0 ? std::size_t{1} : number_of_threads;
+        const auto num_threads       = std::max<std::size_t>(1, std::min(requested_threads, total_canvas_layouts));
 
-        const auto add_combination_to_layout_and_check_operation = [this, &mutex_to_protect_designed_gate_layouts,
-                                                                    &designed_gate_layouts,
-                                                                    &solution_found](const auto& combination) noexcept
+        const auto add_combination_to_layout_and_check_operation =
+            [this, &mutex_to_protect_designed_gate_layouts, &designed_gate_layouts, &solution_found](
+                const std::vector<std::size_t>& combination) noexcept
         {
             // canvas SiDBs are added to the skeleton
             const auto layout_with_added_cells = skeleton_layout_with_canvas_sidbs(combination);
@@ -244,16 +244,8 @@ class design_sidb_gates_impl
                 solution_found = true;
             }
 
-            if (solution_found && (params.termination_cond ==
-                                   design_sidb_gates_params<cell<Lyt>>::termination_condition::AFTER_FIRST_SOLUTION))
-            {
-                return;
-            }
+            // Early exit handled by caller loop.
         };
-
-        const std::size_t num_threads = std::min(number_of_threads, all_combinations.size());
-
-        const std::size_t chunk_size = (all_combinations.size() + num_threads - 1) / num_threads;  // Ceiling division
 
         std::vector<std::thread> threads{};
         threads.reserve(num_threads);
@@ -261,21 +253,33 @@ class design_sidb_gates_impl
         for (std::size_t i = 0; i < num_threads; ++i)
         {
             threads.emplace_back(
-                [i, chunk_size, &all_combinations, &add_combination_to_layout_and_check_operation, &solution_found,
-                 this]()
+                [this, &generator, &add_combination_to_layout_and_check_operation, &solution_found]()
                 {
-                    const std::size_t start_index = i * chunk_size;
-                    const std::size_t end_index   = std::min(start_index + chunk_size, all_combinations.size());
+                    std::vector<std::size_t> combination{};
+                    combination.reserve(params.number_of_canvas_sidbs);
 
-                    for (std::size_t j = start_index; j < end_index; ++j)
+                    while (true)
                     {
                         if (solution_found &&
                             (params.termination_cond ==
                              design_sidb_gates_params<cell<Lyt>>::termination_condition::AFTER_FIRST_SOLUTION))
                         {
-                            return;
+                            break;
                         }
-                        add_combination_to_layout_and_check_operation(all_combinations[j]);
+
+                        if (!generator.next(combination))
+                        {
+                            break;
+                        }
+
+                        add_combination_to_layout_and_check_operation(combination);
+
+                        if (solution_found &&
+                            (params.termination_cond ==
+                             design_sidb_gates_params<cell<Lyt>>::termination_condition::AFTER_FIRST_SOLUTION))
+                        {
+                            break;
+                        }
                     }
                 });
         }
@@ -308,7 +312,8 @@ class design_sidb_gates_impl
             params.canvas, params.number_of_canvas_sidbs,
             generate_random_sidb_layout_params<cell<Lyt>>::positive_charges::ALLOWED};
 
-        const auto num_threads = std::min(number_of_threads, all_canvas_layouts.size());
+        const auto requested_threads = number_of_threads == 0 ? std::size_t{1} : number_of_threads;
+        const auto num_threads       = std::max<std::size_t>(1, requested_threads);
 
         std::vector<std::thread> threads{};
         threads.reserve(num_threads);
@@ -393,19 +398,28 @@ class design_sidb_gates_impl
         mockturtle::stopwatch stop{stats.time_total};
 
         std::vector<Lyt> gate_candidates{};
-        gate_candidates.reserve(all_canvas_layouts.size());
 
         {
             mockturtle::stopwatch stop_pruning{stats.pruning_total};
             gate_candidates = run_pruning();
         }
 
-        stats.number_of_layouts_after_first_pruning =
-            all_canvas_layouts.size() - number_of_discarded_layouts_at_first_pruning.load();
-        stats.number_of_layouts_after_second_pruning =
-            stats.number_of_layouts_after_first_pruning - number_of_discarded_layouts_at_second_pruning.load();
-        stats.number_of_layouts_after_third_pruning =
-            stats.number_of_layouts_after_second_pruning - number_of_discarded_layouts_at_third_pruning.load();
+        const auto safe_subtract = [](const std::size_t lhs, const std::size_t rhs) noexcept -> std::size_t
+        {
+            return lhs > rhs ? lhs - rhs : 0u;
+        };
+
+        const auto discarded_first  = number_of_discarded_layouts_at_first_pruning.load();
+        const auto discarded_second = number_of_discarded_layouts_at_second_pruning.load();
+        const auto discarded_third  = number_of_discarded_layouts_at_third_pruning.load();
+
+        const auto after_first  = safe_subtract(total_canvas_layouts, discarded_first);
+        const auto after_second = safe_subtract(after_first, discarded_second);
+        const auto after_third  = safe_subtract(after_second, discarded_third);
+
+        stats.number_of_layouts_after_first_pruning  = after_first;
+        stats.number_of_layouts_after_second_pruning = after_second;
+        stats.number_of_layouts_after_third_pruning  = after_third;
 
         std::vector<Lyt> gate_layouts{};
         gate_layouts.reserve(gate_candidates.size());
@@ -424,9 +438,8 @@ class design_sidb_gates_impl
 
         std::mutex mutex_to_protect_gate_designs{};
 
-        gate_layouts.reserve(gate_candidates.size());
-
-        const std::size_t num_threads = std::min(number_of_threads, gate_candidates.size());
+        const auto requested_threads = number_of_threads == 0 ? std::size_t{1} : number_of_threads;
+        const auto num_threads       = std::max<std::size_t>(1, std::min(requested_threads, gate_candidates.size()));
 
         const std::size_t chunk_size = (gate_candidates.size() + num_threads - 1) / num_threads;  // Ceiling division
 
@@ -534,9 +547,9 @@ class design_sidb_gates_impl
      */
     const std::size_t number_of_output_wires;
     /**
-     * All Canvas SiDB layout (without I/O pins).
+     * Total number of possible canvas layouts.
      */
-    const std::vector<Lyt> all_canvas_layouts{};
+    const std::size_t total_canvas_layouts;
     /**
      * Number of discarded layouts at first pruning.
      */
@@ -553,6 +566,69 @@ class design_sidb_gates_impl
      * Number of threads to be used for the design process.
      */
     std::size_t number_of_threads{std::thread::hardware_concurrency()};
+
+    class combination_generator
+    {
+      public:
+        combination_generator(std::size_t positions, std::size_t chosen) :
+                n{positions},
+                k{chosen},
+                current_combination(chosen)
+        {
+            if (k != 0 && k <= n)
+            {
+                std::iota(current_combination.begin(), current_combination.end(), 0);
+                has_next = true;
+            }
+        }
+
+        [[nodiscard]] bool next(std::vector<std::size_t>& combination)
+        {
+            std::lock_guard lock{generator_mutex};
+
+            if (!has_next)
+            {
+                return false;
+            }
+
+            combination = current_combination;
+
+            has_next = advance();
+
+            return true;
+        }
+
+      private:
+        [[nodiscard]] bool advance() noexcept
+        {
+            if (k == 0)
+            {
+                return false;
+            }
+
+            for (std::size_t idx = k; idx-- > 0;)
+            {
+                if (current_combination[idx] != idx + n - k)
+                {
+                    ++current_combination[idx];
+                    for (std::size_t j = idx + 1; j < k; ++j)
+                    {
+                        current_combination[j] = current_combination[j - 1] + 1;
+                    }
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        std::size_t n{0};
+        std::size_t k{0};
+        std::vector<std::size_t> current_combination{};
+        bool has_next{false};
+        std::mutex generator_mutex{};
+    };
+
     /**
      * This function processes each layout to determine if it represents a valid gate implementation or if it can be
      * pruned by using three distinct physically-informed pruning steps. It leverages multi-threading to accelerate the
@@ -562,17 +638,21 @@ class design_sidb_gates_impl
      */
     [[nodiscard]] std::vector<Lyt> run_pruning() noexcept
     {
-        std::vector<Lyt> gate_candidate = {};
+        std::vector<Lyt> gate_candidates{};
 
-        if (all_canvas_layouts.empty())
+        if (total_canvas_layouts == 0)
         {
-            return gate_candidate;
+            return gate_candidates;
         }
 
-        std::mutex mutex_to_protect_gate_candidates{};  // used to control access to shared resources
+        combination_generator generator{all_sidbs_in_canvas.size(), params.number_of_canvas_sidbs};
 
-        // Function to check validity and add layout to all_designs
-        auto conduct_pruning_steps = [&](const Lyt& canvas_lyt)
+        std::mutex mutex_to_protect_gate_candidates{};
+
+        const auto requested_threads = number_of_threads == 0 ? std::size_t{1} : number_of_threads;
+        const auto num_threads       = std::max<std::size_t>(1, std::min(requested_threads, total_canvas_layouts));
+
+        const auto conduct_pruning_steps = [this, &gate_candidates, &mutex_to_protect_gate_candidates](const Lyt& canvas_lyt)
         {
             // If the canvas layout is empty, skip further processing
             if (canvas_lyt.is_empty())
@@ -636,13 +716,8 @@ class design_sidb_gates_impl
             }
 
             const std::lock_guard lock{mutex_to_protect_gate_candidates};
-            gate_candidate.push_back(current_layout);
+            gate_candidates.push_back(current_layout);
         };
-
-        gate_candidate.reserve(all_canvas_layouts.size());
-
-        const std::size_t num_threads = std::min(number_of_threads, all_canvas_layouts.size());
-        const std::size_t chunk_size  = (all_canvas_layouts.size() + num_threads - 1) / num_threads;
 
         std::vector<std::thread> threads{};
         threads.reserve(num_threads);
@@ -650,14 +725,20 @@ class design_sidb_gates_impl
         for (std::size_t i = 0; i < num_threads; ++i)
         {
             threads.emplace_back(
-                [i, chunk_size, this, &conduct_pruning_steps]()
+                [this, &generator, &conduct_pruning_steps]()
                 {
-                    const std::size_t start_index = i * chunk_size;
-                    const std::size_t end_index   = std::min(start_index + chunk_size, all_canvas_layouts.size());
+                    std::vector<std::size_t> combination{};
+                    combination.reserve(params.number_of_canvas_sidbs);
 
-                    for (std::size_t j = start_index; j < end_index; ++j)
+                    while (generator.next(combination))
                     {
-                        conduct_pruning_steps(all_canvas_layouts[j]);
+                        const auto canvas_layout = design_canvas_layout(combination);
+                        if (!canvas_layout.has_value())
+                        {
+                            continue;
+                        }
+
+                        conduct_pruning_steps(*canvas_layout);
                     }
                 });
         }
@@ -670,7 +751,7 @@ class design_sidb_gates_impl
             }
         }
 
-        return gate_candidate;
+        return gate_candidates;
     }
 
     /**
@@ -679,30 +760,16 @@ class design_sidb_gates_impl
      *
      * @return A vector containing all possible gate layouts generated from the combinations.
      */
-    [[nodiscard]] std::vector<Lyt> determine_all_possible_canvas_layouts() const noexcept
+    [[nodiscard]] static std::size_t compute_total_canvas_layouts(const std::size_t available_positions,
+                                                                  const std::size_t required_sidbs) noexcept
     {
-        const auto all_combinations = determine_all_combinations_of_distributing_k_entities_on_n_positions(
-            params.number_of_canvas_sidbs, static_cast<std::size_t>(all_sidbs_in_canvas.size()));
-
-        std::vector<Lyt> designed_gate_layouts = {};
-        designed_gate_layouts.reserve(all_combinations.size());
-
-        const auto add_cell_combination_to_layout = [this, &designed_gate_layouts](const auto& combination) noexcept
+        if (required_sidbs == 0 || required_sidbs > available_positions)
         {
-            const auto layout_with_added_cells = design_canvas_layout(combination);
-            if (!layout_with_added_cells.has_value())
-            {
-                return;
-            }
-            designed_gate_layouts.push_back(layout_with_added_cells.value());
-        };
-
-        for (const auto& combination : all_combinations)
-        {
-            add_cell_combination_to_layout(combination);
+            return 0u;
         }
 
-        return designed_gate_layouts;
+        return static_cast<std::size_t>(binomial_coefficient(static_cast<uint64_t>(available_positions),
+                                                             static_cast<uint64_t>(required_sidbs)));
     }
 
     /**
