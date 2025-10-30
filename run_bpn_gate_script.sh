@@ -2,7 +2,7 @@
 
 set -e
 
-cmake -S . -B build -DFICTION_EXPERIMENTS=ON
+cmake -S . -B build -DFICTION_EXPERIMENTS=ON -DFICTION_ALGLIB:BOOL=ON
 cmake --build build --parallel
 
 # -a: find all gate candidates
