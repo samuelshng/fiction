@@ -3530,12 +3530,77 @@ static const char *__doc_fiction_cp_and_tp_throughput =
 R"doc(Throughput of the layout in clock cycles as :math:`\frac{1}{x}` where
 only :math:`x` is stored.)doc";
 
+static const char *__doc_fiction_create_a_and_not_b_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for an A_AND_NOT_B (A&!B)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an A_AND_NOT_B gate with the output fanned out.
+The function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an
+    A_AND_NOT_B gate.)doc";
+
+static const char *__doc_fiction_create_a_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for an A gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an A gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an A gate.)doc";
+
+static const char *__doc_fiction_create_a_not_a_tt =
+R"doc(Creates and returns a vector of truth tables for an A_NOT_A multi-
+output function.
+
+Outputs propagate A and !A, respectively.
+
+Returns:
+    Vector of truth tables representing the A_NOT_A function.)doc";
+
+static const char *__doc_fiction_create_a_or_not_b_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for an A_OR_NOT_B (A|!B)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an A_OR_NOT_B gate with the output fanned out.
+The function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an
+    A_OR_NOT_B gate.)doc";
+
 static const char *__doc_fiction_create_and3_tt =
 R"doc(Creates and returns a truth table that implements the conjunction in
 three variables.
 
 Returns:
     Conjunction in three variables.)doc";
+
+static const char *__doc_fiction_create_and_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for an AND gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an AND gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an AND
+    gate.)doc";
+
+static const char *__doc_fiction_create_and_or_tt =
+R"doc(Creates and returns a vector of truth tables for an AND_OR multi-
+output function.
+
+Outputs compute AND(A, B) and OR(A, B), respectively.
+
+Returns:
+    Vector of truth tables representing the AND_OR function.)doc";
 
 static const char *__doc_fiction_create_and_tt =
 R"doc(Creates and returns a truth table that implements the conjunction in
@@ -3568,6 +3633,16 @@ Returns:
     An object of type `std::array<T, N>` that is initialized with `N`
     copies of value.)doc";
 
+static const char *__doc_fiction_create_b_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a B gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a B gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a B gate.)doc";
+
 static const char *__doc_fiction_create_crossing_wire_tt =
 R"doc(Creates and returns a vector of truth tables for a crossing wire
 multi-output function.
@@ -3579,6 +3654,15 @@ variables. The function returns a vector containing two truth tables.
 Returns:
     Vector of truth tables, each representing an output of the
     crossing wire function.)doc";
+
+static const char *__doc_fiction_create_demux_a_by_b_tt =
+R"doc(Creates and returns a vector of truth tables for a DEMUX_A_BY_B multi-
+output function.
+
+Outputs compute A&!B and A&B, respectively.
+
+Returns:
+    Vector of truth tables representing the DEMUX_A_BY_B function.)doc";
 
 static const char *__doc_fiction_create_dot_tt =
 R"doc(Creates and returns a truth table that implements the Dot function (a
@@ -3598,6 +3682,18 @@ variables. The function returns a vector containing two truth tables.
 Returns:
     Vector of truth tables, each representing an output of the double
     wire function.)doc";
+
+static const char *__doc_fiction_create_false_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a FALSE (constant 0)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a FALSE gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a FALSE
+    gate.)doc";
 
 static const char *__doc_fiction_create_fan_out_tt =
 R"doc(Creates and returns a vector of truth tables for a multi-output
@@ -3623,6 +3719,16 @@ equal function in two variables.
 
 Returns:
     Greater-than-or-equal function in two variables.)doc";
+
+static const char *__doc_fiction_create_gt_lt_tt =
+R"doc(Creates and returns a vector of truth tables for a GT_LT multi-output
+function.
+
+Outputs compute A&!B (greater-than) and !A&B (less-than),
+respectively.
+
+Returns:
+    Vector of truth tables representing the GT_LT function.)doc";
 
 static const char *__doc_fiction_create_gt_tt =
 R"doc(Creates and returns a truth table that implements the greater-than
@@ -3678,6 +3784,18 @@ function in three variables.
 Returns:
     Majority function in three variables.)doc";
 
+static const char *__doc_fiction_create_nand_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a NAND gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NAND gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a NAND
+    gate.)doc";
+
 static const char *__doc_fiction_create_nand_tt =
 R"doc(Creates and returns a truth table that implements the negated
 conjunction in two variables.
@@ -3685,12 +3803,71 @@ conjunction in two variables.
 Returns:
     Negated conjunction in two variables.)doc";
 
+static const char *__doc_fiction_create_nor_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a NOR gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOR gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a NOR gate.)doc";
+
 static const char *__doc_fiction_create_nor_tt =
 R"doc(Creates and returns a truth table that implements the negated
 disjunction in two variables.
 
 Returns:
     Negated disjunction in two variables.)doc";
+
+static const char *__doc_fiction_create_not_a_and_b_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a NOT_A_AND_B (!A&B)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOT_A_AND_B gate with the output fanned out.
+The function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a
+    NOT_A_AND_B gate.)doc";
+
+static const char *__doc_fiction_create_not_a_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a NOT_A (!A) gate
+with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOT_A gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a NOT_A
+    gate.)doc";
+
+static const char *__doc_fiction_create_not_a_or_b_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a NOT_A_OR_B (!A|B)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOT_A_OR_B gate with the output fanned out.
+The function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a
+    NOT_A_OR_B gate.)doc";
+
+static const char *__doc_fiction_create_not_b_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a NOT_B (!B) gate
+with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOT_B gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a NOT_B
+    gate.)doc";
 
 static const char *__doc_fiction_create_not_tt =
 R"doc(Creates and returns a truth table that implements the negation in one
@@ -3713,12 +3890,74 @@ R"doc(Creates and returns a truth table that implements the OR-AND function
 Returns:
     OR-AND in three variables.)doc";
 
+static const char *__doc_fiction_create_or_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for an OR gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an OR gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an OR gate.)doc";
+
 static const char *__doc_fiction_create_or_tt =
 R"doc(Creates and returns a truth table that implements the disjunction in
 two variables.
 
 Returns:
     Disjunction in two variables.)doc";
+
+static const char *__doc_fiction_create_pass_left_and_tt =
+R"doc(Creates and returns a vector of truth tables for a PASS_LEFT_AND
+multi-output function.
+
+First output propagates input A, second output computes AND(A, B).
+
+Returns:
+    Vector of truth tables representing the PASS_LEFT_AND function.)doc";
+
+static const char *__doc_fiction_create_pass_left_or_tt =
+R"doc(Creates and returns a vector of truth tables for a PASS_LEFT_OR multi-
+output function.
+
+First output propagates input A, second output computes OR(A, B).
+
+Returns:
+    Vector of truth tables representing the PASS_LEFT_OR function.)doc";
+
+static const char *__doc_fiction_create_pass_left_xor_tt =
+R"doc(Creates and returns a vector of truth tables for a PASS_LEFT_XOR
+multi-output function.
+
+First output propagates input A, second output computes XOR(A, B).
+
+Returns:
+    Vector of truth tables representing the PASS_LEFT_XOR function.)doc";
+
+static const char *__doc_fiction_create_true_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a TRUE (constant 1)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a TRUE gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a TRUE
+    gate.)doc";
+
+static const char *__doc_fiction_create_xnor_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a XNOR gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a XNOR gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a XNOR
+    gate.)doc";
 
 static const char *__doc_fiction_create_xnor_tt =
 R"doc(Creates and returns a truth table that implements the negated
@@ -3740,6 +3979,17 @@ R"doc(Creates and returns a truth table that implements the XOR-AND function
 
 Returns:
     XOR-AND in three variables.)doc";
+
+static const char *__doc_fiction_create_xor_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a XOR gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a XOR gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a XOR gate.)doc";
 
 static const char *__doc_fiction_create_xor_tt =
 R"doc(Creates and returns a truth table that implements the exclusive
@@ -6258,9 +6508,34 @@ Parameter ``to_delete``:
 
 static const char *__doc_fiction_detail_design_sidb_gates_impl = R"doc()doc";
 
-static const char *__doc_fiction_detail_design_sidb_gates_impl_all_canvas_layouts = R"doc(All Canvas SiDB layout (without I/O pins).)doc";
-
 static const char *__doc_fiction_detail_design_sidb_gates_impl_all_sidbs_in_canvas = R"doc(All cells within the canvas.)doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_combination_generator = R"doc()doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_combination_generator_advance = R"doc()doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_combination_generator_combination_generator = R"doc()doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_combination_generator_current_combination = R"doc()doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_combination_generator_generator_mutex = R"doc()doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_combination_generator_has_next = R"doc()doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_combination_generator_k = R"doc()doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_combination_generator_n = R"doc()doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_combination_generator_next = R"doc()doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_compute_total_canvas_layouts =
+R"doc(This function calculates all combinations of distributing a given
+number of SiDBs across a specified number of positions in the canvas.
+Each combination is then used to create a gate layout candidate.
+
+Returns:
+    A vector containing all possible gate layouts generated from the
+    combinations.)doc";
 
 static const char *__doc_fiction_detail_design_sidb_gates_impl_design_canvas_layout =
 R"doc(This function designs canvas SiDB layouts based on given indices.
@@ -6288,15 +6563,6 @@ Parameter ``ps``:
 
 Parameter ``st``:
     Statistics for the gate design process.)doc";
-
-static const char *__doc_fiction_detail_design_sidb_gates_impl_determine_all_possible_canvas_layouts =
-R"doc(This function calculates all combinations of distributing a given
-number of SiDBs across a specified number of positions in the canvas.
-Each combination is then used to create a gate layout candidate.
-
-Returns:
-    A vector containing all possible gate layouts generated from the
-    combinations.)doc";
 
 static const char *__doc_fiction_detail_design_sidb_gates_impl_input_bdl_wires = R"doc(Input BDL wires.)doc";
 
@@ -6374,6 +6640,8 @@ Returns:
     added at specified indices.)doc";
 
 static const char *__doc_fiction_detail_design_sidb_gates_impl_stats = R"doc(The statistics of the gate design.)doc";
+
+static const char *__doc_fiction_detail_design_sidb_gates_impl_total_canvas_layouts = R"doc(Total number of possible canvas layouts.)doc";
 
 static const char *__doc_fiction_detail_design_sidb_gates_impl_truth_table = R"doc(Truth table of the given gate.)doc";
 
