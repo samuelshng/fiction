@@ -25,6 +25,13 @@
 
 using namespace fiction;
 
+struct gate_design_request
+{
+    std::vector<tt> truth_tables;
+    std::string name;
+    std::size_t sidb_count;
+};
+
 int main(int argc, char* argv[])  // NOLINT
 {
     // Configuration options
@@ -59,37 +66,36 @@ int main(int argc, char* argv[])  // NOLINT
     std::cout << "Save to file: " << (save_to_file ? "Yes" : "No") << "\n\n";
 
     // Define which gates to design (you can modify this list)
-    const std::vector<std::pair<std::vector<tt>, std::string>> gates_to_design = {
-        {create_false_fan_out_tt(), "false_fanout"},
-        // {create_nor_fan_out_tt(), "nor_fanout"},
-        // // {create_not_a_and_b_fan_out_tt(), "not_a_and_b_fanout"}, // MIRROR OF A AND NOT B
-        // {create_not_a_fan_out_tt(), "not_a_fanout"},
-        // {create_a_and_not_b_fan_out_tt(), "a_and_not_b_fanout"},
-        // // {create_not_b_fan_out_tt(), "not_b_fanout"}, // MIRROR OF NOT A
-        // {create_xor_fan_out_tt(), "xor_fanout"},
-        // {create_nand_fan_out_tt(), "nand_fanout"},
-        // {create_and_fan_out_tt(), "and_fanout"},
-        // {create_xnor_fan_out_tt(), "xnor_fanout"},
-        // // {create_b_fan_out_tt(), "b_fanout"}, // MIRROR OF A
-        // // {create_not_a_or_b_fan_out_tt(), "not_a_or_b_fanout"}, // MIRROR OF A OR NOT B
-        // {create_a_fan_out_tt(), "a_fanout"},
-        // {create_a_or_not_b_fan_out_tt(), "a_or_not_b_fanout"},
-        // {create_or_fan_out_tt(), "or_fanout"},
-        // {create_true_fan_out_tt(), "true_fanout"},
-        // {create_half_adder_tt(), "half_adder"},
-        // {create_pass_left_and_tt(), "pass_left_and"},
-        // {create_pass_left_or_tt(), "pass_left_or"},
-        // {create_and_or_tt(), "and_or"},
-        // {create_demux_a_by_b_tt(), "demux_a_by_b"},
-        // {create_gt_lt_tt(), "gt_lt"},
-        // {create_a_not_a_tt(), "a_not_a"}
+    // Each entry: {truth tables, gate name, number of SiDBs to place}
+    const std::vector<gate_design_request> gates_to_design = {
+        {create_false_fan_out_tt(), "false_fanout", 3},
+        // {create_nor_fan_out_tt(), "nor_fanout", 3},
+        // // {create_not_a_and_b_fan_out_tt(), "not_a_and_b_fanout", 3}, // MIRROR OF A AND NOT B
+        // {create_not_a_fan_out_tt(), "not_a_fanout", 3},
+        {create_a_and_not_b_fan_out_tt(), "a_and_not_b_fanout", 4},
+        // // {create_not_b_fan_out_tt(), "not_b_fanout", 3}, // MIRROR OF NOT A
+        // {create_xor_fan_out_tt(), "xor_fanout", 4},
+        // {create_nand_fan_out_tt(), "nand_fanout", 3},
+        // {create_and_fan_out_tt(), "and_fanout", 3},
+        // {create_xnor_fan_out_tt(), "xnor_fanout", 3},
+        // // {create_b_fan_out_tt(), "b_fanout", 3}, // MIRROR OF A
+        // // {create_not_a_or_b_fan_out_tt(), "not_a_or_b_fanout", 3}, // MIRROR OF A OR NOT B
+        // {create_a_fan_out_tt(), "a_fanout", 3},
+        // {create_a_or_not_b_fan_out_tt(), "a_or_not_b_fanout", 3},
+        // {create_or_fan_out_tt(), "or_fanout", 3},
+        // {create_true_fan_out_tt(), "true_fanout", 3},
+        // {create_half_adder_tt(), "half_adder", 3},
+    //     {create_pass_left_xor_tt(), "pass_left_xor", 4},
+        // {create_pass_left_and_tt(), "pass_left_and", 3},
+        // {create_pass_left_or_tt(), "pass_left_or", 3},
+        // {create_and_or_tt(), "and_or", 3},
+        // {create_demux_a_by_b_tt(), "demux_a_by_b", 3},
+        // {create_gt_lt_tt(), "gt_lt", 3},
+        // {create_a_not_a_tt(), "a_not_a", 3},
+        {create_crossing_wire_tt(), "crossing_wire", 3},
+        {create_double_wire_tt(), "double_wire", 3},
+
     };
-    // Needs 4 SiDBs
-    // const std::vector<std::pair<std::vector<tt>, std::string>> gates_to_design = {
-    //     {create_a_and_not_b_fan_out_tt(), "a_and_not_b_fanout"},
-    //     {create_xor_fan_out_tt(), "xor_fanout"},
-    //     {create_pass_left_xor_tt(), "pass_left_xor"}, // not found in 3 SiDBs
-    // };
 
     static const std::string folder = fmt::format("{}/gate_skeletons/skeleton_bestagons_with_tags/", EXPERIMENTS_PATH);
 
@@ -98,7 +104,7 @@ int main(int argc, char* argv[])  // NOLINT
         fmt::format("{}/{}", folder, "skeleton_hex_inputsdbp_2i2o.sqd"));
 
     // Configure parameters for optimal gate finding
-    const design_sidb_gates_params<fiction::cell<sidb_100_cell_clk_lyt_siqad>> params{
+    const design_sidb_gates_params<fiction::cell<sidb_100_cell_clk_lyt_siqad>> base_params{
         is_operational_params{sidb_simulation_parameters{2, -0.32}, sidb_simulation_engine::QUICKEXACT,
                               bdl_input_iterator_params{detect_bdl_wires_params{3.0}},
                               is_operational_params::operational_condition::REJECT_KINKS},
@@ -111,12 +117,16 @@ int main(int argc, char* argv[])  // NOLINT
     };
 
     // Design gates
-    for (const auto& [truth_tables, gate_name] : gates_to_design)
+    for (const auto& [truth_tables, gate_name, sidb_count] : gates_to_design)
     {
-        std::cout << "Designing " << gate_name << "...\n";
+        std::cout << "Designing " << gate_name << " (" << sidb_count << " SiDB"
+                  << (sidb_count == 1 ? "" : "s") << ")...\n";
+
+        auto gate_params                    = base_params;
+        gate_params.number_of_canvas_sidbs = sidb_count;
         
         design_sidb_gates_stats stats{};
-        const auto gate_designs = design_sidb_gates(skeleton, truth_tables, params, &stats);
+        const auto gate_designs = design_sidb_gates(skeleton, truth_tables, gate_params, &stats);
         
         std::cout << "  Found " << gate_designs.size() << " optimal design(s)\n";
         std::cout << "  Runtime: " << mockturtle::to_seconds(stats.time_total) << " seconds\n";
