@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <optional>
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -99,8 +100,6 @@ const std::unordered_map<std::string, truth_table_generator>& truth_table_lookup
         {"gt", make_tt_generator(&create_gt_tt)},
         {"gt_lt", make_tt_generator(&create_gt_lt_tt)},
         {"half_adder", make_tt_generator(&create_half_adder_tt)},
-        {"half_adder_3", make_tt_generator(&create_half_adder_tt)},
-        {"half_adder_4", make_tt_generator(&create_half_adder_tt)},
         {"ha", make_tt_generator(&create_half_adder_tt)},
         {"inv", make_tt_generator(&create_not_tt)},
         {"inv_diag", make_tt_generator(&create_not_tt)},
@@ -143,11 +142,32 @@ std::optional<std::vector<tt>> resolve_truth_tables(const std::vector<std::strin
 {
     const auto& lookup = truth_table_lookup();
 
+    const auto try_lookup = [&lookup](const std::string& candidate_name) -> const truth_table_generator* {
+        if (const auto it = lookup.find(candidate_name); it != lookup.end())
+        {
+            return &it->second;
+        }
+        return nullptr;
+    };
+
     for (const auto& name : candidates)
     {
-        if (const auto it = lookup.find(name); it != lookup.end())
+        if (const auto* generator = try_lookup(name); generator != nullptr)
         {
-            return it->second();
+            return (*generator)();
+        }
+
+        const auto fallback_names = candidate_gate_names(name);
+        for (const auto& fallback : fallback_names)
+        {
+            if (fallback == name)
+            {
+                continue;
+            }
+            if (const auto* generator = try_lookup(fallback); generator != nullptr)
+            {
+                return (*generator)();
+            }
         }
     }
 
@@ -171,18 +191,35 @@ void append_unique_candidates(std::vector<std::string>& target, const std::vecto
     }
 }
 
+std::string join_paths(const std::vector<std::filesystem::path>& paths)
+{
+    std::string result{};
+    for (std::size_t idx = 0; idx < paths.size(); ++idx)
+    {
+        result.append(paths[idx].string());
+        if (idx + 1 < paths.size())
+        {
+            result.append(", ");
+        }
+    }
+    return result;
+}
+
 void print_usage(const char* executable)
 {
-    std::cout << "Usage: " << executable << " --input-dir <path> [--output-dir <path>] [--verbose]\n";
+    std::cout << "Usage: " << executable
+              << " --input-dir <path> [--input-dir <path> ...] [--output-dir <path>] [--sample-count <count>] "
+                 "[--verbose]\n";
 }
 
 }  // namespace
 
 int main(int argc, char* argv[])
 {
-    std::filesystem::path input_dir{};
-    std::filesystem::path output_dir = std::filesystem::current_path();
-    bool                  verbose    = false;
+    std::vector<std::filesystem::path> input_dirs{};
+    std::filesystem::path              output_dir = std::filesystem::current_path();
+    bool                               verbose    = false;
+    std::optional<std::size_t>         sample_count{};
 
     if (argc == 1)
     {
@@ -201,7 +238,7 @@ int main(int argc, char* argv[])
                 std::cerr << "Error: --input-dir requires a path argument.\n";
                 return EXIT_FAILURE;
             }
-            input_dir = argv[++i];
+            input_dirs.emplace_back(argv[++i]);
         }
         else if (arg == "--output-dir" || arg == "-o")
         {
@@ -211,6 +248,30 @@ int main(int argc, char* argv[])
                 return EXIT_FAILURE;
             }
             output_dir = argv[++i];
+        }
+        else if (arg == "--sample-count" || arg == "-s")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "Error: --sample-count requires an integer argument.\n";
+                return EXIT_FAILURE;
+            }
+            const std::string count_arg = argv[++i];
+            try
+            {
+                const auto value = std::stoull(count_arg);
+                if (value == 0)
+                {
+                    std::cerr << "Error: --sample-count must be greater than zero.\n";
+                    return EXIT_FAILURE;
+                }
+                sample_count = static_cast<std::size_t>(value);
+            }
+            catch (const std::exception&)
+            {
+                std::cerr << "Error: invalid numeric value for --sample-count: '" << count_arg << "'.\n";
+                return EXIT_FAILURE;
+            }
         }
         else if (arg == "--verbose" || arg == "-v")
         {
@@ -229,29 +290,54 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (input_dir.empty())
+    if (input_dirs.empty())
     {
-        std::cerr << "Error: --input-dir must be specified.\n";
+        std::cerr << "Error: --input-dir must be specified at least once.\n";
         print_usage(argv[0]);
         return EXIT_FAILURE;
     }
 
-    if (!std::filesystem::exists(input_dir) || !std::filesystem::is_directory(input_dir))
+    for (const auto& input_dir : input_dirs)
     {
-        std::cerr << "Error: '" << input_dir.string() << "' is not a valid directory.\n";
-        return EXIT_FAILURE;
+        if (!std::filesystem::exists(input_dir) || !std::filesystem::is_directory(input_dir))
+        {
+            std::cerr << "Error: '" << input_dir.string() << "' is not a valid directory.\n";
+            return EXIT_FAILURE;
+        }
     }
 
     std::vector<std::filesystem::path> sqd_files{};
-    for (const auto& entry : std::filesystem::directory_iterator(input_dir))
+    for (const auto& input_dir : input_dirs)
     {
-        if (!entry.is_regular_file())
+        for (const auto& entry : std::filesystem::directory_iterator(input_dir))
         {
-            continue;
+            if (!entry.is_regular_file())
+            {
+                continue;
+            }
+            if (entry.path().extension() == ".sqd")
+            {
+                sqd_files.push_back(entry.path());
+            }
         }
-        if (entry.path().extension() == ".sqd")
+    }
+
+    if (sample_count.has_value() && !sqd_files.empty())
+    {
+        if (*sample_count >= sqd_files.size())
         {
-            sqd_files.push_back(entry.path());
+            if (*sample_count > sqd_files.size())
+            {
+                std::cerr << "Warning: requested sample count (" << *sample_count << ") exceeds available SQD files ("
+                          << sqd_files.size() << "). Processing all files without sampling.\n";
+            }
+        }
+        else
+        {
+            std::random_device rd;
+            std::mt19937       generator{rd()};
+            std::shuffle(sqd_files.begin(), sqd_files.end(), generator);
+            sqd_files.resize(*sample_count);
         }
     }
 
@@ -259,7 +345,8 @@ int main(int argc, char* argv[])
 
     if (sqd_files.empty())
     {
-        std::cout << "No SQD files found in '" << input_dir.string() << "'. Nothing to do.\n";
+        const auto dir_list = join_paths(input_dirs);
+        std::cout << "No SQD files found in [" << dir_list << "]. Nothing to do.\n";
         return EXIT_SUCCESS;
     }
 
@@ -287,7 +374,8 @@ int main(int argc, char* argv[])
 
     if (grouped_layouts.empty())
     {
-        std::cout << "No valid SQD layouts could be loaded from '" << input_dir.string() << "'.\n";
+        const auto dir_list = join_paths(input_dirs);
+        std::cout << "No valid SQD layouts could be loaded from [" << dir_list << "].\n";
         if (!load_errors.empty())
         {
             std::cerr << "Encountered " << load_errors.size() << " error(s) while loading files.\n";
