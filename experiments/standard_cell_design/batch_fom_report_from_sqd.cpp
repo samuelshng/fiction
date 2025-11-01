@@ -419,7 +419,7 @@ int main(int argc, char* argv[])
 
     const is_operational_params base_params{
         sidb_simulation_parameters{2, -0.32},
-        sidb_simulation_engine::CLUSTERCOMPLETE,
+        sidb_simulation_engine::QUICKEXACT,
         bdl_input_iterator_params{detect_bdl_wires_params{3.0}},
         is_operational_params::operational_condition::REJECT_KINKS};
 

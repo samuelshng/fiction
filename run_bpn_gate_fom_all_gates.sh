@@ -4,9 +4,9 @@ set -e
 
 curr_time=$(date +%Y%m%d%H%M%S)
 input_dir_root=./gates-20251031050236-design-all-gates
-rand_sample_count=2000
+rand_sample_count=4000
 
-export FICTION_FOM_MAX_THREADS=8
+export FICTION_FOM_MAX_THREADS=192
 
 for gate_dir in "$input_dir_root"/*; do
   [ -d "$gate_dir" ] || continue
