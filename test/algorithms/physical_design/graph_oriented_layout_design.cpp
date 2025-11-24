@@ -314,7 +314,8 @@ TEST_CASE("Different cost objectives", "[graph-oriented-layout-design]")
     const std::array cost_objectives = {graph_oriented_layout_design_params::cost_objective::AREA,
                                         graph_oriented_layout_design_params::cost_objective::WIRES,
                                         graph_oriented_layout_design_params::cost_objective::CROSSINGS,
-                                        graph_oriented_layout_design_params::cost_objective::ACP};
+                                        graph_oriented_layout_design_params::cost_objective::ACP,
+                                        graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM};
 
     // loop over each cost objective
     for (const auto& cost : cost_objectives)

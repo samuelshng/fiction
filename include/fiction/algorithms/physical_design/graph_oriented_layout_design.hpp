@@ -76,21 +76,21 @@ struct graph_oriented_layout_design_params
          */
         HIGH_EFFORT,
         /**
-         * HIGHEST_EFFORT mode builds upon HIGH_EFFORT by duplicating the 12 search space graphs for different cost
-         * objectives. If the cost objective involves layout area, number of crossings, number of wire segments, or a
-         * combination of area and crossings, a total of 48 search space graphs are generated. For a custom cost
-         * objective, an additional 12 graphs are created, resulting in 60 graphs in total.
-         */
-        HIGHEST_EFFORT,
-        /**
-         * MAXIMUM_EFFORT mode builds upon HIGHEST_EFFORT by duplicating the 48 (60) search space graphs using
-         * randomized fanout substitution strategies and topological orderings. If the cost objective involves layout
-         * area, number of crossings, number of wire segments, or a combination of area and crossings, a total of 96
-         * search space graphs are generated. For a custom cost objective, an additional 12 graphs are created,
-         * resulting in 120 graphs in total. This mode has a higher chance of finding optimal solutions but
-         * significantly increases runtime.
-         */
-        MAXIMUM_EFFORT
+     * HIGHEST_EFFORT mode builds upon HIGH_EFFORT by duplicating the 12 search space graphs for different cost
+     * objectives. If the cost objective involves a built-in objective (layout area, number of crossings, number of
+     * wire segments, area-crossing product, or the layout's x+y dimensions), a total of 60 search space graphs are
+     * generated. For a custom cost objective, an additional 12 graphs are created, resulting in 72 graphs in total.
+     */
+    HIGHEST_EFFORT,
+    /**
+     * MAXIMUM_EFFORT mode builds upon HIGHEST_EFFORT by duplicating the 48 (60) search space graphs using
+     * randomized fanout substitution strategies and topological orderings. If the cost objective involves layout
+     * area, number of crossings, number of wire segments, the layout's x+y dimensions, or a combination of area and
+     * crossings, a total of 120 search space graphs are generated. For a custom cost objective, an additional 24
+     * graphs are created, resulting in 144 graphs in total. This mode has a higher chance of finding optimal solutions
+     * but significantly increases runtime.
+     */
+    MAXIMUM_EFFORT
     };
     /**
      * The effort mode used. Defaults to HIGH_EFFORT.
@@ -126,24 +126,28 @@ struct graph_oriented_layout_design_params
         /**
          * AREA: Optimizes for the total area of the layout, aiming to minimize the space required for the design.
          */
-        AREA,
+        AREA = 0,
         /**
-         * WIRES: Optimizes for the number of wire segments in the layout, reducing the delay and increasing throughput.
-         */
-        WIRES,
-        /**
-         * CROSSINGS: Optimizes for the number of wire crossings in the layout.
-         */
-        CROSSINGS,
-        /**
-         * ACP (Area-Crossings Product): Optimizes for a combination of layout area and the number of crossings.
-         */
-        ACP,
-        /**
-         * CUSTOM: Allows for a user-defined cost objective, enabling optimization based on specific criteria outside
-         * the predefined options.
-         */
-        CUSTOM
+     * WIRES: Optimizes for the number of wire segments in the layout, reducing the delay and increasing throughput.
+     */
+    WIRES = 1,
+    /**
+     * CROSSINGS: Optimizes for the number of wire crossings in the layout.
+     */
+    CROSSINGS = 2,
+    /**
+     * ACP (Area-Crossings Product): Optimizes for a combination of layout area and the number of crossings.
+     */
+    ACP = 3,
+    /**
+     * DIMENSION_SUM: Optimizes for the sum of the layout's width (x-size) and height (y-size).
+     */
+    DIMENSION_SUM = 4,
+    /**
+     * CUSTOM: Allows for a user-defined cost objective, enabling optimization based on specific criteria outside
+     * the predefined options.
+     */
+    CUSTOM = 5
     };
     /**
      * The cost objective used. Defaults to AREA
@@ -938,6 +942,11 @@ class graph_oriented_layout_design_impl
      */
     std::atomic<uint64_t> best_acp_solution = std::numeric_limits<uint64_t>::max();
     /**
+     * The current best solution with respect to the layout dimension sum (x-size + y-size), initialized to the maximum
+     * possible value. This value will be updated as better solutions are found.
+     */
+    std::atomic<uint64_t> best_dimension_sum_solution = std::numeric_limits<uint64_t>::max();
+    /**
      * The current best solution with respect to a custom cost objective, initialized to the maximum possible value.
      * This value will be updated as better solutions are found.
      */
@@ -969,10 +978,24 @@ class graph_oriented_layout_design_impl
      */
     std::atomic<bool> improve_acp_solution = false;
     /**
+     * Flag indicating that an initial solution has been found with the layout dimension sum as cost objective. When
+     * set to `true`, subsequent search space graphs with this cost objective can be pruned.
+     */
+    std::atomic<bool> improve_dimension_sum_solution = false;
+    /**
      * Flag indicating that an initial solution has been found with a custom cost objective.
      * When set to `true`, subsequent search space graphs with a custom cost objective can be pruned.
      */
     std::atomic<bool> improve_custom_solution = false;
+    /**
+     * Built-in cost objectives evaluated in standard GOLD configurations (excludes CUSTOM).
+     */
+    inline static constexpr std::array core_cost_objectives{
+        graph_oriented_layout_design_params::cost_objective::AREA,
+        graph_oriented_layout_design_params::cost_objective::WIRES,
+        graph_oriented_layout_design_params::cost_objective::CROSSINGS,
+        graph_oriented_layout_design_params::cost_objective::ACP,
+        graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM};
     /**
      * In high-efficiency mode, only 2 search space graphs are used
      */
@@ -983,24 +1006,26 @@ class graph_oriented_layout_design_impl
      */
     const uint64_t num_search_space_graphs_high_effort = 12u;
     /**
-     * In highest-effort mode, 48 search space graphs are used.
-     * This includes 12 search space graphs for each of the four base cost objectives layout area, number of wire
-     * segments, number of wire crossings, and area-crossing product.
+     * In highest-effort mode, 60 search space graphs are used.
+     * This includes 12 search space graphs for each of the five base cost objectives layout area, number of wire
+     * segments, number of wire crossings, area-crossing product, and layout dimension sum.
      */
-    const uint64_t num_search_space_graphs_highest_effort = 4u * num_search_space_graphs_high_effort;
+    const uint64_t num_search_space_graphs_highest_effort =
+        static_cast<uint64_t>(core_cost_objectives.size()) * num_search_space_graphs_high_effort;
     /**
-     * In maximum-effort mode, 96 search space graphs are used.
-     * It adds another 48 search space graphs to the 48 search space graphs from highest-effort mode
+     * In maximum-effort mode, 120 search space graphs are used.
+     * It adds another 60 search space graphs to the 60 search space graphs from highest-effort mode
      * using randomized fanout substitution strategies and random topological orderings.
      */
     const uint64_t num_search_space_graphs_maximum_effort = 2u * num_search_space_graphs_highest_effort;
     /**
-     * In highest-effort mode with a custom cost function, 60 search space graphs are used (48 with the standard cost
+     * In highest-effort mode with a custom cost function, 72 search space graphs are used (60 with the standard cost
      * objectives and 12 for the custom one).
      */
-    const uint64_t num_search_space_graphs_highest_effort_custom = 5u * num_search_space_graphs_high_effort;
+    const uint64_t num_search_space_graphs_highest_effort_custom =
+        (static_cast<uint64_t>(core_cost_objectives.size()) + 1) * num_search_space_graphs_high_effort;
     /**
-     * In maximum-effort mode with a custom cost function, 120 search space graphs are used (96 with the standard cost
+     * In maximum-effort mode with a custom cost function, 144 search space graphs are used (120 with the standard cost
      * objectives and 24 for the custom one).
      */
     const uint64_t num_search_space_graphs_maximum_effort_custom = 2u * num_search_space_graphs_highest_effort_custom;
@@ -1787,6 +1812,11 @@ class graph_oriented_layout_design_impl
             cost          = (layout.num_crossings() + 1) *
                    (static_cast<uint64_t>(bb.get_max().x + 1u) * static_cast<uint64_t>(bb.get_max().y + 1u));
         }
+        else if (cost_function == graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM)
+        {
+            const auto bb = bounding_box_2d(layout);
+            cost          = static_cast<uint64_t>(bb.get_max().x + 1u) + static_cast<uint64_t>(bb.get_max().y + 1u);
+        }
         else if (cost_function == graph_oriented_layout_design_params::cost_objective::CUSTOM)
         {
             cost = custom_cost_objective(layout);
@@ -1829,6 +1859,21 @@ class graph_oriented_layout_design_impl
                     static_cast<double>((ssg.nodes_to_place.size() * ssg.nodes_to_place.size()));
 
                 double priority = remaining_nodes_to_place + layout_size + last_position;
+                next_positions.push_back({new_sequence, priority});
+            }
+            else if (ssg.cost == graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM)
+            {
+                const auto width  = static_cast<double>(std::max(layout.x() - 1, position.x) + 1);
+                const auto height = static_cast<double>(std::max(layout.y() - 1, position.y) + 1);
+
+                const double dimension_sum =
+                    (width + height) / static_cast<double>(2 * ssg.nodes_to_place.size());
+
+                const double last_position =
+                    static_cast<double>((position.x + 1) + (position.y + 1)) /
+                    static_cast<double>(2 * ssg.nodes_to_place.size());
+
+                double priority = remaining_nodes_to_place + dimension_sum + last_position;
                 next_positions.push_back({new_sequence, priority});
             }
             else
@@ -1913,6 +1958,12 @@ class graph_oriented_layout_design_impl
                     best_solution    = best_acp_solution;
                     break;
                 }
+                case graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM:
+                {
+                    improve_solution = improve_dimension_sum_solution;
+                    best_solution    = best_dimension_sum_solution;
+                    break;
+                }
                 default:
                 {
                     break;
@@ -1952,6 +2003,12 @@ class graph_oriented_layout_design_impl
                     {
                         improve_acp_solution = true;
                         best_acp_solution    = cost;
+                        break;
+                    }
+                    case graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM:
+                    {
+                        improve_dimension_sum_solution = true;
+                        best_dimension_sum_solution    = cost;
                         break;
                     }
                     default:
@@ -2032,6 +2089,12 @@ class graph_oriented_layout_design_impl
                 {
                     improve_solution = improve_acp_solution;
                     best_solution    = best_acp_solution;
+                    break;
+                }
+                case graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM:
+                {
+                    improve_solution = improve_dimension_sum_solution;
+                    best_solution    = best_dimension_sum_solution;
                     break;
                 }
                 default:
@@ -2284,11 +2347,6 @@ class graph_oriented_layout_design_impl
                     }
                 }
             }
-            const std::array core_objectives = {graph_oriented_layout_design_params::cost_objective::AREA,
-                                                graph_oriented_layout_design_params::cost_objective::WIRES,
-                                                graph_oriented_layout_design_params::cost_objective::CROSSINGS,
-                                                graph_oriented_layout_design_params::cost_objective::ACP};
-
             // batch of 12 SSGs (all combinations of 3 different PI locations, 2 fanout substitution strategies, and 2
             // topological orderings)
             const auto ssg_batch = num_search_space_graphs_high_effort;
@@ -2301,7 +2359,7 @@ class graph_oriented_layout_design_impl
             {
                 std::uint64_t offset = 0;
 
-                for (auto obj : core_objectives)
+                for (auto obj : core_cost_objectives)
                 {
                     set_costs(offset, offset + ssg_batch, obj);
                     offset += ssg_batch;
@@ -2319,7 +2377,7 @@ class graph_oriented_layout_design_impl
                                            num_search_space_graphs_highest_effort_custom :
                                            num_search_space_graphs_highest_effort;
 
-                for (auto obj : core_objectives)
+                for (auto obj : core_cost_objectives)
                 {
                     set_costs(offset, offset + ssg_batch, obj);
                     offset += ssg_batch;

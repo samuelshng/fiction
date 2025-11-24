@@ -50,6 +50,8 @@ inline void graph_oriented_layout_design(pybind11::module& m)
                DOC(fiction_graph_oriented_layout_design_params_cost_objective_CROSSINGS))
         .value("ACP", fiction::graph_oriented_layout_design_params::cost_objective::ACP,
                DOC(fiction_graph_oriented_layout_design_params_cost_objective_ACP))
+        .value("DIMENSION_SUM", fiction::graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM,
+               DOC(fiction_graph_oriented_layout_design_params_cost_objective_DIMENSION_SUM))
         .value("CUSTOM", fiction::graph_oriented_layout_design_params::cost_objective::CUSTOM,
                DOC(fiction_graph_oriented_layout_design_params_cost_objective_CUSTOM))
 

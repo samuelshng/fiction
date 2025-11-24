@@ -49,9 +49,10 @@ gold_command::gold_command(const environment::ptr& e) :
                "Possible values for the cost objective:\n"
                " - `0` (area): Minimize the layout area.\n- `1` (wires): Minimize the number of wire segments.\n"
                " - `2` (crossings): Minimize the number of crossings.\n"
-               " - `3` (acp): Minimize the area-crossing product (ACP), balancing area and crossings.",
+               " - `3` (acp): Minimize the area-crossing product (ACP), balancing area and crossings.\n"
+               " - `4` (x+y): Minimize the sum of the layout's x- and y-size.",
                true)
-        ->set_type_name("{area=0, wires=1, crossings=2, acp=3}");
+        ->set_type_name("{area=0, wires=1, crossings=2, acp=3, x+y=4}");
     add_flag("--return_first,-r", ps.return_first,
              "Terminate on the first found layout; reduces runtime but might sacrifice result quality");
     add_flag("--planar,-p", ps.planar, "Enable planar layout generation");
