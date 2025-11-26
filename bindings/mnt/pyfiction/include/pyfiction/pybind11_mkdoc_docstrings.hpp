@@ -7931,6 +7931,11 @@ R"doc(The current best solution with respect to a custom cost objective,
 initialized to the maximum possible value. This value will be updated
 as better solutions are found.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_best_dimension_diagonal_solution =
+R"doc(The current best solution with respect to the squared layout diagonal
+(x-size^2 + y-size^2), initialized to the maximum possible value. This
+value will be updated as better solutions are found.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_best_dimension_sum_solution =
 R"doc(The current best solution with respect to the layout dimension sum
 (x-size + y-size), initialized to the maximum possible value. This
@@ -8129,6 +8134,11 @@ R"doc(Flag indicating that an initial solution has been found with a custom
 cost objective. When set to `true`, subsequent search space graphs
 with a custom cost objective can be pruned.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_improve_dimension_diagonal_solution =
+R"doc(Flag indicating that an initial solution has been found with the
+squared layout diagonal as cost objective. When set to `true`,
+subsequent search space graphs with this cost objective can be pruned.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_improve_dimension_sum_solution =
 R"doc(Flag indicating that an initial solution has been found with the
 layout dimension sum as cost objective. When set to `true`, subsequent
@@ -8164,9 +8174,9 @@ orderings))doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_num_search_space_graphs_highest_effort =
 R"doc(In highest-effort mode, 72 search space graphs are used. This includes
-12 search space graphs for each of the six base cost objectives layout
-area, number of wire segments, number of wire crossings, area-crossing
-product, layout dimension sum, and squared layout diagonal.)doc";
+12 search space graphs for each of the six base cost objectives:
+layout area, number of wire segments, number of wire crossings, area-
+crossing product, layout dimension sum, and squared layout diagonal.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_num_search_space_graphs_highest_effort_custom =
 R"doc(In highest-effort mode with a custom cost function, 84 search space
@@ -14345,14 +14355,15 @@ R"doc(CUSTOM: Allows for a user-defined cost objective, enabling
 optimization based on specific criteria outside the predefined
 options.)doc";
 
+static const char *__doc_fiction_graph_oriented_layout_design_params_cost_objective_DIMENSION_DIAGONAL =
+R"doc(DIMENSION_DIAGONAL: Optimizes for the squared diagonal of the layout's
+bounding box, i.e., x-size^2 + y-size^2. This is proportional to the
+Euclidean diagonal length and favors compact layouts in both
+dimensions.)doc";
+
 static const char *__doc_fiction_graph_oriented_layout_design_params_cost_objective_DIMENSION_SUM =
 R"doc(DIMENSION_SUM: Optimizes for the sum of the layout's width (x-size)
 and height (y-size).)doc";
-
-static const char *__doc_fiction_graph_oriented_layout_design_params_cost_objective_DIMENSION_DIAGONAL =
-R"doc(DIMENSION_DIAGONAL: Optimizes for the squared diagonal of the
-layout's bounding box (x-size^2 + y-size^2), which is proportional to
-the Euclidean diagonal length.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_params_cost_objective_WIRES =
 R"doc(WIRES: Optimizes for the number of wire segments in the layout,
@@ -23737,3 +23748,4 @@ static const char *__doc_std_tuple_size = R"doc()doc";
 #if defined(__GNUG__)
 #pragma GCC diagnostic pop
 #endif
+
