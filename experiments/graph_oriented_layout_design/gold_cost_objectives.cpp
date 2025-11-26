@@ -71,7 +71,8 @@ int main()  // NOLINT
                  {fiction::graph_oriented_layout_design_params::cost_objective::WIRES, "|W|"},
                  {fiction::graph_oriented_layout_design_params::cost_objective::CROSSINGS, "|C|"},
                  {fiction::graph_oriented_layout_design_params::cost_objective::ACP, "ACP"},
-                 {fiction::graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM, "x+y"}})
+                 {fiction::graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM, "x+y"},
+                 {fiction::graph_oriented_layout_design_params::cost_objective::DIMENSION_DIAGONAL, "diag^2"}})
         {
             const auto& [cost, cost_name]            = cost_pair;
             graph_oriented_layout_design_params.cost = cost;

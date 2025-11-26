@@ -52,6 +52,8 @@ inline void graph_oriented_layout_design(pybind11::module& m)
                DOC(fiction_graph_oriented_layout_design_params_cost_objective_ACP))
         .value("DIMENSION_SUM", fiction::graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM,
                DOC(fiction_graph_oriented_layout_design_params_cost_objective_DIMENSION_SUM))
+        .value("DIMENSION_DIAGONAL", fiction::graph_oriented_layout_design_params::cost_objective::DIMENSION_DIAGONAL,
+               DOC(fiction_graph_oriented_layout_design_params_cost_objective_DIMENSION_DIAGONAL))
         .value("CUSTOM", fiction::graph_oriented_layout_design_params::cost_objective::CUSTOM,
                DOC(fiction_graph_oriented_layout_design_params_cost_objective_CUSTOM))
 

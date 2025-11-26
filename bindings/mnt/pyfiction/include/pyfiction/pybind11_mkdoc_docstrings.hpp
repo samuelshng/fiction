@@ -8163,25 +8163,25 @@ locations) * 2 (fanout substitution strategies) * 2 (topological
 orderings))doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_num_search_space_graphs_highest_effort =
-R"doc(In highest-effort mode, 60 search space graphs are used. This includes
-12 search space graphs for each of the five base cost objectives
-layout area, number of wire segments, number of wire crossings, area-
-crossing product, and layout dimension sum.)doc";
+R"doc(In highest-effort mode, 72 search space graphs are used. This includes
+12 search space graphs for each of the six base cost objectives layout
+area, number of wire segments, number of wire crossings, area-crossing
+product, layout dimension sum, and squared layout diagonal.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_num_search_space_graphs_highest_effort_custom =
-R"doc(In highest-effort mode with a custom cost function, 72 search space
-graphs are used (60 with the standard cost objectives and 12 for the
+R"doc(In highest-effort mode with a custom cost function, 84 search space
+graphs are used (72 with the standard cost objectives and 12 for the
 custom one).)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_num_search_space_graphs_maximum_effort =
-R"doc(In maximum-effort mode, 120 search space graphs are used. It adds
-another 60 search space graphs to the 60 search space graphs from
+R"doc(In maximum-effort mode, 144 search space graphs are used. It adds
+another 72 search space graphs to the 72 search space graphs from
 highest-effort mode using randomized fanout substitution strategies
 and random topological orderings.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_num_search_space_graphs_maximum_effort_custom =
-R"doc(In maximum-effort mode with a custom cost function, 144 search space
-graphs are used (120 with the standard cost objectives and 24 for the
+R"doc(In maximum-effort mode with a custom cost function, 168 search space
+graphs are used (144 with the standard cost objectives and 24 for the
 custom one).)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_place_and_route =
@@ -14349,6 +14349,11 @@ static const char *__doc_fiction_graph_oriented_layout_design_params_cost_object
 R"doc(DIMENSION_SUM: Optimizes for the sum of the layout's width (x-size)
 and height (y-size).)doc";
 
+static const char *__doc_fiction_graph_oriented_layout_design_params_cost_objective_DIMENSION_DIAGONAL =
+R"doc(DIMENSION_DIAGONAL: Optimizes for the squared diagonal of the
+layout's bounding box (x-size^2 + y-size^2), which is proportional to
+the Euclidean diagonal length.)doc";
+
 static const char *__doc_fiction_graph_oriented_layout_design_params_cost_objective_WIRES =
 R"doc(WIRES: Optimizes for the number of wire segments in the layout,
 reducing the delay and increasing throughput.)doc";
@@ -14365,10 +14370,10 @@ static const char *__doc_fiction_graph_oriented_layout_design_params_effort_mode
 R"doc(HIGHEST_EFFORT mode builds upon HIGH_EFFORT by duplicating the 12
 search space graphs for different cost objectives. If the cost
 objective involves a built-in objective (layout area, number of
-crossings, number of wire segments, area-crossing product, or the
-layout's x+y dimensions), a total of 60 search space graphs are
-generated. For a custom cost objective, an additional 12 graphs are
-created, resulting in 72 graphs in total.)doc";
+crossings, number of wire segments, area-crossing product, the
+layout's x+y dimensions, or its squared diagonal), a total of 72
+search space graphs are generated. For a custom cost objective, an
+additional 12 graphs are created, resulting in 84 graphs in total.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_params_effort_mode_HIGH_EFFICIENCY =
 R"doc(HIGH_EFFICIENCY mode generates 2 search space graphs. This option
@@ -14382,15 +14387,15 @@ also extends runtime. When a solution is found in any graph, its cost
 is used to prune the remaining graphs.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_params_effort_mode_MAXIMUM_EFFORT =
-R"doc(MAXIMUM_EFFORT mode builds upon HIGHEST_EFFORT by duplicating the 48
-(60) search space graphs using randomized fanout substitution
+R"doc(MAXIMUM_EFFORT mode builds upon HIGHEST_EFFORT by duplicating the 60
+(72) search space graphs using randomized fanout substitution
 strategies and topological orderings. If the cost objective involves
 layout area, number of crossings, number of wire segments, the
-layout's x+y dimensions, or a combination of area and crossings, a
-total of 120 search space graphs are generated. For a custom cost
-objective, an additional 24 graphs are created, resulting in 144
-graphs in total. This mode has a higher chance of finding optimal
-solutions but significantly increases runtime.)doc";
+layout's x+y dimensions, its squared diagonal, or a combination of
+area and crossings, a total of 144 search space graphs are generated.
+For a custom cost objective, an additional 24 graphs are created,
+resulting in 168 graphs in total. This mode has a higher chance of
+finding optimal solutions but significantly increases runtime.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_params_enable_multithreading =
 R"doc(BETA feature: Flag to enable or disable multithreading during the
@@ -23732,4 +23737,3 @@ static const char *__doc_std_tuple_size = R"doc()doc";
 #if defined(__GNUG__)
 #pragma GCC diagnostic pop
 #endif
-

@@ -315,7 +315,8 @@ TEST_CASE("Different cost objectives", "[graph-oriented-layout-design]")
                                         graph_oriented_layout_design_params::cost_objective::WIRES,
                                         graph_oriented_layout_design_params::cost_objective::CROSSINGS,
                                         graph_oriented_layout_design_params::cost_objective::ACP,
-                                        graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM};
+                                        graph_oriented_layout_design_params::cost_objective::DIMENSION_SUM,
+                                        graph_oriented_layout_design_params::cost_objective::DIMENSION_DIAGONAL};
 
     // loop over each cost objective
     for (const auto& cost : cost_objectives)
