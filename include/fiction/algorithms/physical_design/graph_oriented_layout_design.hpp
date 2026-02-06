@@ -44,6 +44,7 @@
 #include <stdexcept>
 #include <thread>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -682,7 +683,7 @@ class graph_oriented_layout_design_impl
     graph_oriented_layout_design_impl(const Ntk& src, const graph_oriented_layout_design_params& p,
                                       graph_oriented_layout_design_stats&       st,
                                       const std::function<uint64_t(const Lyt&)> custom) :
-            ntk{convert_network<tec_nt>(src)},
+            ntk{initialize_network(src)},
             ps{p},
             pst{st},
             custom_cost_objective{custom},
@@ -881,6 +882,16 @@ class graph_oriented_layout_design_impl
      * The network to be placed and routed.
      */
     tec_nt ntk;
+
+    [[nodiscard]] static tec_nt initialize_network(const Ntk& src)
+    {
+        if constexpr (std::is_same_v<Ntk, tec_nt>)
+        {
+            return src;
+        }
+
+        return convert_network<tec_nt>(src);
+    }
     /**
      * Parameters.
      */
@@ -1574,15 +1585,17 @@ class graph_oriented_layout_design_impl
     void route_single_input_node(const tile<ObstrLyt>& position, ObstrLyt& layout,
                                  node_dict_type<ObstrLyt, tec_nt>& node2pos, const fanin_container<tec_nt>& fc) noexcept
     {
-        const auto& pre   = fc.fanin_nodes[0];
-        const auto  pre_t = static_cast<tile<ObstrLyt>>(node2pos[pre]);
+        const auto& pre  = fc.fanin_nodes[0];
+        auto        src  = node2pos[pre];
+        src.output       = fc.fanin_signals[0].output;
+        const auto pre_t = static_cast<tile<ObstrLyt>>(src);
 
         layout.move_node(layout.get_node(position), position, {});
 
         const auto path = check_path(layout, pre_t, position, new_gate_location::NONE);
         assert(!path.empty());
 
-        route_path(layout, path);
+        route_path(layout, src, path);
 
         for (const auto& el : path)
         {
@@ -1603,8 +1616,13 @@ class graph_oriented_layout_design_impl
         const auto& pre1 = fc.fanin_nodes[0];
         const auto& pre2 = fc.fanin_nodes[1];
 
-        const auto pre1_t = static_cast<tile<ObstrLyt>>(node2pos[pre1]);
-        const auto pre2_t = static_cast<tile<ObstrLyt>>(node2pos[pre2]);
+        auto src1   = node2pos[pre1];
+        src1.output = fc.fanin_signals[0].output;
+        auto src2   = node2pos[pre2];
+        src2.output = fc.fanin_signals[1].output;
+
+        const auto pre1_t = static_cast<tile<ObstrLyt>>(src1);
+        const auto pre2_t = static_cast<tile<ObstrLyt>>(src2);
 
         layout.move_node(layout.get_node(position), position, {});
 
@@ -1624,8 +1642,8 @@ class graph_oriented_layout_design_impl
             layout.obstruct_coordinate(el);
         }
 
-        route_path(layout, path_1);
-        route_path(layout, path_2);
+        route_path(layout, src1, path_1);
+        route_path(layout, src2, path_2);
     }
     /**
      * Executes a single placement step in the layout for the given network node. It determines the type of the node,
@@ -1661,20 +1679,19 @@ class graph_oriented_layout_design_impl
         else if (fc.fanin_nodes.size() == 1)
         {
             const auto& pre = fc.fanin_nodes[0];
+            auto        src = place_info.node2pos[pre];
+            src.output      = fc.fanin_signals[0].output;
 
             // place single input node
             if (ssg.network.is_po(ssg.nodes_to_place[place_info.current_node]))
             {
                 place_info.node2pos[ssg.nodes_to_place[place_info.current_node]] =
-                    layout.create_po(place_info.node2pos[pre], fmt::format("po{}", place_info.current_po++), position);
+                    layout.create_po(src, fmt::format("po{}", place_info.current_po++), position);
             }
             else
             {
-                const auto pre_t = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre]);
-                auto       a     = static_cast<mockturtle::signal<ObstrLyt>>(pre_t);
-
                 place_info.node2pos[ssg.nodes_to_place[place_info.current_node]] =
-                    place(layout, position, ssg.network, ssg.nodes_to_place[place_info.current_node], a);
+                    place(layout, position, ssg.network, ssg.nodes_to_place[place_info.current_node], src);
             }
 
             route_single_input_node(position, layout, place_info.node2pos, fc);
@@ -1685,8 +1702,10 @@ class graph_oriented_layout_design_impl
             const auto& pre1 = fc.fanin_nodes[0];
             const auto& pre2 = fc.fanin_nodes[1];
 
-            const auto a1 = static_cast<mockturtle::signal<ObstrLyt>>(pre1);
-            const auto a2 = static_cast<mockturtle::signal<ObstrLyt>>(pre2);
+            auto a1   = place_info.node2pos[pre1];
+            a1.output = fc.fanin_signals[0].output;
+            auto a2   = place_info.node2pos[pre2];
+            a2.output = fc.fanin_signals[1].output;
 
             place_info.node2pos[ssg.nodes_to_place[place_info.current_node]] = place(
                 layout, position, ssg.network, ssg.nodes_to_place[place_info.current_node], a1, a2, fc.constant_fanin);

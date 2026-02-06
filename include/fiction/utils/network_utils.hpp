@@ -175,6 +175,10 @@ template <typename Ntk>
 struct fanin_container
 {
     /**
+     * A vector of all fanin signals except for constants.
+     */
+    std::vector<mockturtle::signal<Ntk>> fanin_signals{};
+    /**
      * A vector of all fanin nodes except for constants.
      */
     std::vector<mockturtle::node<Ntk>> fanin_nodes{};
@@ -212,6 +216,7 @@ fanin_container<Ntk> fanins(const Ntk& ntk, const mockturtle::node<Ntk>& n) noex
                           }
                           else
                           {
+                              fc.fanin_signals.push_back(fi);
                               fc.fanin_nodes.push_back(fin);
                           }
                       });

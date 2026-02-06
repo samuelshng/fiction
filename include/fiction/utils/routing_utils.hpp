@@ -189,11 +189,11 @@ template <typename Lyt>
  * @param path Path to route wires along.
  */
 template <typename Lyt, typename Path>
-void route_path(Lyt& lyt, const Path& path) noexcept
+void route_path(Lyt& lyt, const mockturtle::signal<Lyt>& source_signal, const Path& path) noexcept
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
 
-    auto incoming_signal = static_cast<mockturtle::signal<Lyt>>(path.source());
+    auto incoming_signal = source_signal;
 
     // exclude source and target
     std::for_each(
@@ -202,6 +202,14 @@ void route_path(Lyt& lyt, const Path& path) noexcept
 
     // establish final connection to target node
     lyt.connect(incoming_signal, lyt.get_node(path.target()));
+}
+
+template <typename Lyt, typename Path>
+void route_path(Lyt& lyt, const Path& path) noexcept
+{
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+
+    route_path(lyt, lyt.make_signal(lyt.get_node(path.source())), path);
 }
 /**
  * Extracts all routing objectives from the given layout. To this end, all routing paths in the layout are traversed,

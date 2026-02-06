@@ -277,6 +277,39 @@ TEMPLATE_TEST_CASE("Complex all function network mapping", "[technology-mapping]
     check_eq(blueprints::maj4_network<TestType>(), mapped_ntk);
 }
 
+TEST_CASE("Half adder mapping uses a single multi-output HA gate", "[technology-mapping]")
+{
+    const auto ntk = blueprints::half_adder_network<mockturtle::aig_network>();
+
+    technology_mapping_stats stats{};
+    const auto               mapped_ntk = technology_mapping(ntk, all_standard_2_input_functions(), &stats);
+
+    REQUIRE(!stats.mapper_stats.mapping_error);
+
+    check_eq(ntk, mapped_ntk);
+
+    CHECK(mapped_ntk.num_gates() == 1);
+
+    uint64_t num_multioutput_gates = 0;
+    uint64_t num_ha_gates          = 0;
+
+    mapped_ntk.foreach_gate(
+        [&mapped_ntk, &num_multioutput_gates, &num_ha_gates](const auto& g)
+        {
+            if (mapped_ntk.is_multioutput(g))
+            {
+                ++num_multioutput_gates;
+            }
+            if (mapped_ntk.is_ha(g))
+            {
+                ++num_ha_gates;
+            }
+        });
+
+    CHECK(num_multioutput_gates == 1);
+    CHECK(num_ha_gates == 1);
+}
+
 TEMPLATE_TEST_CASE("Name conservation after technology mapping", "[technology-mapping]", mockturtle::mig_network)
 {
     auto maj = blueprints::maj1_network<mockturtle::names_view<TestType>>();

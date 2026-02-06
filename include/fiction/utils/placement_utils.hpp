@@ -166,6 +166,13 @@ place(Lyt& lyt, const tile<Lyt>& t, const Ntk& ntk, const mockturtle::node<Ntk>&
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout type");
     static_assert(mockturtle::is_network_type_v<Ntk>, "Ntk is not a network type");
 
+    if constexpr (fiction::has_is_ha_v<Ntk> && fiction::has_create_ha_v<Lyt>)
+    {
+        if (ntk.is_ha(n))
+        {
+            return lyt.create_ha(a, b, t);
+        }
+    }
     if constexpr (mockturtle::has_is_and_v<Ntk>)
     {
         if (ntk.is_and(n))
@@ -334,22 +341,22 @@ template <typename Lyt, typename Ntk>
     }
     else if (num_fanins == 1)
     {
-        const auto fanin_signal = ntk.make_signal(fc.fanin_nodes[0]);
+        const auto fanin_signal = fc.fanin_signals[0];
 
         return place(lyt, t, ntk, n, node2pos[fanin_signal]);
     }
     else if (num_fanins == 2)
     {
-        const auto fanin_signal_a = ntk.make_signal(fc.fanin_nodes[0]);
-        const auto fanin_signal_b = ntk.make_signal(fc.fanin_nodes[1]);
+        const auto fanin_signal_a = fc.fanin_signals[0];
+        const auto fanin_signal_b = fc.fanin_signals[1];
 
         return place(lyt, t, ntk, n, node2pos[fanin_signal_a], node2pos[fanin_signal_b], fc.constant_fanin);
     }
     else if (num_fanins == 3)
     {
-        const auto fanin_signal_a = ntk.make_signal(fc.fanin_nodes[0]);
-        const auto fanin_signal_b = ntk.make_signal(fc.fanin_nodes[1]);
-        const auto fanin_signal_c = ntk.make_signal(fc.fanin_nodes[2]);
+        const auto fanin_signal_a = fc.fanin_signals[0];
+        const auto fanin_signal_b = fc.fanin_signals[1];
+        const auto fanin_signal_c = fc.fanin_signals[2];
 
         return place(lyt, t, ntk, n, node2pos[fanin_signal_a], node2pos[fanin_signal_b], node2pos[fanin_signal_c]);
     }
@@ -485,22 +492,22 @@ place(Lyt& lyt, const tile<Lyt>& t, const Ntk& ntk, const mockturtle::node<Ntk>&
     }
     else if (num_fanins == 1)
     {
-        const auto fanin_signal = ntk.make_signal(fc.fanin_nodes[0]);
+        const auto fanin_signal = fc.fanin_signals[0];
 
         return place(lyt, t, ntk, n, node2pos[fanin_signal][n]);
     }
     else if (num_fanins == 2)
     {
-        const auto fanin_signal_a = ntk.make_signal(fc.fanin_nodes[0]);
-        const auto fanin_signal_b = ntk.make_signal(fc.fanin_nodes[1]);
+        const auto fanin_signal_a = fc.fanin_signals[0];
+        const auto fanin_signal_b = fc.fanin_signals[1];
 
         return place(lyt, t, ntk, n, node2pos[fanin_signal_a][n], node2pos[fanin_signal_b][n], fc.constant_fanin);
     }
     else if (num_fanins == 3)
     {
-        const auto fanin_signal_a = ntk.make_signal(fc.fanin_nodes[0]);
-        const auto fanin_signal_b = ntk.make_signal(fc.fanin_nodes[1]);
-        const auto fanin_signal_c = ntk.make_signal(fc.fanin_nodes[2]);
+        const auto fanin_signal_a = fc.fanin_signals[0];
+        const auto fanin_signal_b = fc.fanin_signals[1];
+        const auto fanin_signal_c = fc.fanin_signals[2];
 
         return place(lyt, t, ntk, n, node2pos[fanin_signal_a][n], node2pos[fanin_signal_b][n],
                      node2pos[fanin_signal_c][n]);

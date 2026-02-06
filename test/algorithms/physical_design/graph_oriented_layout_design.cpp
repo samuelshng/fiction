@@ -7,6 +7,7 @@
 #include "utils/blueprints/network_blueprints.hpp"
 #include "utils/equivalence_checking_utils.hpp"
 
+#include <fiction/algorithms/network_transformation/technology_mapping.hpp>
 #include <fiction/algorithms/physical_design/apply_gate_library.hpp>
 #include <fiction/algorithms/physical_design/graph_oriented_layout_design.hpp>
 #include <fiction/layouts/cartesian_layout.hpp>
@@ -22,10 +23,12 @@
 #include <mockturtle/networks/mig.hpp>
 #include <mockturtle/views/names_view.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
 #include <stdexcept>
+#include <vector>
 
 using namespace fiction;
 
@@ -34,8 +37,14 @@ void check_graph_oriented_layout_design_equiv(const Ntk& ntk)
 {
     graph_oriented_layout_design_stats  stats{};
     graph_oriented_layout_design_params params{};
-    params.timeout      = 100000;
-    params.return_first = true;
+    params.mode                                = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    params.cost                                = graph_oriented_layout_design_params::cost_objective::WIRES;
+    params.enable_multithreading               = true;
+    params.seed                                = 0u;
+    params.timeout                             = 10000u;
+    params.tiles_to_skip_between_pis           = 0u;
+    params.randomize_tiles_to_skip_between_pis = true;
+    params.return_first                        = false;
 
     const auto layout = graph_oriented_layout_design<Lyt>(ntk, params, &stats);
     REQUIRE(layout.has_value());
@@ -71,6 +80,51 @@ TEST_CASE("Layout equivalence after graph-oriented layout design", "[graph-orien
 
         check_graph_oriented_layout_design_equiv_all<gate_layout>();
     }
+}
+
+TEST_CASE("Graph-oriented layout design preserves mapped half adder gate", "[graph-oriented-layout-design]")
+{
+    using gate_layout = cart_gate_clk_lyt;
+
+    const auto aig_ha = blueprints::half_adder_network<mockturtle::aig_network>();
+
+    technology_mapping_stats mapping_stats{};
+    const auto               mapped_ha = technology_mapping(aig_ha, all_standard_2_input_functions(), &mapping_stats);
+    REQUIRE(!mapping_stats.mapper_stats.mapping_error);
+
+    uint64_t mapped_num_ha_gates = 0;
+    mapped_ha.foreach_gate(
+        [&mapped_ha, &mapped_num_ha_gates](const auto& g)
+        {
+            if (mapped_ha.is_ha(g))
+            {
+                ++mapped_num_ha_gates;
+            }
+        });
+
+    REQUIRE(mapped_num_ha_gates == 1);
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.timeout      = 100000;
+    params.return_first = true;
+
+    const auto layout = graph_oriented_layout_design<gate_layout>(mapped_ha, params, &stats);
+    REQUIRE(layout.has_value());
+
+    uint64_t layout_num_ha_gates = 0;
+    layout->foreach_gate(
+        [&layout_num_ha_gates, &layout](const auto& g)
+        {
+            if (layout->is_ha(g))
+            {
+                ++layout_num_ha_gates;
+            }
+        });
+
+    CHECK(layout_num_ha_gates == 1);
+
+    CHECK(layout->num_pos() == 2u);
 }
 
 TEST_CASE("Gate library application", "[graph-oriented-layout-design]")

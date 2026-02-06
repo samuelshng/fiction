@@ -8,6 +8,8 @@
 #include "utils/blueprints/network_blueprints.hpp"
 #include "utils/equivalence_checking_utils.hpp"
 
+#include <fiction/algorithms/network_transformation/technology_mapping.hpp>
+#include <fiction/algorithms/physical_design/graph_oriented_layout_design.hpp>
 #include <fiction/algorithms/physical_design/hexagonalization.hpp>
 #include <fiction/algorithms/physical_design/orthogonal.hpp>
 #include <fiction/layouts/cartesian_layout.hpp>
@@ -211,6 +213,60 @@ TEST_CASE("Layout equivalence", "[hexagonalization]")
 
         check_mapping_equiv_all<gate_layout>();
     }
+}
+
+TEST_CASE("Hexagonalization preserves mapped half adder gate", "[hexagonalization]")
+{
+    using cart_layout = cart_gate_clk_lyt;
+
+    const auto aig_ha = blueprints::half_adder_network<mockturtle::aig_network>();
+
+    technology_mapping_stats mapping_stats{};
+    const auto               mapped_ha = technology_mapping(aig_ha, all_standard_2_input_functions(), &mapping_stats);
+    REQUIRE(!mapping_stats.mapper_stats.mapping_error);
+
+    graph_oriented_layout_design_stats  gold_stats{};
+    graph_oriented_layout_design_params gold_params{};
+    gold_params.mode                                = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    gold_params.cost                                = graph_oriented_layout_design_params::cost_objective::WIRES;
+    gold_params.enable_multithreading               = true;
+    gold_params.seed                                = 0u;
+    gold_params.timeout                             = 10000u;
+    gold_params.tiles_to_skip_between_pis           = 0u;
+    gold_params.randomize_tiles_to_skip_between_pis = true;
+    gold_params.return_first                        = false;
+
+    const auto cart_ha_layout = graph_oriented_layout_design<cart_layout>(mapped_ha, gold_params, &gold_stats);
+    REQUIRE(cart_ha_layout.has_value());
+
+    uint64_t cart_num_ha_gates = 0;
+    cart_ha_layout->foreach_gate(
+        [&cart_num_ha_gates, &cart_ha_layout](const auto& g)
+        {
+            if (cart_ha_layout->is_ha(g))
+            {
+                ++cart_num_ha_gates;
+            }
+        });
+    REQUIRE(cart_num_ha_gates == 1);
+
+    hexagonalization_stats  hex_stats{};
+    hexagonalization_params hex_params{};
+    const auto              hex_layout =
+        hexagonalization<hex_even_row_gate_clk_lyt, cart_layout>(*cart_ha_layout, hex_params, &hex_stats);
+
+    uint64_t hex_num_ha_gates = 0;
+    hex_layout.foreach_gate(
+        [&hex_num_ha_gates, &hex_layout](const auto& g)
+        {
+            if (hex_layout.is_ha(g))
+            {
+                ++hex_num_ha_gates;
+            }
+        });
+    CHECK(hex_num_ha_gates == 1);
+
+    CHECK(hex_layout.num_pos() == 2u);
 }
 
 TEST_CASE("Cartesian to hexagonal")

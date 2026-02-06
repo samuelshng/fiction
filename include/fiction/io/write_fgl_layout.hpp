@@ -77,6 +77,7 @@ inline constexpr const char* SIGNAL         = "        <signal>\n"
                                               "          <x>{}</x>\n"
                                               "          <y>{}</y>\n"
                                               "          <z>{}</z>\n"
+                                              "          <p>{}</p>\n"
                                               "        </signal>\n";
 
 }  // namespace fcn
@@ -188,10 +189,16 @@ class write_fgl_layout_impl
             [&gate_id, this](const auto& gate)
             {
                 os << fcn::OPEN_GATE;
-                const auto coord = lyt.get_tile(gate);
-                if (const auto signals = lyt.incoming_data_flow(coord); signals.size() == 1)
+                const auto                           coord = lyt.get_tile(gate);
+                std::vector<mockturtle::signal<Lyt>> signals{};
+                signals.reserve(lyt.fanin_size(gate));
+                lyt.foreach_fanin(gate, [&signals](const auto& signal) { signals.push_back(signal); });
+
+                const auto signal_to_tile = [](const auto& signal) { return static_cast<tile<Lyt>>(signal); };
+
+                if (signals.size() == 1)
                 {
-                    const auto incoming_signal = signals[0];
+                    const auto incoming_signal = signal_to_tile(signals[0]);
 
                     if (lyt.is_po(gate))
                     {
@@ -213,15 +220,70 @@ class write_fgl_layout_impl
                     }
 
                     os << fcn::OPEN_INCOMING;
-                    os << fmt::format(fcn::SIGNAL, incoming_signal.x, incoming_signal.y, incoming_signal.z);
+                    os << fmt::format(fcn::SIGNAL, incoming_signal.x, incoming_signal.y, incoming_signal.z,
+                                      signals[0].output);
                     os << fcn::CLOSE_INCOMING;
                 }
                 else if (signals.size() == 2)
                 {
-                    const auto incoming_signal_a = signals[0];
-                    const auto incoming_signal_b = signals[1];
+                    const auto incoming_signal_a = signal_to_tile(signals[0]);
+                    const auto incoming_signal_b = signal_to_tile(signals[1]);
 
-                    if (lyt.is_and(gate))
+                    if constexpr (has_is_ha_v<Lyt>)
+                    {
+                        if (lyt.is_ha(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "HA", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_and(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "AND", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_nand(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "NAND", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_or(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "OR", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_nor(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "NOR", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_xor(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "XOR", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_xnor(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "XNOR", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_lt(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "LT", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_gt(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "GT", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_le(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "LE", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_ge(gate))
+                        {
+                            os << fmt::format(fcn::GATE, gate_id, "GE", "", coord.x, coord.y, coord.z);
+                        }
+                        else if (lyt.is_function(gate))
+                        {
+                            const auto node_fun = lyt.node_function(gate);
+
+                            os << fmt::format(fcn::GATE, gate_id, kitty::to_hex(node_fun), "", coord.x, coord.y,
+                                              coord.z);
+                        }
+                    }
+                    else if (lyt.is_and(gate))
                     {
                         os << fmt::format(fcn::GATE, gate_id, "AND", "", coord.x, coord.y, coord.z);
                     }
@@ -268,15 +330,17 @@ class write_fgl_layout_impl
                         os << fmt::format(fcn::GATE, gate_id, kitty::to_hex(node_fun), "", coord.x, coord.y, coord.z);
                     }
                     os << fcn::OPEN_INCOMING;
-                    os << fmt::format(fcn::SIGNAL, incoming_signal_a.x, incoming_signal_a.y, incoming_signal_a.z);
-                    os << fmt::format(fcn::SIGNAL, incoming_signal_b.x, incoming_signal_b.y, incoming_signal_b.z);
+                    os << fmt::format(fcn::SIGNAL, incoming_signal_a.x, incoming_signal_a.y, incoming_signal_a.z,
+                                      signals[0].output);
+                    os << fmt::format(fcn::SIGNAL, incoming_signal_b.x, incoming_signal_b.y, incoming_signal_b.z,
+                                      signals[1].output);
                     os << fcn::CLOSE_INCOMING;
                 }
                 else if (signals.size() == 3)
                 {
-                    const auto incoming_signal_a = signals[0];
-                    const auto incoming_signal_b = signals[1];
-                    const auto incoming_signal_c = signals[2];
+                    const auto incoming_signal_a = signal_to_tile(signals[0]);
+                    const auto incoming_signal_b = signal_to_tile(signals[1]);
+                    const auto incoming_signal_c = signal_to_tile(signals[2]);
 
                     if (lyt.is_maj(gate))
                     {
@@ -289,9 +353,12 @@ class write_fgl_layout_impl
                         os << fmt::format(fcn::GATE, gate_id, kitty::to_hex(node_fun), "", coord.x, coord.y, coord.z);
                     }
                     os << fcn::OPEN_INCOMING;
-                    os << fmt::format(fcn::SIGNAL, incoming_signal_a.x, incoming_signal_a.y, incoming_signal_a.z);
-                    os << fmt::format(fcn::SIGNAL, incoming_signal_b.x, incoming_signal_b.y, incoming_signal_b.z);
-                    os << fmt::format(fcn::SIGNAL, incoming_signal_c.x, incoming_signal_c.y, incoming_signal_c.z);
+                    os << fmt::format(fcn::SIGNAL, incoming_signal_a.x, incoming_signal_a.y, incoming_signal_a.z,
+                                      signals[0].output);
+                    os << fmt::format(fcn::SIGNAL, incoming_signal_b.x, incoming_signal_b.y, incoming_signal_b.z,
+                                      signals[1].output);
+                    os << fmt::format(fcn::SIGNAL, incoming_signal_c.x, incoming_signal_c.y, incoming_signal_c.z,
+                                      signals[2].output);
                     os << fcn::CLOSE_INCOMING;
                 }
                 else if (lyt.is_function(gate))
@@ -303,7 +370,9 @@ class write_fgl_layout_impl
                     os << fcn::OPEN_INCOMING;
                     for (std::size_t i = 0; i < signals.size(); i++)
                     {
-                        os << fmt::format(fcn::SIGNAL, signals[i].x, signals[i].y, signals[i].z);
+                        const auto incoming_signal = signal_to_tile(signals[i]);
+                        os << fmt::format(fcn::SIGNAL, incoming_signal.x, incoming_signal.y, incoming_signal.z,
+                                          signals[i].output);
                     }
                     os << fcn::CLOSE_INCOMING;
                 }

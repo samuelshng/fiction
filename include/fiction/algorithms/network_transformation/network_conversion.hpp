@@ -65,7 +65,8 @@ class convert_network_impl<NtkDest, NtkSrc, false>
                               [this, &ntk_dest, &old2new, &children](const auto& f)
                               {
                                   const auto fn         = ntk.get_node(f);
-                                  const auto tgt_signal = old2new[fn];
+                                  auto       tgt_signal = old2new[fn];
+                                  set_signal_output(tgt_signal, f);
 
                                   children.emplace_back(ntk.is_complemented(f) ? ntk_dest.create_not(tgt_signal) :
                                                                                  tgt_signal);
@@ -88,6 +89,25 @@ class convert_network_impl<NtkDest, NtkSrc, false>
                 // update progress
                 bar(i);
 #endif
+
+                if constexpr (mockturtle::has_is_multioutput_v<TopoNtkSrc> &&
+                              mockturtle::has_num_outputs_v<TopoNtkSrc> &&
+                              mockturtle::has_node_function_pin_v<TopoNtkSrc> && has_create_multioutput_node_v<NtkDest>)
+                {
+                    if (ntk.is_multioutput(g))
+                    {
+                        std::vector<kitty::dynamic_truth_table> functions{};
+                        functions.reserve(ntk.num_outputs(g));
+
+                        for (uint32_t pin = 0; pin < ntk.num_outputs(g); ++pin)
+                        {
+                            functions.push_back(ntk.node_function_pin(g, pin));
+                        }
+
+                        old2new[g] = ntk_dest.create_node(children, functions);
+                        return true;
+                    }
+                }
 
                 if constexpr (mockturtle::has_is_and_v<TopoNtkSrc> && mockturtle::has_create_and_v<NtkDest>)
                 {
@@ -165,8 +185,10 @@ class convert_network_impl<NtkDest, NtkSrc, false>
         ntk.foreach_po(
             [this, &ntk_dest, &old2new](const auto& po)
             {
-                const auto tgt_signal = old2new[ntk.get_node(po)];
-                const auto tgt_po     = ntk.is_complemented(po) ? ntk_dest.create_not(tgt_signal) : tgt_signal;
+                auto tgt_signal = old2new[ntk.get_node(po)];
+                set_signal_output(tgt_signal, po);
+                auto tgt_po = tgt_signal;
+                tgt_po      = ntk.is_complemented(po) ? ntk_dest.create_not(tgt_po) : tgt_po;
 
                 ntk_dest.create_po(tgt_po);
             });
@@ -178,6 +200,40 @@ class convert_network_impl<NtkDest, NtkSrc, false>
     }
 
   private:
+    template <typename DstSignal, typename SrcSignal, typename = void>
+    struct can_copy_output : std::false_type
+    {};
+
+    template <typename DstSignal, typename SrcSignal>
+    struct can_copy_output<
+        DstSignal, SrcSignal,
+        std::void_t<decltype(std::declval<DstSignal&>().output), decltype(std::declval<SrcSignal const&>().output)>>
+            : std::true_type
+    {};
+
+    template <typename DstSignal, typename SrcSignal>
+    static void set_signal_output(DstSignal& dst, const SrcSignal& src) noexcept
+    {
+        if constexpr (can_copy_output<DstSignal, SrcSignal>::value)
+        {
+            dst.output = src.output;
+        }
+    }
+
+    template <typename Ntk, typename = void>
+    struct has_create_multioutput_node : std::false_type
+    {};
+
+    template <typename Ntk>
+    struct has_create_multioutput_node<Ntk, std::void_t<decltype(std::declval<Ntk&>().create_node(
+                                                std::declval<const std::vector<typename Ntk::signal>&>(),
+                                                std::declval<const std::vector<kitty::dynamic_truth_table>&>()))>>
+            : std::true_type
+    {};
+
+    template <typename Ntk>
+    inline static constexpr bool has_create_multioutput_node_v = has_create_multioutput_node<Ntk>::value;
+
     using TopoNtkSrc = mockturtle::topo_view<NtkSrc>;
     TopoNtkSrc ntk;
 };

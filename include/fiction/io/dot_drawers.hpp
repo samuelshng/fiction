@@ -136,6 +136,13 @@ class technology_dot_drawer : public mockturtle::gate_dot_drawer<Ntk>
                 return "thistle";
             }
         }
+        if constexpr (has_is_ha_v<Ntk>)
+        {
+            if (ntk.is_ha(n))
+            {
+                return "plum1";
+            }
+        }
         if constexpr (has_is_xor_and_v<Ntk>)
         {
             if (ntk.is_xor_and(n))
@@ -253,6 +260,13 @@ class technology_dot_drawer : public mockturtle::gate_dot_drawer<Ntk>
             if (ntk.is_dot(n))
             {
                 return "DOT";
+            }
+        }
+        if constexpr (has_is_ha_v<Ntk>)
+        {
+            if (ntk.is_ha(n))
+            {
+                return "HA";
             }
         }
         if constexpr (has_is_xor_and_v<Ntk>)

@@ -193,6 +193,7 @@ struct technology_mapping_params
     params.nor2  = true;
     params.xor2  = true;
     params.xnor2 = true;
+    params.ha    = true;
 
     return params;
 }
@@ -218,6 +219,7 @@ struct technology_mapping_params
     params.gt2   = true;
     params.le2   = true;
     params.ge2   = true;
+    params.ha    = true;
 
     return params;
 }
@@ -262,6 +264,7 @@ struct technology_mapping_params
     params.nor2  = true;
     params.xor2  = true;
     params.xnor2 = true;
+    params.ha    = true;
 
     params.and3    = true;
     params.xor_and = true;
@@ -296,6 +299,7 @@ struct technology_mapping_params
     params.gt2   = true;
     params.le2   = true;
     params.ge2   = true;
+    params.ha    = true;
 
     params.and3    = true;
     params.xor_and = true;
@@ -606,16 +610,24 @@ class technology_mapping_impl
     template <unsigned NumInp>
     [[nodiscard]] tec_nt perform_mapping(const std::vector<mockturtle::gate>& gates) const noexcept
     {
-        mockturtle::tech_library<NumInp> lib{gates};
+        mockturtle::tech_library_params lib_params{};
+        lib_params.load_multioutput_gates        = true;
+        lib_params.load_multioutput_gates_single = false;
 
-        const auto mapped_ntk = mockturtle::emap(ntk, lib, params.mapper_params, &stats.mapper_stats);
+        mockturtle::tech_library<NumInp> lib{gates, lib_params};
+
+        auto mapper_ps            = params.mapper_params;
+        mapper_ps.map_multioutput = mapper_ps.map_multioutput || params.ha;
+
+        const auto mapped_ntk = mockturtle::emap(ntk, lib, mapper_ps, &stats.mapper_stats);
 
         tec_nt converted_ntk{};
 
         if (!stats.mapper_stats.mapping_error)
         {
             // convert network
-            converted_ntk = convert_network<tec_nt>(mapped_ntk);
+            const auto net = netlist{mapped_ntk._storage};
+            converted_ntk  = mockturtle::names_view{net};
             restore_names(ntk, converted_ntk);
         }
 

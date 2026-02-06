@@ -220,6 +220,31 @@ TEST_CASE("Draw Cartesian layout blueprints", "[dot-drawers]")
     }
 }
 
+TEST_CASE("Draw Cartesian layout with half adder gate", "[dot-drawers]")
+{
+    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+
+    gate_layout layout{{2, 1, 0}, twoddwave_clocking<gate_layout>(), "half_adder_layout"};
+
+    const auto a = layout.create_pi("a", {0, 0});
+    const auto b = layout.create_pi("b", {0, 1});
+
+    const auto ha_gate = layout.create_ha(a, b, {1, 0});
+
+    const auto carry = ha_gate;
+    auto       sum   = ha_gate;
+    sum.output       = 1u;
+
+    layout.create_po(carry, "carry", {2, 0});
+    layout.create_po(sum, "sum", {2, 1});
+
+    std::stringstream dot_stream{};
+    write_dot_layout<gate_layout, gate_layout_cartesian_drawer<gate_layout, false, false>>(layout, dot_stream);
+
+    CHECK(dot_stream.str().find("x1y0 [label=\"HA\", fillcolor=plum1];") != std::string::npos);
+    CHECK(dot_stream.str().find("x1y0 [label=\"AND\", fillcolor=lightcoral];") == std::string::npos);
+}
+
 TEST_CASE("Draw empty hexagonal layouts", "[dot-drawers]")
 {
     SECTION("odd row")

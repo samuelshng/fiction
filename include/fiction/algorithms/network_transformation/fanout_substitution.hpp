@@ -19,6 +19,7 @@
 #include <optional>
 #include <queue>
 #include <random>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -103,7 +104,7 @@ class fanout_substitution_impl
 {
   public:
     fanout_substitution_impl(const NtkSrc& src, const fanout_substitution_params p) :
-            ntk_topo{convert_network<NtkDest>(src)},
+            ntk_topo{prepare_source_network(src)},
             available_fanouts{ntk_topo},
             ps{p}
     {
@@ -141,6 +142,7 @@ class fanout_substitution_impl
                                            const auto fn = ntk_topo.get_node(f);
 
                                            auto child = old2new[fn];
+                                           set_signal_output(child, f);
 
                                            // constants do not need fanout trees
                                            if (!ntk_topo.is_constant(fn))
@@ -169,9 +171,10 @@ class fanout_substitution_impl
             {
                 const auto po_node    = ntk_topo.get_node(po);
                 auto       tgt_signal = old2new[po_node];
-                auto       tgt_po     = get_fanout(substituted, po_node, tgt_signal);
+                set_signal_output(tgt_signal, po);
+                auto tgt_po = get_fanout(substituted, po_node, tgt_signal);
 
-                tgt_po = ntk_topo.is_complemented(po) ? substituted.create_not(tgt_signal) : tgt_po;
+                tgt_po = ntk_topo.is_complemented(po) ? substituted.create_not(tgt_po) : tgt_po;
 
                 substituted.create_po(tgt_po);
             });
@@ -209,8 +212,54 @@ class fanout_substitution_impl
      */
     std::optional<rng_state> rng;
 
+    [[nodiscard]] static NtkDest prepare_source_network(const NtkSrc& src)
+    {
+        if constexpr (std::is_same_v<NtkDest, NtkSrc>)
+        {
+            return src;
+        }
+
+        return convert_network<NtkDest>(src);
+    }
+
+    template <typename DstSignal, typename SrcSignal, typename = void>
+    struct can_copy_output : std::false_type
+    {};
+
+    template <typename DstSignal, typename SrcSignal>
+    struct can_copy_output<
+        DstSignal, SrcSignal,
+        std::void_t<decltype(std::declval<DstSignal&>().output), decltype(std::declval<SrcSignal const&>().output)>>
+            : std::true_type
+    {};
+
+    template <typename DstSignal, typename SrcSignal>
+    static void set_signal_output(DstSignal& dst, const SrcSignal& src) noexcept
+    {
+        if constexpr (can_copy_output<DstSignal, SrcSignal>::value)
+        {
+            dst.output = src.output;
+        }
+    }
+
     void generate_fanout_tree(NtkDest& substituted, const mockturtle::node<NtkSrc>& n, const old2new_map& old2new)
     {
+        // Multi-output nodes carry semantically distinct output pins and must not be merged into a shared fanout tree.
+        if constexpr (mockturtle::has_is_multioutput_v<decltype(ntk_topo)>)
+        {
+            if (ntk_topo.is_multioutput(n))
+            {
+                return;
+            }
+        }
+        if constexpr (mockturtle::has_num_outputs_v<decltype(ntk_topo)>)
+        {
+            if (ntk_topo.num_outputs(n) > 1u)
+            {
+                return;
+            }
+        }
+
         // skip fanout tree generation if n is a proper fanout node
         if constexpr (has_is_fanout_v<NtkDest>)
         {
@@ -257,6 +306,23 @@ class fanout_substitution_impl
     mockturtle::signal<NtkDest> get_fanout(const NtkDest& substituted, const mockturtle::node<NtkSrc>& n,
                                            mockturtle::signal<NtkDest>& child)
     {
+        // Shared fanout pools are keyed by source node and are therefore invalid for multi-output nodes where each
+        // output pin is semantically distinct.
+        if constexpr (mockturtle::has_is_multioutput_v<decltype(ntk_topo)>)
+        {
+            if (ntk_topo.is_multioutput(n))
+            {
+                return child;
+            }
+        }
+        if constexpr (mockturtle::has_num_outputs_v<decltype(ntk_topo)>)
+        {
+            if (ntk_topo.num_outputs(n) > 1u)
+            {
+                return child;
+            }
+        }
+
         if (substituted.fanout_size(substituted.get_node(child)) >= ps.threshold)
         {
             if (auto fanouts = available_fanouts[n]; !fanouts.empty())

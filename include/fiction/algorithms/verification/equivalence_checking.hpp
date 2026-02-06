@@ -16,7 +16,10 @@
 #include <mockturtle/networks/klut.hpp>
 #include <mockturtle/traits.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
+#include <mockturtle/views/names_view.hpp>
+#include <mockturtle/views/topo_view.hpp>
 
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -68,6 +71,311 @@ struct equivalence_checking_stats
 
 namespace detail
 {
+/**
+ * @brief Checks whether a network signal exposes an output-pin field.
+ *
+ * @tparam Ntk Network type.
+ */
+template <typename Ntk, typename = void>
+struct has_signal_output_pin : std::false_type
+{};
+
+template <typename Ntk>
+struct has_signal_output_pin<Ntk, std::void_t<decltype(std::declval<typename Ntk::signal>().output)>> : std::true_type
+{};
+
+template <typename Ntk>
+inline constexpr bool has_signal_output_pin_v = has_signal_output_pin<Ntk>::value;
+
+/**
+ * @brief Returns a signal's output pin if present, otherwise pin 0.
+ *
+ * @tparam Ntk Network type.
+ * @param s Network signal.
+ * @return Output pin index represented by `s`.
+ */
+template <typename Ntk>
+[[nodiscard]] uint32_t signal_output_pin(const typename Ntk::signal& s) noexcept
+{
+    if constexpr (has_signal_output_pin_v<Ntk>)
+    {
+        return static_cast<uint32_t>(s.output);
+    }
+
+    static_cast<void>(s);
+    return 0u;
+}
+
+/**
+ * @brief Returns the number of output pins for a node.
+ *
+ * @tparam Ntk Network type.
+ * @param ntk Network instance.
+ * @param n Node in `ntk`.
+ * @return Number of output pins represented by `n`.
+ */
+template <typename Ntk>
+[[nodiscard]] uint32_t node_output_pin_count(const Ntk& ntk, const typename Ntk::node n) noexcept
+{
+    if constexpr (mockturtle::has_num_outputs_v<Ntk>)
+    {
+        if (ntk.is_multioutput(n))
+        {
+            return ntk.num_outputs(n);
+        }
+    }
+
+    if (ntk.is_multioutput(n))
+    {
+        return 2u;
+    }
+
+    return 1u;
+}
+
+/**
+ * @brief Ensures bookkeeping vectors can represent all output pins of a node.
+ *
+ * @tparam Ntk Network type.
+ * @param old2new Node mapping from source network signals to resulting KLUT signals.
+ * @param required_outputs Marker vector for output pins that are required in the resulting network.
+ * @param ntk Source network.
+ * @param n Node to reserve output-pin capacity for.
+ */
+template <typename Ntk>
+void ensure_output_pin_capacity(mockturtle::node_map<std::vector<mockturtle::signal<mockturtle::klut_network>>,
+                                                     mockturtle::topo_view<Ntk>>&                    old2new,
+                                mockturtle::node_map<std::vector<bool>, mockturtle::topo_view<Ntk>>& required_outputs,
+                                const mockturtle::topo_view<Ntk>& ntk, const typename Ntk::node n)
+{
+    const auto pin_count = node_output_pin_count(ntk, n);
+
+    if (old2new[n].size() < pin_count)
+    {
+        old2new[n].resize(pin_count);
+    }
+    if (required_outputs[n].size() < pin_count)
+    {
+        required_outputs[n].resize(pin_count, false);
+    }
+}
+
+/**
+ * @brief Ensures bookkeeping vectors can represent a specific output pin of a node.
+ *
+ * @tparam Ntk Network type.
+ * @param old2new Node mapping from source network signals to resulting KLUT signals.
+ * @param required_outputs Marker vector for output pins that are required in the resulting network.
+ * @param ntk Source network.
+ * @param n Node to reserve output-pin capacity for.
+ * @param pin Output pin to reserve.
+ */
+template <typename Ntk>
+void ensure_output_pin_capacity(mockturtle::node_map<std::vector<mockturtle::signal<mockturtle::klut_network>>,
+                                                     mockturtle::topo_view<Ntk>>&                    old2new,
+                                mockturtle::node_map<std::vector<bool>, mockturtle::topo_view<Ntk>>& required_outputs,
+                                const mockturtle::topo_view<Ntk>& ntk, const typename Ntk::node n, const uint32_t pin)
+{
+    ensure_output_pin_capacity(old2new, required_outputs, ntk, n);
+
+    if (old2new[n].size() <= pin)
+    {
+        old2new[n].resize(pin + 1u);
+    }
+    if (required_outputs[n].size() <= pin)
+    {
+        required_outputs[n].resize(pin + 1u, false);
+    }
+}
+
+/**
+ * @brief Splits all multi-output nodes in a network into dedicated single-output KLUT nodes.
+ *
+ * @tparam Ntk Source network type.
+ * @param src Source network.
+ * @return Equivalent single-output `klut_network`.
+ */
+template <typename Ntk>
+mockturtle::klut_network split_multioutput_network(const Ntk& src)
+{
+    static_assert(mockturtle::has_is_multioutput_v<Ntk>, "Ntk does not implement is_multioutput");
+    static_assert(mockturtle::has_node_function_pin_v<Ntk>, "Ntk does not implement node_function_pin");
+
+    using klut_signal = mockturtle::signal<mockturtle::klut_network>;
+
+    mockturtle::topo_view<Ntk>                                                 topo_ntk{src};
+    mockturtle::klut_network                                                   klut_ntk{};
+    mockturtle::node_map<std::vector<klut_signal>, mockturtle::topo_view<Ntk>> old2new{topo_ntk};
+    mockturtle::node_map<std::vector<bool>, mockturtle::topo_view<Ntk>>        required_outputs{topo_ntk};
+
+    topo_ntk.foreach_gate(
+        [&topo_ntk, &old2new, &required_outputs](const auto& gate)
+        {
+            ensure_output_pin_capacity(old2new, required_outputs, topo_ntk, gate);
+
+            topo_ntk.foreach_fanin(gate,
+                                   [&topo_ntk, &old2new, &required_outputs](const auto& fanin)
+                                   {
+                                       const auto fanin_node = topo_ntk.get_node(fanin);
+                                       if (!topo_ntk.is_constant(fanin_node))
+                                       {
+                                           const auto output_pin = static_cast<std::size_t>(
+                                               topo_ntk.is_multioutput(fanin_node) ? signal_output_pin<Ntk>(fanin) :
+                                                                                     0u);
+                                           ensure_output_pin_capacity(old2new, required_outputs, topo_ntk, fanin_node,
+                                                                      static_cast<uint32_t>(output_pin));
+                                           required_outputs[fanin_node][output_pin] = true;
+                                       }
+                                   });
+        });
+
+    topo_ntk.foreach_po(
+        [&topo_ntk, &old2new, &required_outputs](const auto& po)
+        {
+            const auto po_node = topo_ntk.get_node(po);
+            if (!topo_ntk.is_constant(po_node))
+            {
+                const auto output_pin =
+                    static_cast<std::size_t>(topo_ntk.is_multioutput(po_node) ? signal_output_pin<Ntk>(po) : 0u);
+                ensure_output_pin_capacity(old2new, required_outputs, topo_ntk, po_node,
+                                           static_cast<uint32_t>(output_pin));
+                required_outputs[po_node][output_pin] = true;
+            }
+        });
+
+    topo_ntk.foreach_pi(
+        [&topo_ntk, &klut_ntk, &old2new, &required_outputs](const auto& pi)
+        {
+            ensure_output_pin_capacity(old2new, required_outputs, topo_ntk, pi);
+
+            const auto pi_sig = klut_ntk.create_pi();
+            for (auto& mapped_output : old2new[pi])
+            {
+                mapped_output = pi_sig;
+            }
+        });
+
+    topo_ntk.foreach_gate(
+        [&topo_ntk, &klut_ntk, &old2new, &required_outputs](const auto& gate)
+        {
+            ensure_output_pin_capacity(old2new, required_outputs, topo_ntk, gate);
+
+            std::vector<klut_signal> children{};
+            children.reserve(topo_ntk.fanin_size(gate));
+
+            topo_ntk.foreach_fanin(gate,
+                                   [&topo_ntk, &klut_ntk, &old2new, &required_outputs, &children](const auto& fanin)
+                                   {
+                                       const auto fanin_node = topo_ntk.get_node(fanin);
+                                       auto       child      = klut_ntk.get_constant(false);
+
+                                       if (topo_ntk.is_constant(fanin_node))
+                                       {
+                                           child = klut_ntk.get_constant(topo_ntk.constant_value(fanin_node));
+                                       }
+                                       else
+                                       {
+                                           const auto output_pin = static_cast<std::size_t>(
+                                               topo_ntk.is_multioutput(fanin_node) ? signal_output_pin<Ntk>(fanin) :
+                                                                                     0u);
+                                           ensure_output_pin_capacity(old2new, required_outputs, topo_ntk, fanin_node,
+                                                                      static_cast<uint32_t>(output_pin));
+                                           child = old2new[fanin_node][output_pin];
+                                       }
+
+                                       if (topo_ntk.is_complemented(fanin))
+                                       {
+                                           child = klut_ntk.create_not(child);
+                                       }
+
+                                       children.push_back(child);
+                                   });
+
+            if (topo_ntk.is_multioutput(gate))
+            {
+                const auto output_pin_count = node_output_pin_count(topo_ntk, gate);
+
+                for (uint32_t pin = 0u; pin < output_pin_count; ++pin)
+                {
+                    if (required_outputs[gate][pin])
+                    {
+                        old2new[gate][pin] = klut_ntk.create_node(children, topo_ntk.node_function_pin(gate, pin));
+                    }
+                }
+
+                const auto first_required_pin =
+                    std::find(required_outputs[gate].cbegin(), required_outputs[gate].cend(), true);
+                if (first_required_pin != required_outputs[gate].cend())
+                {
+                    const auto representative_pin =
+                        static_cast<uint32_t>(std::distance(required_outputs[gate].cbegin(), first_required_pin));
+
+                    for (uint32_t pin = 0u; pin < output_pin_count; ++pin)
+                    {
+                        if (!required_outputs[gate][pin])
+                        {
+                            old2new[gate][pin] = old2new[gate][representative_pin];
+                        }
+                    }
+                }
+            }
+            else
+            {
+                const auto gate_sig = klut_ntk.create_node(children, topo_ntk.node_function(gate));
+                for (auto& mapped_output : old2new[gate])
+                {
+                    mapped_output = gate_sig;
+                }
+            }
+        });
+
+    topo_ntk.foreach_po(
+        [&topo_ntk, &klut_ntk, &old2new](const auto& po)
+        {
+            const auto po_node = topo_ntk.get_node(po);
+            auto       po_sig  = klut_ntk.get_constant(false);
+
+            if (topo_ntk.is_constant(po_node))
+            {
+                po_sig = klut_ntk.get_constant(topo_ntk.constant_value(po_node));
+            }
+            else
+            {
+                const auto output_pin =
+                    static_cast<std::size_t>(topo_ntk.is_multioutput(po_node) ? signal_output_pin<Ntk>(po) : 0u);
+                po_sig = old2new[po_node][output_pin];
+            }
+
+            if (topo_ntk.is_complemented(po))
+            {
+                po_sig = klut_ntk.create_not(po_sig);
+            }
+
+            klut_ntk.create_po(po_sig);
+        });
+
+    return klut_ntk;
+}
+
+/**
+ * @brief Prepares a network for SAT-based equivalence checking.
+ *
+ * Multi-output networks are transformed into single-output KLUT networks while preserving output-pin semantics.
+ *
+ * @tparam NtkOrLyt Source network or layout type.
+ * @param ntk_or_lyt Source network or layout.
+ * @return Equivalent `klut_network` used for miter construction.
+ */
+template <typename NtkOrLyt>
+mockturtle::klut_network prepare_for_equivalence_checking(const NtkOrLyt& ntk_or_lyt)
+{
+    if constexpr (mockturtle::has_is_multioutput_v<NtkOrLyt> && mockturtle::has_node_function_pin_v<NtkOrLyt>)
+    {
+        return split_multioutput_network(ntk_or_lyt);
+    }
+
+    return mockturtle::cleanup_dangling<NtkOrLyt, mockturtle::klut_network>(ntk_or_lyt, true, false);
+}
 
 template <typename Spec, typename Impl>
 class equivalence_checking_impl
@@ -107,7 +415,9 @@ class equivalence_checking_impl
             }
         }
 
-        const auto miter = mockturtle::miter<mockturtle::klut_network>(spec, impl);
+        const auto spec_ntk = prepare_for_equivalence_checking(spec);
+        const auto impl_ntk = prepare_for_equivalence_checking(impl);
+        const auto miter    = mockturtle::miter<mockturtle::klut_network>(spec_ntk, impl_ntk);
 
         if (miter)
         {

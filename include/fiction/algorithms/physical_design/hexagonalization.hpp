@@ -27,6 +27,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -131,12 +132,33 @@ struct hexagonalization_stats
 namespace detail
 {
 
+template <typename DstSignal, typename SrcSignal, typename = void>
+struct can_copy_output : std::false_type
+{};
+
+template <typename DstSignal, typename SrcSignal>
+struct can_copy_output<
+    DstSignal, SrcSignal,
+    std::void_t<decltype(std::declval<DstSignal&>().output), decltype(std::declval<const SrcSignal&>().output)>>
+        : std::true_type
+{};
+
+template <typename DstSignal, typename SrcSignal>
+void set_signal_output(DstSignal& dst, const SrcSignal& src) noexcept
+{
+    if constexpr (can_copy_output<DstSignal, SrcSignal>::value)
+    {
+        dst.output = src.output;
+    }
+}
+
 /**
  * Encapsulates a routing objective with fanin update information.
  *
  * This struct specifies a routing objective by defining the source and target coordinates, and it includes
- * a flag that indicates whether the primary input was the first fanin for the corresponding fanout and the fanout gate
- * is asymmetric (e.g., greater than). If the flag is set to true, the fanin signals need to be reordered.
+ * a flag that indicates whether the primary input was the first fanin for the corresponding fanout and the fanout
+ * gate is asymmetric (e.g., greater than). If the flag is set to true, the fanin signals need to be reordered.
+ * Additionally, the source output index can be stored to preserve multi-output routing semantics.
  *
  * @tparam HexLyt The type of the hexagonal layout.
  */
@@ -153,11 +175,13 @@ struct routing_objective_with_fanin_update_information : public routing_objectiv
      * @param tgt The target coordinate of the routing objective.
      * @param update (Optional) A flag that, if true, indicates that the primary input was the first fanin and the
      * fanout gate is asymmetric, which means that the fanin signals need to be reordered. Defaults to false.
+     * @param output (Optional) Output index of the source signal. Defaults to 0.
      */
     routing_objective_with_fanin_update_information(const coordinate<HexLyt>& src, const coordinate<HexLyt>& tgt,
-                                                    const bool update = false) :
+                                                    const bool update = false, const uint8_t output = 0u) :
             routing_objective<HexLyt>{src, tgt},
-            update_first_fanin{update}
+            update_first_fanin{update},
+            source_output{output}
     {}
     /**
      * Flag indicating whether the primary input was the first fanin and the fanout gate is asymmetric.
@@ -165,6 +189,10 @@ struct routing_objective_with_fanin_update_information : public routing_objectiv
      * If this flag is true, the fanin signals need to be reordered.
      */
     bool update_first_fanin = false;
+    /**
+     * Output index of the objective's source signal.
+     */
+    uint8_t source_output = 0u;
 };
 
 /**
@@ -574,21 +602,25 @@ class hexagonalization_impl
                             x_max = std::max(static_cast<uint64_t>(hex_tile.x), x_max);
                             y_max = std::max(static_cast<uint64_t>(hex_tile.y), y_max);
 
-                            // get incoming data flow signals for the tile
-                            const auto signals = layout.incoming_data_flow(old_tile);
+                            // get incoming fanin signals for the tile to preserve output pins of multi-output nodes
+                            std::vector<mockturtle::signal<CartLyt>> signals{};
+                            signals.reserve(2);
+                            layout.foreach_fanin(node, [&signals](const auto& s) { signals.push_back(s); });
 
                             // process single input signals (buffer or inverter)
                             if (signals.size() == 1)
                             {
                                 const auto hex_source = [&signals, layout_height, offset_to_add, offset_to_subtract]
                                 {
-                                    auto t = detail::to_hex<CartLyt, HexLyt>(signals[0], layout_height);
+                                    auto t = detail::to_hex<CartLyt, HexLyt>(static_cast<tile<CartLyt>>(signals[0]),
+                                                                             layout_height);
                                     t.x += offset_to_add - offset_to_subtract;
                                     return t;
                                 }();
 
                                 // create a hex signal from the source
-                                const auto hex_signal = hex_layout.make_signal(hex_layout.get_node(hex_source));
+                                auto hex_signal = hex_layout.make_signal(hex_layout.get_node(hex_source));
+                                detail::set_signal_output(hex_signal, signals[0]);
 
                                 // create appropriate gate in hex layout based on node type
                                 if (!layout.is_po(node))
@@ -600,16 +632,20 @@ class hexagonalization_impl
                             else if (signals.size() == 2)
                             {
                                 // process two-input gates
-                                auto hex_tile_a = detail::to_hex<CartLyt, HexLyt>(signals[0], layout_height);
-                                auto hex_tile_b = detail::to_hex<CartLyt, HexLyt>(signals[1], layout_height);
+                                auto hex_tile_a = detail::to_hex<CartLyt, HexLyt>(
+                                    static_cast<tile<CartLyt>>(signals[0]), layout_height);
+                                auto hex_tile_b = detail::to_hex<CartLyt, HexLyt>(
+                                    static_cast<tile<CartLyt>>(signals[1]), layout_height);
 
                                 // adjust coordinates for offset
                                 hex_tile_a.x += offset_to_add - offset_to_subtract;
                                 hex_tile_b.x += offset_to_add - offset_to_subtract;
 
                                 // create signals for both inputs
-                                const auto hex_signal_a = hex_layout.make_signal(hex_layout.get_node(hex_tile_a));
-                                const auto hex_signal_b = hex_layout.make_signal(hex_layout.get_node(hex_tile_b));
+                                auto hex_signal_a = hex_layout.make_signal(hex_layout.get_node(hex_tile_a));
+                                auto hex_signal_b = hex_layout.make_signal(hex_layout.get_node(hex_tile_b));
+                                detail::set_signal_output(hex_signal_a, signals[0]);
+                                detail::set_signal_output(hex_signal_b, signals[1]);
 
                                 [[maybe_unused]] const auto s =
                                     place(hex_layout, hex_tile, layout, node, hex_signal_a, hex_signal_b);
@@ -627,20 +663,28 @@ class hexagonalization_impl
                     // get the original Cartesian tile for the output
                     const auto old_coord = layout.get_tile(layout.get_node(gate));
 
-                    // get the output signal
-                    const auto signal = layout.incoming_data_flow(old_coord)[0];
+                    // get the output-driving source signal and preserve its output-pin semantics
+                    std::vector<mockturtle::signal<CartLyt>> po_fanins{};
+                    po_fanins.reserve(1);
+                    auto po_fanin_collector = [&po_fanins](const auto& s) { po_fanins.push_back(s); };
+                    layout.template foreach_fanin<decltype(po_fanin_collector), false>(layout.get_node(old_coord),
+                                                                                       std::move(po_fanin_collector));
+
+                    assert(!po_fanins.empty());
+                    const auto signal = po_fanins[0];
 
                     // convert coordinates to hex format and adjust x-coordinate
                     auto hex_coord = detail::to_hex<CartLyt, HexLyt>(old_coord, layout_height);
                     hex_coord.x += offset_to_add - offset_to_subtract;
-                    auto hex_tile = detail::to_hex<CartLyt, HexLyt>(signal, layout_height);
+                    auto hex_tile = detail::to_hex<CartLyt, HexLyt>(static_cast<tile<CartLyt>>(signal), layout_height);
                     hex_tile.x += offset_to_add - offset_to_subtract;
 
                     x_max = std::max(static_cast<uint64_t>(hex_coord.x), x_max);
                     y_max = std::max(static_cast<uint64_t>(hex_coord.y), y_max);
 
                     // create the primary output in the hex layout
-                    const auto hex_signal = hex_layout.make_signal(hex_layout.get_node(hex_tile));
+                    auto hex_signal = hex_layout.make_signal(hex_layout.get_node(hex_tile));
+                    detail::set_signal_output(hex_signal, signal);
                     hex_layout.create_po(hex_signal, layout.get_name(layout.get_node(old_coord)), hex_coord);
 
                     // collect POs to the left and to the right of the middle PO
@@ -853,14 +897,16 @@ class hexagonalization_impl
                 // process POs from left column of the Cartesian layout
                 for (const auto& c : left_pos)
                 {
-                    tile<HexLyt> fanin{};
+                    mockturtle::signal<HexLyt> fanin_signal{};
                     hex_layout.foreach_fanin(hex_layout.get_node(c),
-                                             [&fanin](const auto& fin) { fanin = static_cast<tile<HexLyt>>(fin); });
+                                             [&fanin_signal](const auto& fin) { fanin_signal = fin; });
+                    const auto fanin = static_cast<tile<HexLyt>>(fanin_signal);
 
                     // shift left primary output position
                     middle_po.x -= 1;
 
-                    routing_objective_with_fanin_update_information<HexLyt> obj{fanin, middle_po, false};
+                    routing_objective_with_fanin_update_information<HexLyt> obj{fanin, middle_po, false,
+                                                                                fanin_signal.output};
 
                     x_max = std::max(static_cast<uint64_t>(middle_po.x), x_max);
                     y_max = std::max(static_cast<uint64_t>(middle_po.y), y_max);
@@ -874,13 +920,15 @@ class hexagonalization_impl
                 // process POs from bottom row of the Cartesian layout (similar to before)
                 for (const auto& c : right_pos)
                 {
-                    tile<HexLyt> fanin{};
+                    mockturtle::signal<HexLyt> fanin_signal{};
                     hex_layout.foreach_fanin(hex_layout.get_node(c),
-                                             [&fanin](const auto& fin) { fanin = static_cast<tile<HexLyt>>(fin); });
+                                             [&fanin_signal](const auto& fin) { fanin_signal = fin; });
+                    const auto fanin = static_cast<tile<HexLyt>>(fanin_signal);
 
                     // shift bottom primary output position
                     middle_po.x += 1;
-                    routing_objective_with_fanin_update_information<HexLyt> obj{fanin, middle_po, false};
+                    routing_objective_with_fanin_update_information<HexLyt> obj{fanin, middle_po, false,
+                                                                                fanin_signal.output};
 
                     x_max = std::max(static_cast<uint64_t>(middle_po.x), x_max);
                     y_max = std::max(static_cast<uint64_t>(middle_po.y), y_max);
@@ -954,7 +1002,9 @@ class hexagonalization_impl
                             new_path.front().z = 1;
                         }
 
-                        route_path(hex_layout, new_path);
+                        auto source_signal   = hex_layout.make_signal(hex_layout.get_node(new_path.front()));
+                        source_signal.output = obj.source_output;
+                        route_path(hex_layout, source_signal, new_path);
 
                         for (const auto& t : new_path)
                         {

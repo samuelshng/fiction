@@ -8,6 +8,8 @@
 #include "utils/blueprints/network_blueprints.hpp"
 #include "utils/equivalence_checking_utils.hpp"
 
+#include <fiction/algorithms/network_transformation/technology_mapping.hpp>
+#include <fiction/algorithms/physical_design/graph_oriented_layout_design.hpp>
 #include <fiction/algorithms/physical_design/orthogonal.hpp>
 #include <fiction/io/read_fgl_layout.hpp>
 #include <fiction/io/write_fgl_layout.hpp>
@@ -25,7 +27,9 @@
 #include <mockturtle/networks/aig.hpp>
 #include <mockturtle/views/names_view.hpp>
 
+#include <algorithm>
 #include <sstream>
+#include <vector>
 
 using namespace fiction;
 
@@ -138,7 +142,7 @@ void check_parsing_equiv_layout_all()
 
 TEST_CASE("Write empty gate_level layout", "[write-fgl-layout]")
 {
-    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+    using gate_layout = cart_gate_clk_lyt;
     const gate_layout layout{{}, "empty"};
 
     std::stringstream layout_stream{};
@@ -146,6 +150,29 @@ TEST_CASE("Write empty gate_level layout", "[write-fgl-layout]")
     const auto read_layout = read_fgl_layout<gate_layout>(layout_stream, "empty");
 
     compare_written_and_read_layout(layout, read_layout);
+}
+
+TEST_CASE("Write FGL layout with half adder gate and output pins", "[write-fgl-layout]")
+{
+    using gate_layout = cart_gate_clk_lyt;
+
+    const auto aig_ha = blueprints::half_adder_network<mockturtle::aig_network>();
+
+    technology_mapping_stats mapping_stats{};
+    const auto               mapped_ha = technology_mapping(aig_ha, all_standard_2_input_functions(), &mapping_stats);
+    REQUIRE(!mapping_stats.mapper_stats.mapping_error);
+
+    graph_oriented_layout_design_params gold_params{};
+    gold_params.timeout      = 100000;
+    gold_params.return_first = true;
+
+    const auto layout = graph_oriented_layout_design<gate_layout>(mapped_ha, gold_params);
+    REQUIRE(layout.has_value());
+
+    std::stringstream output_stream{};
+    write_fgl_layout(*layout, output_stream);
+
+    CHECK(output_stream.str().find("<type>HA</type>") != std::string::npos);
 }
 
 TEST_CASE("Write and read layouts", "[write-fgl-layout]")

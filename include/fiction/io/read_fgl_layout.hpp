@@ -25,6 +25,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace fiction
@@ -448,7 +449,19 @@ class read_fgl_layout_impl
                             throw fgl_parsing_error("Error parsing FGL file: no element 'z' in 'signal'");
                         }
 
-                        gate.incoming.push_back(incoming);
+                        auto signal = static_cast<mockturtle::signal<Lyt>>(incoming);
+
+                        if constexpr (std::is_class_v<mockturtle::signal<Lyt>>)
+                        {
+                            auto* const incoming_signal_p = incoming_signal->FirstChildElement("p");
+                            if (incoming_signal_p != nullptr && incoming_signal_p->GetText())
+                            {
+                                signal.output =
+                                    static_cast<decltype(signal.output)>(std::stoull(incoming_signal_p->GetText()));
+                            }
+                        }
+
+                        gate.incoming.push_back(signal);
                     }
                 }
 #pragma GCC diagnostic pop
@@ -481,9 +494,7 @@ class read_fgl_layout_impl
 
                 else if (gate.incoming.size() == 1)
                 {
-                    const tile<Lyt> incoming_tile{gate.incoming.front().x, gate.incoming.front().y,
-                                                  gate.incoming.front().z};
-                    const auto      incoming_signal = lyt.make_signal(lyt.get_node(incoming_tile));
+                    const auto incoming_signal = gate.incoming.front();
 
                     if (gate.type == "PO")
                     {
@@ -524,15 +535,17 @@ class read_fgl_layout_impl
 
                 else if (gate.incoming.size() == 2)
                 {
-                    const tile<Lyt> incoming_tile_1{gate.incoming.front().x, gate.incoming.front().y,
-                                                    gate.incoming.front().z};
-                    const tile<Lyt> incoming_tile_2{gate.incoming.back().x, gate.incoming.back().y,
-                                                    gate.incoming.back().z};
+                    const auto incoming_signal_1 = gate.incoming.front();
+                    const auto incoming_signal_2 = gate.incoming.back();
 
-                    const auto incoming_signal_1 = lyt.make_signal(lyt.get_node(incoming_tile_1));
-                    const auto incoming_signal_2 = lyt.make_signal(lyt.get_node(incoming_tile_2));
-
-                    if (gate.type == "AND")
+                    if (gate.type == "HA")
+                    {
+                        if constexpr (has_create_ha_v<Lyt>)
+                        {
+                            lyt.create_ha(incoming_signal_1, incoming_signal_2, location);
+                        }
+                    }
+                    else if (gate.type == "AND")
                     {
                         if constexpr (mockturtle::has_create_and_v<Lyt>)
                         {
@@ -619,15 +632,9 @@ class read_fgl_layout_impl
                 }
                 else if (gate.incoming.size() == 3)
                 {
-                    const tile<Lyt> incoming_tile_1{gate.incoming.front().x, gate.incoming.front().y,
-                                                    gate.incoming.front().z};
-                    const tile<Lyt> incoming_tile_2{gate.incoming[1].x, gate.incoming[1].y, gate.incoming[1].z};
-                    const tile<Lyt> incoming_tile_3{gate.incoming.back().x, gate.incoming.back().y,
-                                                    gate.incoming.back().z};
-
-                    const auto incoming_signal_1 = lyt.make_signal(lyt.get_node(incoming_tile_1));
-                    const auto incoming_signal_2 = lyt.make_signal(lyt.get_node(incoming_tile_2));
-                    const auto incoming_signal_3 = lyt.make_signal(lyt.get_node(incoming_tile_3));
+                    const auto incoming_signal_1 = gate.incoming.front();
+                    const auto incoming_signal_2 = gate.incoming[1];
+                    const auto incoming_signal_3 = gate.incoming.back();
 
                     if (gate.type == "MAJ")
                     {
@@ -659,9 +666,7 @@ class read_fgl_layout_impl
                         std::vector<mockturtle::signal<Lyt>> incoming_signals{};
                         for (std::size_t i = 0; i < num_incoming_signals; i++)
                         {
-                            tile<Lyt> incoming_tile_i{gate.incoming[i].x, gate.incoming[i].y, gate.incoming[i].z};
-                            auto      incoming_signal_i = lyt.make_signal(lyt.get_node(incoming_tile_i));
-                            incoming_signals.push_back(incoming_signal_i);
+                            incoming_signals.push_back(gate.incoming[i]);
                         }
                         kitty::dynamic_truth_table tt_t(static_cast<uint32_t>(num_incoming_signals));
                         kitty::create_from_hex_string(tt_t, gate.type);
@@ -716,7 +721,7 @@ class read_fgl_layout_impl
         /**
          * List of incoming connections to the gate.
          */
-        std::vector<tile<Lyt>> incoming{};
+        std::vector<mockturtle::signal<Lyt>> incoming{};
 
         /**
          * Static member function to compare gate_storage objects by their IDs.

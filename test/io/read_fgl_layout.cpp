@@ -12,6 +12,7 @@
 #include <fiction/layouts/tile_based_layout.hpp>
 #include <fiction/utils/name_utils.hpp>
 
+#include <array>
 #include <sstream>
 
 using namespace fiction;
@@ -243,6 +244,132 @@ TEST_CASE("Read FGL layout with hexadecimal gate type", "[read-fgl-layout]")
         CHECK(lyt.is_le(lyt.get_node({1, 1})));
         CHECK(lyt.is_po_tile({2, 1}));
         CHECK(lyt.get_name(lyt.get_node({2, 1})) == "po0");
+    };
+
+    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+    check(read_fgl_layout<gate_layout>(layout_stream));
+}
+
+TEST_CASE("Read FGL layout with half adder gate and output pins", "[read-fgl-layout]")
+{
+    static constexpr const char* fgl_layout = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                              "<fgl>\n"
+                                              "  <layout>\n"
+                                              "    <name>HA_Test</name>\n"
+                                              "    <topology>cartesian</topology>\n"
+                                              "    <size>\n"
+                                              "      <x>2</x>\n"
+                                              "      <y>1</y>\n"
+                                              "      <z>0</z>\n"
+                                              "    </size>\n"
+                                              "    <clocking>\n"
+                                              "      <name>2DDWave</name>\n"
+                                              "    </clocking>\n"
+                                              "  </layout>\n"
+                                              "  <gates>\n"
+                                              "    <gate>\n"
+                                              "      <id>0</id>\n"
+                                              "      <type>PI</type>\n"
+                                              "      <name>a</name>\n"
+                                              "      <loc>\n"
+                                              "        <x>0</x>\n"
+                                              "        <y>0</y>\n"
+                                              "        <z>0</z>\n"
+                                              "      </loc>\n"
+                                              "    </gate>\n"
+                                              "    <gate>\n"
+                                              "      <id>1</id>\n"
+                                              "      <type>PI</type>\n"
+                                              "      <name>b</name>\n"
+                                              "      <loc>\n"
+                                              "        <x>0</x>\n"
+                                              "        <y>1</y>\n"
+                                              "        <z>0</z>\n"
+                                              "      </loc>\n"
+                                              "    </gate>\n"
+                                              "    <gate>\n"
+                                              "      <id>2</id>\n"
+                                              "      <type>HA</type>\n"
+                                              "      <loc>\n"
+                                              "        <x>1</x>\n"
+                                              "        <y>0</y>\n"
+                                              "        <z>0</z>\n"
+                                              "      </loc>\n"
+                                              "      <incoming>\n"
+                                              "        <signal>\n"
+                                              "          <x>0</x>\n"
+                                              "          <y>0</y>\n"
+                                              "          <z>0</z>\n"
+                                              "          <p>0</p>\n"
+                                              "        </signal>\n"
+                                              "        <signal>\n"
+                                              "          <x>0</x>\n"
+                                              "          <y>1</y>\n"
+                                              "          <z>0</z>\n"
+                                              "          <p>0</p>\n"
+                                              "        </signal>\n"
+                                              "      </incoming>\n"
+                                              "    </gate>\n"
+                                              "    <gate>\n"
+                                              "      <id>3</id>\n"
+                                              "      <type>PO</type>\n"
+                                              "      <name>carry</name>\n"
+                                              "      <loc>\n"
+                                              "        <x>2</x>\n"
+                                              "        <y>0</y>\n"
+                                              "        <z>0</z>\n"
+                                              "      </loc>\n"
+                                              "      <incoming>\n"
+                                              "        <signal>\n"
+                                              "          <x>1</x>\n"
+                                              "          <y>0</y>\n"
+                                              "          <z>0</z>\n"
+                                              "          <p>0</p>\n"
+                                              "        </signal>\n"
+                                              "      </incoming>\n"
+                                              "    </gate>\n"
+                                              "    <gate>\n"
+                                              "      <id>4</id>\n"
+                                              "      <type>PO</type>\n"
+                                              "      <name>sum</name>\n"
+                                              "      <loc>\n"
+                                              "        <x>2</x>\n"
+                                              "        <y>1</y>\n"
+                                              "        <z>0</z>\n"
+                                              "      </loc>\n"
+                                              "      <incoming>\n"
+                                              "        <signal>\n"
+                                              "          <x>1</x>\n"
+                                              "          <y>0</y>\n"
+                                              "          <z>0</z>\n"
+                                              "          <p>1</p>\n"
+                                              "        </signal>\n"
+                                              "      </incoming>\n"
+                                              "    </gate>\n"
+                                              "  </gates>\n"
+                                              "</fgl>\n";
+
+    std::istringstream layout_stream{fgl_layout};
+
+    const auto check = [](const auto& lyt)
+    {
+        CHECK(lyt.x() == 2);
+        CHECK(lyt.y() == 1);
+        CHECK(get_name(lyt) == "HA_Test");
+        CHECK(lyt.is_ha(lyt.get_node({1, 0})));
+
+        std::array<uint8_t, 2> po_output_pins{};
+        auto                   po_index = 0u;
+
+        lyt.foreach_po(
+            [&po_output_pins, &po_index](const auto& po)
+            {
+                po_output_pins[po_index] = po.output;
+                ++po_index;
+            });
+
+        CHECK(((po_output_pins[0] == 0u && po_output_pins[1] == 1u) ||
+               (po_output_pins[0] == 1u && po_output_pins[1] == 0u)));
     };
 
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;

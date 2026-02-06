@@ -11,6 +11,7 @@
 #include <fiction/layouts/obstruction_layout.hpp>
 #include <fiction/networks/technology_network.hpp>
 #include <fiction/types.hpp>
+#include <fiction/utils/truth_table_utils.hpp>
 
 #include <mockturtle/networks/aig.hpp>
 #include <mockturtle/networks/klut.hpp>
@@ -18,6 +19,26 @@
 #include <mockturtle/networks/xag.hpp>
 
 using namespace fiction;
+
+mockturtle::names_view<fiction::netlist> multioutput_half_adder_network()
+{
+    mockturtle::names_view<fiction::netlist> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+
+    const auto ha = static_cast<mockturtle::block_network&>(ntk).create_node({a, b}, create_half_adder_tt());
+
+    auto and_output   = ha;
+    and_output.output = 1u;
+
+    const auto xor_output = ha;
+
+    ntk.create_po(and_output, "sum");
+    ntk.create_po(xor_output, "carry");
+
+    return ntk;
+}
 
 template <typename Spec, typename Impl>
 void check_for_strong_equiv(const Spec& spec, const Impl& impl)
@@ -74,6 +95,15 @@ TEST_CASE("Network-network equivalence", "[equiv]")
                            blueprints::maj4_network<fiction::technology_network>());
     check_for_strong_equiv(blueprints::maj4_network<fiction::technology_network>(),
                            blueprints::maj4_network<mockturtle::aig_network>());
+}
+
+TEST_CASE("Network-network equivalence with multi-output nodes", "[equiv]")
+{
+    const auto aig_half_adder = blueprints::half_adder_network<mockturtle::aig_network>();
+    const auto mo_half_adder  = multioutput_half_adder_network();
+
+    check_for_strong_equiv(aig_half_adder, mo_half_adder);
+    check_for_strong_equiv(mo_half_adder, aig_half_adder);
 }
 
 TEST_CASE("Network-layout equivalence", "[equiv]")
