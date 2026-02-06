@@ -142,8 +142,10 @@ TEST_CASE("Read simple FGL layout", "[read-fgl-layout]")
         CHECK(lyt.is_pi_tile({1, 0}));
         CHECK(lyt.get_name(lyt.get_node({1, 0})) == "pi1");
         CHECK(lyt.is_and(lyt.get_node({1, 1})));
+        CHECK(lyt.fanin_size(lyt.get_node({1, 1})) == 2);
         CHECK(lyt.is_po_tile({2, 1}));
         CHECK(lyt.get_name(lyt.get_node({2, 1})) == "po0");
+        CHECK(lyt.fanin_size(lyt.get_node({2, 1})) == 1);
     };
 
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
@@ -242,8 +244,10 @@ TEST_CASE("Read FGL layout with hexadecimal gate type", "[read-fgl-layout]")
         CHECK(lyt.is_pi_tile({1, 0}));
         CHECK(lyt.get_name(lyt.get_node({1, 0})) == "pi1");
         CHECK(lyt.is_le(lyt.get_node({1, 1})));
+        CHECK(lyt.fanin_size(lyt.get_node({1, 1})) == 2);
         CHECK(lyt.is_po_tile({2, 1}));
         CHECK(lyt.get_name(lyt.get_node({2, 1})) == "po0");
+        CHECK(lyt.fanin_size(lyt.get_node({2, 1})) == 1);
     };
 
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;

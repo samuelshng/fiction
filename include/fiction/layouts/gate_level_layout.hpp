@@ -1270,8 +1270,9 @@ class gate_level_layout : public ClockedLayout
 
         for (auto i = 0u; i < children.size(); ++i)
         {
-            const auto& c  = children[i];
-            const auto  ct = static_cast<tile>(c.index);
+            const auto& c          = children[i];
+            const auto  child_node = get_node(signal{c.index});
+            const auto  ct         = get_tile(child_node);
 
             bool include = false;
             if constexpr (RespectClocking)
@@ -1286,7 +1287,7 @@ class gate_level_layout : public ClockedLayout
             if (include)
             {
                 const auto output       = i < child_outputs.size() ? child_outputs[i] : uint8_t{0};
-                const auto child_signal = signal::with_output(c.index, output);
+                const auto child_signal = signal::with_output(static_cast<uint64_t>(ct), output);
 
                 if constexpr (mockturtle::detail::is_callable_with_index_v<Fn, signal, bool>)
                 {

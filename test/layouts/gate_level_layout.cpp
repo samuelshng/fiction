@@ -885,6 +885,23 @@ TEST_CASE("Iteration disrespecting clocking", "[gate-level-layout]")
     CHECK(layout.fanout_size<false>(layout.get_node({3, 1})) == 0);
 }
 
+TEST_CASE("Stale fanins are ignored", "[gate-level-layout]")
+{
+    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+
+    gate_layout layout{{1, 0}, twoddwave_clocking<gate_layout>()};
+
+    const auto a = layout.create_pi("a", {0, 0});
+    const auto w = layout.create_buf(a, {1, 0});
+
+    CHECK(layout.fanin_size<false>(layout.get_node(w)) == 1);
+
+    layout.clear_tile({0, 0});
+
+    CHECK(layout.get_node({0, 0}) == 0);
+    CHECK(layout.fanin_size<false>(layout.get_node(w)) == 0);
+}
+
 TEST_CASE("Gate-level layout properties", "[gate-level-layout]")
 {
     // adapted from mockturtle/test/networks/klut.cpp

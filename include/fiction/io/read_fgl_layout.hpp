@@ -414,13 +414,15 @@ class read_fgl_layout_impl
                     for (const auto* incoming_signal                 = incoming_signals->FirstChildElement("signal");
                          incoming_signal != nullptr; incoming_signal = incoming_signal->NextSiblingElement("signal"))
                     {
-                        tile<Lyt> incoming{};
+                        decltype(tile<Lyt>{}.x) x_coord{};
+                        decltype(tile<Lyt>{}.y) y_coord{};
+                        decltype(tile<Lyt>{}.z) z_coord{};
 
                         // get x-coordinate of incoming signal
                         auto* const incoming_signal_x = incoming_signal->FirstChildElement("x");
                         if (incoming_signal_x != nullptr && incoming_signal_x->GetText())
                         {
-                            incoming.x = static_cast<decltype(incoming.x)>(std::stoull(incoming_signal_x->GetText()));
+                            x_coord = static_cast<decltype(x_coord)>(std::stoull(incoming_signal_x->GetText()));
                         }
                         else
                         {
@@ -431,7 +433,7 @@ class read_fgl_layout_impl
                         auto* const incoming_signal_y = incoming_signal->FirstChildElement("y");
                         if (incoming_signal_y != nullptr && incoming_signal_y->GetText())
                         {
-                            incoming.y = static_cast<decltype(incoming.y)>(std::stoull(incoming_signal_y->GetText()));
+                            y_coord = static_cast<decltype(y_coord)>(std::stoull(incoming_signal_y->GetText()));
                         }
                         else
                         {
@@ -442,14 +444,15 @@ class read_fgl_layout_impl
                         auto* const incoming_signal_z = incoming_signal->FirstChildElement("z");
                         if (incoming_signal_z != nullptr && incoming_signal_z->GetText())
                         {
-                            incoming.z = static_cast<decltype(incoming.z)>(std::stoull(incoming_signal_z->GetText()));
+                            z_coord = static_cast<decltype(z_coord)>(std::stoull(incoming_signal_z->GetText()));
                         }
                         else
                         {
                             throw fgl_parsing_error("Error parsing FGL file: no element 'z' in 'signal'");
                         }
 
-                        auto signal = static_cast<mockturtle::signal<Lyt>>(incoming);
+                        const tile<Lyt> incoming{x_coord, y_coord, z_coord};
+                        auto            signal = static_cast<mockturtle::signal<Lyt>>(incoming);
 
                         if constexpr (std::is_class_v<mockturtle::signal<Lyt>>)
                         {
