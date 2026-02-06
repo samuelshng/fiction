@@ -71,8 +71,7 @@ int main()  // NOLINT
             const auto cp_tp = fiction::critical_path_length_and_throughput(*gate_level_layout);
 
             // check equivalence
-            const auto eq_stats =
-                fiction::equivalence_checking<fiction::technology_network, gate_lyt>(network, *gate_level_layout);
+            const auto eq_stats = fiction::equivalence_checking<fiction::tec_nt, gate_lyt>(network, *gate_level_layout);
 
             const std::string eq_result = eq_stats == fiction::eq_type::STRONG ? "STRONG" :
                                           eq_stats == fiction::eq_type::WEAK   ? "WEAK" :

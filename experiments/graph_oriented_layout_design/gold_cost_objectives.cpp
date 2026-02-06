@@ -84,7 +84,7 @@ int main()  // NOLINT
             {
                 // check equivalence
                 const auto eq_stats =
-                    fiction::equivalence_checking<fiction::technology_network, gate_lyt>(network, *gate_level_layout);
+                    fiction::equivalence_checking<fiction::tec_nt, gate_lyt>(network, *gate_level_layout);
 
                 std::string eq_result = "NO";
                 if (eq_stats == fiction::eq_type::STRONG)
