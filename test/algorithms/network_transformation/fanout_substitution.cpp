@@ -9,7 +9,9 @@
 
 #include <fiction/algorithms/network_transformation/fanout_substitution.hpp>
 #include <fiction/algorithms/network_transformation/network_balancing.hpp>
+#include <fiction/networks/netlist.hpp>
 #include <fiction/networks/technology_network.hpp>
+#include <fiction/utils/truth_table_utils.hpp>
 
 #include <kitty/dynamic_truth_table.hpp>
 #include <mockturtle/networks/aig.hpp>
@@ -18,6 +20,35 @@
 #include <type_traits>
 
 using namespace fiction;
+
+mockturtle::names_view<fiction::netlist> multioutput_half_adder_fanout_network()
+{
+    mockturtle::names_view<fiction::netlist> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+    const auto c = ntk.create_pi("c");
+    const auto d = ntk.create_pi("d");
+
+    const auto ha = static_cast<mockturtle::block_network&>(ntk).create_node({a, b}, create_half_adder_tt());
+
+    auto sum_output         = ha;
+    sum_output.output       = 1u;
+    const auto carry_output = ha;
+
+    const auto sum_and_c = ntk.create_and(sum_output, c);
+    const auto sum_or_d  = ntk.create_or(sum_output, d);
+    const auto sum_xor_c = ntk.create_xor(sum_output, c);
+    const auto sum_and_d = ntk.create_and(sum_output, d);
+
+    ntk.create_po(sum_and_c, "sum_and_c");
+    ntk.create_po(sum_or_d, "sum_or_d");
+    ntk.create_po(sum_xor_c, "sum_xor_c");
+    ntk.create_po(sum_and_d, "sum_and_d");
+    ntk.create_po(carry_output, "carry");
+
+    return ntk;
+}
 
 template <typename Ntk>
 void substitute(const Ntk& ntk, const fanout_substitution_params ps, const uint32_t size)
@@ -162,4 +193,19 @@ TEST_CASE("Consistent fanout substitution after balancing", "[fanout-substitutio
     CHECK(is_fanout_substituted(substituted_tec));
     auto balanced_tec = network_balancing<technology_network>(substituted_tec);
     CHECK(is_fanout_substituted(balanced_tec));
+}
+
+TEST_CASE("Fanout substitution respects multi-output pins", "[fanout-substitution]")
+{
+    const auto ntk = multioutput_half_adder_fanout_network();
+
+    const fanout_substitution_params params{fanout_substitution_params::substitution_strategy::BREADTH, 2u, 1u};
+
+    CHECK(!is_fanout_substituted(ntk, params));
+
+    const auto substituted = fanout_substitution<mockturtle::names_view<fiction::netlist>>(ntk, params);
+
+    CHECK(substituted.size() > ntk.size());
+    CHECK(is_fanout_substituted(substituted, params));
+    check_eq(ntk, substituted);
 }

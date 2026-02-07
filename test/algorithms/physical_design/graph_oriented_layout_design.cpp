@@ -15,9 +15,11 @@
 #include <fiction/layouts/clocked_layout.hpp>
 #include <fiction/layouts/gate_level_layout.hpp>
 #include <fiction/layouts/tile_based_layout.hpp>
+#include <fiction/networks/netlist.hpp>
 #include <fiction/networks/technology_network.hpp>
 #include <fiction/technology/qca_one_library.hpp>
 #include <fiction/utils/network_utils.hpp>
+#include <fiction/utils/truth_table_utils.hpp>
 
 #include <mockturtle/networks/aig.hpp>
 #include <mockturtle/networks/mig.hpp>
@@ -70,6 +72,35 @@ void check_graph_oriented_layout_design_equiv_all()
     check_graph_oriented_layout_design_equiv<Lyt>(
         blueprints::one_to_five_path_difference_network<technology_network>());
     check_graph_oriented_layout_design_equiv<Lyt>(blueprints::nand_xnor_network<technology_network>());
+}
+
+mockturtle::names_view<fiction::netlist> multioutput_half_adder_fanout_network()
+{
+    mockturtle::names_view<fiction::netlist> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+    const auto c = ntk.create_pi("c");
+    const auto d = ntk.create_pi("d");
+
+    const auto ha = static_cast<mockturtle::block_network&>(ntk).create_node({a, b}, create_half_adder_tt());
+
+    auto sum_output         = ha;
+    sum_output.output       = 1u;
+    const auto carry_output = ha;
+
+    const auto sum_and_c = ntk.create_and(sum_output, c);
+    const auto sum_or_d  = ntk.create_or(sum_output, d);
+    const auto sum_xor_c = ntk.create_xor(sum_output, c);
+    const auto sum_and_d = ntk.create_and(sum_output, d);
+
+    ntk.create_po(sum_and_c, "sum_and_c");
+    ntk.create_po(sum_or_d, "sum_or_d");
+    ntk.create_po(sum_xor_c, "sum_xor_c");
+    ntk.create_po(sum_and_d, "sum_and_d");
+    ntk.create_po(carry_output, "carry");
+
+    return ntk;
 }
 
 TEST_CASE("Layout equivalence after graph-oriented layout design", "[graph-oriented-layout-design]")
@@ -146,6 +177,26 @@ TEST_CASE("Gate library application", "[graph-oriented-layout-design]")
     };
 
     check(blueprints::maj1_network<mockturtle::names_view<mockturtle::aig_network>>());
+}
+
+TEST_CASE("Graph-oriented layout design supports high-fanout multi-output gates", "[graph-oriented-layout-design]")
+{
+    using gate_layout = cart_gate_clk_lyt;
+    const auto ntk    = multioutput_half_adder_fanout_network();
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode         = graph_oriented_layout_design_params::effort_mode::HIGH_EFFORT;
+    params.timeout      = 100000u;
+    params.seed         = 0u;
+    params.return_first = true;
+
+    const auto layout = graph_oriented_layout_design<gate_layout>(ntk, params, &stats);
+    REQUIRE(layout.has_value());
+
+    CHECK(layout->num_pis() == ntk.num_pis());
+    CHECK(layout->num_pos() == ntk.num_pos());
+    CHECK(layout->num_gates() >= ntk.num_gates());
 }
 
 TEST_CASE("Different parameters", "[graph-oriented-layout-design]")

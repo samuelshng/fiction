@@ -16,10 +16,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <queue>
 #include <random>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -105,8 +107,8 @@ class fanout_substitution_impl
   public:
     fanout_substitution_impl(const NtkSrc& src, const fanout_substitution_params p) :
             ntk_topo{prepare_source_network(src)},
-            available_fanouts{ntk_topo},
-            ps{p}
+            ps{p},
+            fanout_sizes{compute_fanout_sizes()}
     {
         if (ps.strategy == fanout_substitution_params::substitution_strategy::RANDOM)
         {
@@ -122,8 +124,12 @@ class fanout_substitution_impl
         auto substituted = init.first;
         auto old2new     = init.second;
 
-        ntk_topo.foreach_pi([this, &substituted, &old2new](const auto& pi)
-                            { generate_fanout_tree(substituted, pi, old2new); });
+        ntk_topo.foreach_pi(
+            [this, &substituted, &old2new](const auto& pi)
+            {
+                auto child = old2new[pi];
+                generate_fanout_tree(substituted, {pi, 0u}, child);
+            });
 
 #if (PROGRESS_BARS)
         // initialize a progress bar
@@ -139,7 +145,9 @@ class fanout_substitution_impl
                 ntk_topo.foreach_fanin(n,
                                        [this, &old2new, &children, &substituted](const auto& f)
                                        {
-                                           const auto fn = ntk_topo.get_node(f);
+                                           const auto fn         = ntk_topo.get_node(f);
+                                           const auto output_idx = signal_output(f);
+                                           const auto fanout_key = output_pin_key{fn, output_idx};
 
                                            auto child = old2new[fn];
                                            set_signal_output(child, f);
@@ -147,7 +155,7 @@ class fanout_substitution_impl
                                            // constants do not need fanout trees
                                            if (!ntk_topo.is_constant(fn))
                                            {
-                                               child = get_fanout(substituted, fn, child);
+                                               child = get_fanout(substituted, fanout_key, child);
                                            }
 
                                            children.push_back(child);
@@ -156,8 +164,16 @@ class fanout_substitution_impl
                 // clone the node with new children according to its depth
                 old2new[n] = substituted.clone_node(ntk_topo, n, children);
 
-                // generate the fanout tree for n
-                generate_fanout_tree(substituted, n, old2new);
+                // generate a fanout tree for every output of n
+                const auto num_outputs = source_num_outputs(n);
+
+                for (auto output_idx = 0u; output_idx < num_outputs; ++output_idx)
+                {
+                    auto child = old2new[n];
+                    set_signal_output(child, output_idx);
+
+                    generate_fanout_tree(substituted, {n, output_idx}, child);
+                }
 
 #if (PROGRESS_BARS)
                 // update progress
@@ -170,9 +186,10 @@ class fanout_substitution_impl
             [this, &old2new, &substituted](const auto& po)
             {
                 const auto po_node    = ntk_topo.get_node(po);
+                const auto output_idx = signal_output(po);
                 auto       tgt_signal = old2new[po_node];
                 set_signal_output(tgt_signal, po);
-                auto tgt_po = get_fanout(substituted, po_node, tgt_signal);
+                auto tgt_po = get_fanout(substituted, {po_node, output_idx}, tgt_signal);
 
                 tgt_po = ntk_topo.is_complemented(po) ? substituted.create_not(tgt_po) : tgt_po;
 
@@ -195,18 +212,71 @@ class fanout_substitution_impl
      */
     using old2new_map = mockturtle::node_map<mockturtle::signal<NtkDest>, mockturtle::topo_view<NtkDest>>;
     /**
-     * Type alias for mapping each node to a queue of buffer outputs.
+     * Type alias for node identifiers.
      */
-    using old2new_queue_map =
-        mockturtle::node_map<std::queue<mockturtle::signal<NtkDest>>, mockturtle::topo_view<NtkDest>>;
+    using source_node = mockturtle::node<NtkSrc>;
     /**
-     * Queue map of available fanouts.
+     * Type alias for source signals.
      */
-    old2new_queue_map available_fanouts;
+    using source_signal = mockturtle::signal<NtkSrc>;
+    /**
+     * Type alias for destination signals.
+     */
+    using destination_signal = mockturtle::signal<NtkDest>;
+    /**
+     * Key that identifies a specific output pin of a source node.
+     */
+    struct output_pin_key
+    {
+        /**
+         * Source node identifier.
+         */
+        source_node node{};
+        /**
+         * Output pin index.
+         */
+        uint32_t output = 0u;
+        /**
+         * Equality operator.
+         *
+         * @param other Other key to compare with.
+         * @return `true` if both node and output index match.
+         */
+        [[nodiscard]] bool operator==(const output_pin_key& other) const noexcept
+        {
+            return node == other.node && output == other.output;
+        }
+    };
+    /**
+     * Hash function for output pin keys.
+     */
+    struct output_pin_key_hash
+    {
+        /**
+         * Hashes an output pin key.
+         *
+         * @param key Key to hash.
+         * @return Hash value.
+         */
+        [[nodiscard]] std::size_t operator()(const output_pin_key& key) const noexcept
+        {
+            const auto node_hash   = std::hash<source_node>{}(key.node);
+            const auto output_hash = std::hash<uint32_t>{}(key.output);
+            return node_hash ^ (output_hash + 0x9e3779b9 + (node_hash << 6) + (node_hash >> 2));
+        }
+    };
+    /**
+     * Queue map of available fanout branches per output pin.
+     */
+    std::unordered_map<output_pin_key, std::queue<destination_signal>, output_pin_key_hash> available_fanouts{};
     /**
      * Parameters controlling how fanout substitution is performed.
      */
     const fanout_substitution_params ps;
+    /**
+     * Fanout usage count per output pin in the original network.
+     */
+    std::unordered_map<output_pin_key, uint32_t, output_pin_key_hash> fanout_sizes;
     /**
      * Optional helper struct holding the RNG and its distribution.
      */
@@ -242,39 +312,97 @@ class fanout_substitution_impl
         }
     }
 
-    void generate_fanout_tree(NtkDest& substituted, const mockturtle::node<NtkSrc>& n, const old2new_map& old2new)
+    template <typename Signal, typename = void>
+    struct has_output_field : std::false_type
+    {};
+
+    template <typename Signal>
+    struct has_output_field<Signal, std::void_t<decltype(std::declval<Signal const&>().output)>> : std::true_type
+    {};
+
+    template <typename Signal>
+    static uint32_t signal_output(const Signal& signal) noexcept
     {
-        // Multi-output nodes carry semantically distinct output pins and must not be merged into a shared fanout tree.
-        if constexpr (mockturtle::has_is_multioutput_v<decltype(ntk_topo)>)
+        if constexpr (has_output_field<Signal>::value)
         {
-            if (ntk_topo.is_multioutput(n))
-            {
-                return;
-            }
-        }
-        if constexpr (mockturtle::has_num_outputs_v<decltype(ntk_topo)>)
-        {
-            if (ntk_topo.num_outputs(n) > 1u)
-            {
-                return;
-            }
+            return static_cast<uint32_t>(signal.output);
         }
 
+        return 0u;
+    }
+
+    template <typename Signal>
+    static void set_signal_output(Signal& signal, const uint32_t output_idx) noexcept
+    {
+        if constexpr (has_output_field<Signal>::value)
+        {
+            signal.output = static_cast<decltype(signal.output)>(output_idx != 0u);
+        }
+    }
+
+    [[nodiscard]] uint32_t source_num_outputs(const source_node& n) const noexcept
+    {
+        if constexpr (mockturtle::has_num_outputs_v<decltype(ntk_topo)>)
+        {
+            return ntk_topo.num_outputs(n);
+        }
+
+        return 1u;
+    }
+
+    [[nodiscard]] uint32_t source_fanout_size(const output_pin_key& key) const
+    {
+        if (const auto it = fanout_sizes.find(key); it != fanout_sizes.cend())
+        {
+            return it->second;
+        }
+
+        return 0u;
+    }
+
+    [[nodiscard]] std::unordered_map<output_pin_key, uint32_t, output_pin_key_hash> compute_fanout_sizes() const
+    {
+        std::unordered_map<output_pin_key, uint32_t, output_pin_key_hash> sizes{};
+
+        ntk_topo.foreach_gate(
+            [this, &sizes](const auto& n)
+            {
+                ntk_topo.foreach_fanin(n,
+                                       [this, &sizes](const auto& f)
+                                       {
+                                           const auto source = ntk_topo.get_node(f);
+                                           const auto key    = output_pin_key{source, signal_output(f)};
+                                           ++sizes[key];
+                                       });
+            });
+
+        ntk_topo.foreach_po(
+            [this, &sizes](const auto& po)
+            {
+                const auto source = ntk_topo.get_node(po);
+                const auto key    = output_pin_key{source, signal_output(po)};
+                ++sizes[key];
+            });
+
+        return sizes;
+    }
+
+    void generate_fanout_tree(NtkDest& substituted, const output_pin_key& key, destination_signal child)
+    {
         // skip fanout tree generation if n is a proper fanout node
         if constexpr (has_is_fanout_v<NtkDest>)
         {
-            if (ntk_topo.is_fanout(n) && ntk_topo.fanout_size(n) <= ps.degree)
+            if (ntk_topo.is_fanout(key.node) && ntk_topo.fanout_size(key.node) <= ps.degree)
             {
                 return;
             }
         }
 
-        auto num_fanouts = static_cast<uint32_t>(
-            std::ceil(static_cast<double>(std::max(
-                          static_cast<int32_t>(ntk_topo.fanout_size(n)) - static_cast<int32_t>(ps.threshold), 0)) /
-                      static_cast<double>(std::max(static_cast<int32_t>(ps.degree) - 1, 1))));
-
-        auto child = old2new[n];
+        const auto pin_fanout_size = source_fanout_size(key);
+        const auto num_fanouts     = static_cast<uint32_t>(
+            std::ceil(static_cast<double>(
+                          std::max(static_cast<int32_t>(pin_fanout_size) - static_cast<int32_t>(ps.threshold), 0)) /
+                          static_cast<double>(std::max(static_cast<int32_t>(ps.degree) - 1, 1))));
 
         if (num_fanouts == 0)
         {
@@ -285,50 +413,34 @@ class fanout_substitution_impl
         {
             case fanout_substitution_params::substitution_strategy::DEPTH:
             {
-                generate_depth_tree(substituted, n, child, num_fanouts);
+                generate_depth_tree(substituted, key, child, num_fanouts);
                 break;
             }
 
             case fanout_substitution_params::substitution_strategy::BREADTH:
             {
-                generate_breadth_tree(substituted, n, child, num_fanouts);
+                generate_breadth_tree(substituted, key, child, num_fanouts);
                 break;
             }
 
             case fanout_substitution_params::substitution_strategy::RANDOM:
             {
-                generate_random_tree(substituted, n, child, num_fanouts);
+                generate_random_tree(substituted, key, child, num_fanouts);
                 break;
             }
         }
     }
 
-    mockturtle::signal<NtkDest> get_fanout(const NtkDest& substituted, const mockturtle::node<NtkSrc>& n,
-                                           mockturtle::signal<NtkDest>& child)
+    destination_signal get_fanout(const NtkDest& substituted, const output_pin_key& key, destination_signal child)
     {
-        // Shared fanout pools are keyed by source node and are therefore invalid for multi-output nodes where each
-        // output pin is semantically distinct.
-        if constexpr (mockturtle::has_is_multioutput_v<decltype(ntk_topo)>)
-        {
-            if (ntk_topo.is_multioutput(n))
-            {
-                return child;
-            }
-        }
-        if constexpr (mockturtle::has_num_outputs_v<decltype(ntk_topo)>)
-        {
-            if (ntk_topo.num_outputs(n) > 1u)
-            {
-                return child;
-            }
-        }
-
         if (substituted.fanout_size(substituted.get_node(child)) >= ps.threshold)
         {
-            if (auto fanouts = available_fanouts[n]; !fanouts.empty())
+            if (const auto it = available_fanouts.find(key); it != available_fanouts.end())
             {
+                auto& fanouts = it->second;
+
                 // find non-overfull fanout node
-                while (true)
+                while (!fanouts.empty())
                 {
                     child = fanouts.front();
                     if (substituted.fanout_size(substituted.get_node(child)) >= ps.degree)
@@ -353,16 +465,16 @@ class fanout_substitution_impl
      * @param child        The signal in substituted representing the output of node n.
      * @param num_fanouts  Number of buffers to insert (chain length)
      */
-    void generate_depth_tree(NtkDest& substituted, const mockturtle::node<NtkSrc>& n,
-                             mockturtle::signal<NtkDest>& child, const uint32_t num_fanouts)
+    void generate_depth_tree(NtkDest& substituted, const output_pin_key& key, destination_signal child,
+                             const uint32_t num_fanouts)
     {
-        std::queue<mockturtle::signal<NtkDest>> q{};
+        std::queue<destination_signal> q{};
         for (auto i = 0u; i < num_fanouts; ++i)
         {
             child = substituted.create_buf(child);
             q.push(child);
         }
-        available_fanouts[n] = std::move(q);
+        available_fanouts[key] = std::move(q);
     }
     /**
      * BREADTH-FIRST strategy: expand buffers level by level to create balanced fanout trees.
@@ -372,10 +484,10 @@ class fanout_substitution_impl
      * @param child        The signal in substituted representing the output of node n.
      * @param num_fanouts  Number of buffers to insert (chain length)
      */
-    void generate_breadth_tree(NtkDest& substituted, const mockturtle::node<NtkSrc>& n,
-                               mockturtle::signal<NtkDest>& child, const uint32_t num_fanouts)
+    void generate_breadth_tree(NtkDest& substituted, const output_pin_key& key, destination_signal child,
+                               const uint32_t num_fanouts)
     {
-        std::queue<mockturtle::signal<NtkDest>> q{{child}};
+        std::queue<destination_signal> q{{child}};
 
         for (auto f = 0ul; f < num_fanouts; ++f)
         {
@@ -388,7 +500,7 @@ class fanout_substitution_impl
                 q.push(child);
             }
         }
-        available_fanouts[n] = std::move(q);
+        available_fanouts[key] = std::move(q);
     }
     /**
      * RANDOM strategy: insert buffers at randomly chosen positions in the expanding tree.
@@ -398,13 +510,13 @@ class fanout_substitution_impl
      * @param child        The signal in substituted representing the output of node n.
      * @param num_fanouts  Number of buffers to insert (chain length)
      */
-    void generate_random_tree(NtkDest& substituted, const mockturtle::node<NtkSrc>& n,
-                              mockturtle::signal<NtkDest>& child, const uint32_t num_fanouts)
+    void generate_random_tree(NtkDest& substituted, const output_pin_key& key, destination_signal child,
+                              const uint32_t num_fanouts)
     {
         auto& gen  = rng->gen;
         auto& dist = rng->dist;
         // maintain a vector of available fanout nodes and randomly select one
-        std::vector<mockturtle::signal<NtkDest>> available_vec{child};
+        std::vector<destination_signal> available_vec{child};
         dist.param(std::uniform_int_distribution<std::size_t>::param_type(0, available_vec.size() - 1));
 
         for (auto f = 0u; f < num_fanouts; ++f)
@@ -431,12 +543,12 @@ class fanout_substitution_impl
             }
         }
         // transfer the available nodes to a queue for later use in get_fanout
-        std::queue<mockturtle::signal<NtkDest>> q{};
+        std::queue<destination_signal> q{};
         for (auto const& sig : available_vec)
         {
             q.push(sig);
         }
-        available_fanouts[n] = std::move(q);
+        available_fanouts[key] = std::move(q);
     }
 };
 
@@ -444,7 +556,11 @@ template <typename Ntk>
 class is_fanout_substituted_impl
 {
   public:
-    is_fanout_substituted_impl(const Ntk& src, fanout_substitution_params p) : ntk{src}, ps{p} {}
+    is_fanout_substituted_impl(const Ntk& src, fanout_substitution_params p) :
+            ntk{src},
+            ps{p},
+            fanout_sizes{compute_fanout_sizes()}
+    {}
 
     bool run()
     {
@@ -471,9 +587,13 @@ class is_fanout_substituted_impl
                     }
                 }
                 // check threshold of non-fanout nodes
-                if (ntk.fanout_size(n) > ps.threshold)
+                for (auto output_idx = 0u; output_idx < num_outputs(n); ++output_idx)
                 {
-                    substituted = false;
+                    if (output_fanout_size({n, output_idx}) > ps.threshold)
+                    {
+                        substituted = false;
+                        break;
+                    }
                 }
 
                 return substituted;
@@ -483,9 +603,100 @@ class is_fanout_substituted_impl
     }
 
   private:
+    using node_type = mockturtle::node<Ntk>;
+
+    struct output_pin_key
+    {
+        node_type node{};
+        uint32_t  output = 0u;
+
+        [[nodiscard]] bool operator==(const output_pin_key& other) const noexcept
+        {
+            return node == other.node && output == other.output;
+        }
+    };
+
+    struct output_pin_key_hash
+    {
+        [[nodiscard]] std::size_t operator()(const output_pin_key& key) const noexcept
+        {
+            const auto node_hash   = std::hash<node_type>{}(key.node);
+            const auto output_hash = std::hash<uint32_t>{}(key.output);
+            return node_hash ^ (output_hash + 0x9e3779b9 + (node_hash << 6) + (node_hash >> 2));
+        }
+    };
+
+    template <typename Signal, typename = void>
+    struct has_output_field : std::false_type
+    {};
+
+    template <typename Signal>
+    struct has_output_field<Signal, std::void_t<decltype(std::declval<Signal const&>().output)>> : std::true_type
+    {};
+
+    template <typename Signal>
+    static uint32_t signal_output(const Signal& signal) noexcept
+    {
+        if constexpr (has_output_field<Signal>::value)
+        {
+            return static_cast<uint32_t>(signal.output);
+        }
+
+        return 0u;
+    }
+
+    [[nodiscard]] uint32_t num_outputs(const node_type& n) const noexcept
+    {
+        if constexpr (mockturtle::has_num_outputs_v<Ntk>)
+        {
+            return ntk.num_outputs(n);
+        }
+
+        return 1u;
+    }
+
+    [[nodiscard]] uint32_t output_fanout_size(const output_pin_key& key) const
+    {
+        if (const auto it = fanout_sizes.find(key); it != fanout_sizes.cend())
+        {
+            return it->second;
+        }
+
+        return 0u;
+    }
+
+    [[nodiscard]] std::unordered_map<output_pin_key, uint32_t, output_pin_key_hash> compute_fanout_sizes() const
+    {
+        std::unordered_map<output_pin_key, uint32_t, output_pin_key_hash> sizes{};
+
+        ntk.foreach_gate(
+            [this, &sizes](const auto& n)
+            {
+                ntk.foreach_fanin(n,
+                                  [this, &sizes](const auto& f)
+                                  {
+                                      const auto source = ntk.get_node(f);
+                                      const auto key    = output_pin_key{source, signal_output(f)};
+                                      ++sizes[key];
+                                  });
+            });
+
+        ntk.foreach_po(
+            [this, &sizes](const auto& po)
+            {
+                const auto source = ntk.get_node(po);
+                const auto key    = output_pin_key{source, signal_output(po)};
+                ++sizes[key];
+            });
+
+        return sizes;
+    }
+
     const Ntk& ntk;
 
     const fanout_substitution_params ps;
+
+    std::unordered_map<output_pin_key, uint32_t, output_pin_key_hash> fanout_sizes;
 
     bool substituted = true;
 };
@@ -550,6 +761,8 @@ bool is_fanout_substituted(const Ntk& ntk, fanout_substitution_params ps = {}) n
 {
     static_assert(mockturtle::is_network_type_v<Ntk>, "NtkSrc is not a network type");
     static_assert(mockturtle::has_foreach_gate_v<Ntk>, "Ntk does not implement the foreach_gate function");
+    static_assert(mockturtle::has_foreach_fanin_v<Ntk>, "Ntk does not implement the foreach_fanin function");
+    static_assert(mockturtle::has_foreach_po_v<Ntk>, "Ntk does not implement the foreach_po function");
     static_assert(mockturtle::has_fanout_size_v<Ntk>, "Ntk does not implement the fanout_size function");
 
     detail::is_fanout_substituted_impl<Ntk> p{ntk, ps};

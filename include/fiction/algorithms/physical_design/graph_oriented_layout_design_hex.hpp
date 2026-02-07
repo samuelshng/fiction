@@ -1,676 +1,25 @@
 //
-// Created by Simon Hofmann on 30.01.24.
+// Created by codex on 06.02.26.
 //
-#ifndef FICTION_GRAPH_ORIENTED_LAYOUT_DESIGN_HPP
-#define FICTION_GRAPH_ORIENTED_LAYOUT_DESIGN_HPP
 
-#include "fiction/algorithms/network_transformation/fanout_substitution.hpp"
-#include "fiction/algorithms/path_finding/a_star.hpp"
-#include "fiction/algorithms/path_finding/cost.hpp"
-#include "fiction/algorithms/path_finding/distance.hpp"
-#include "fiction/algorithms/physical_design/post_layout_optimization.hpp"
-#include "fiction/layouts/bounding_box.hpp"
-#include "fiction/layouts/clocking_scheme.hpp"
-#include "fiction/layouts/obstruction_layout.hpp"
-#include "fiction/traits.hpp"
-#include "fiction/types.hpp"
-#include "fiction/utils/name_utils.hpp"
-#include "fiction/utils/network_utils.hpp"
-#include "fiction/utils/placement_utils.hpp"
-#include "fiction/utils/routing_utils.hpp"
+#ifndef FICTION_GRAPH_ORIENTED_LAYOUT_DESIGN_HEX_HPP
+#define FICTION_GRAPH_ORIENTED_LAYOUT_DESIGN_HEX_HPP
 
-#include <fmt/format.h>
-#include <mockturtle/traits.hpp>
-#include <mockturtle/utils/node_map.hpp>
-#include <mockturtle/utils/stopwatch.hpp>
-#include <mockturtle/views/fanout_view.hpp>
-#include <mockturtle/views/immutable_view.hpp>
-
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cassert>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <future>
-#include <iostream>
-#include <limits>
-#include <mutex>
-#include <optional>
-#include <queue>
-#include <random>
-#include <stdexcept>
-#include <thread>
-#include <tuple>
-#include <type_traits>
-#include <unordered_map>
-#include <utility>
-#include <vector>
+#include "fiction/algorithms/physical_design/graph_oriented_layout_design.hpp"
 
 namespace fiction
 {
 
-/**
- * Parameters for the graph-oriented layout design algorithm.
- */
-struct graph_oriented_layout_design_params
-{
-    /**
-     * The `effort_mode` enum defines different levels of computational effort for generating and exploring search space
-     * graphs for during the graph-oriented layout design process. Each mode varies in the number of search space graphs
-     * generated and the strategies employed, balancing between runtime efficiency and the likelihood of finding optimal
-     * solutions.
-     */
-    enum effort_mode : std::uint8_t
-    {
-        /**
-         * HIGH_EFFICIENCY mode generates 2 search space graphs. This option minimizes runtime but may not always yield
-         * the optimal results.
-         */
-        HIGH_EFFICIENCY,
-        /**
-         * HIGH_EFFORT mode generates 12 search space graphs using various fanout substitution strategies, PI
-         * placements, and other parameters. This wider exploration increases the chance of finding optimal layouts but
-         * also extends runtime. When a solution is found in any graph, its cost is used to prune the remaining graphs.
-         */
-        HIGH_EFFORT,
-        /**
-         * HIGHEST_EFFORT mode builds upon HIGH_EFFORT by duplicating the 12 search space graphs for different cost
-         * objectives. If the cost objective involves layout area, number of crossings, number of wire segments, or a
-         * combination of area and crossings, a total of 48 search space graphs are generated. For a custom cost
-         * objective, an additional 12 graphs are created, resulting in 60 graphs in total.
-         */
-        HIGHEST_EFFORT,
-        /**
-         * MAXIMUM_EFFORT mode builds upon HIGHEST_EFFORT by duplicating the 48 (60) search space graphs using
-         * randomized fanout substitution strategies and topological orderings. If the cost objective involves layout
-         * area, number of crossings, number of wire segments, or a combination of area and crossings, a total of 96
-         * search space graphs are generated. For a custom cost objective, an additional 12 graphs are created,
-         * resulting in 120 graphs in total. This mode has a higher chance of finding optimal solutions but
-         * significantly increases runtime.
-         */
-        MAXIMUM_EFFORT
-    };
-    /**
-     * The effort mode used. Defaults to HIGH_EFFORT.
-     */
-    effort_mode mode = HIGH_EFFORT;
-    /**
-     * Number of expansions for each vertex that should be explored. For each partial layout, `num_vertex_expansions`
-     * positions will be checked for the next node/gate to be placed. A lower value requires less runtime, but the
-     * layout might have a larger area or it could also lead to no solution being found. A higher value might lead to
-     * better solutions, but also requires more runtime. Defaults to 4 expansions for each vertex.
-     *
-     */
-    uint64_t num_vertex_expansions = 4u;
-    /**
-     * Return the first found layout, which might still have a high cost but can be found fast.
-     */
-    bool return_first = false;
-    /**
-     * Timeout limit (in ms).
-     */
-    uint64_t timeout = std::numeric_limits<uint64_t>::max();
-    /**
-     * Disable the creation of crossings during layout generation. If set to true, gates will only be placed if a
-     * crossing-free wiring is found. Defaults to false.
-     */
-    bool planar = false;
-    /**
-     * The `cost_objective` enum defines various cost objectives that can be used in the graph-oriented layout design
-     * process. Each cost objective represents a different metric used to expand a vertex in the search space graph.
-     */
-    enum cost_objective : std::uint8_t
-    {
-        /**
-         * AREA: Optimizes for the total area of the layout, aiming to minimize the space required for the design.
-         */
-        AREA,
-        /**
-         * WIRES: Optimizes for the number of wire segments in the layout, reducing the delay and increasing throughput.
-         */
-        WIRES,
-        /**
-         * CROSSINGS: Optimizes for the number of wire crossings in the layout.
-         */
-        CROSSINGS,
-        /**
-         * ACP (Area-Crossings Product): Optimizes for a combination of layout area and the number of crossings.
-         */
-        ACP,
-        /**
-         * CUSTOM: Allows for a user-defined cost objective, enabling optimization based on specific criteria outside
-         * the predefined options.
-         */
-        CUSTOM
-    };
-    /**
-     * The cost objective used. Defaults to AREA
-     */
-    cost_objective cost = AREA;
-    /**
-     * BETA feature:
-     * Flag to enable or disable multithreading during the execution of the layout design algorithm.
-     *
-     * When set to `true`, the algorithm will utilize multiple threads to process different search space graphs in
-     * parallel, improving performance by distributing the workload across available CPU cores. If set to `false`, the
-     * algorithm will run sequentially on a single thread.
-     *
-     * Only recommended for `HIGH_EFFORT` and `HIGHEST_EFFORT` modes and complex networks (> 100 nodes).
-     *
-     * Enabling multithreading can significantly speed up the algorithm, especially when using multiple search space
-     * graphs and dealing with complex networks, by concurrently expanding them. However, it may introduce additional
-     * overhead for thread synchronization and can increase memory usage. It is therefore not recommended for small
-     * input networks.
-     *
-     * Default value: `false`
-     */
-    bool enable_multithreading = false;
-    /**
-     * Verbosity.
-     */
-    bool verbose = false;
-    /**
-     * Random seed used for random fanout substitution and random topological ordering in maximum-effort mode,
-     * generated randomly if not specified.
-     */
-    std::optional<uint32_t> seed = std::nullopt;
-    /**
-     * Enforce NOT gates to be routed non-bending only.
-     */
-    bool straight_inverters = false;
-    /**
-     * For each primary input (PI) considered during placement, reserve this many
-     * empty tiles *after* the current frontier:
-     *  - Top edge (row 0): leave `tiles_to_skip_between_pis` empty tiles to the right
-     *    of the rightmost occupied tile before proposing a new PI position.
-     *  - Left edge (column 0): leave `tiles_to_skip_between_pis` empty tiles below
-     *    the bottommost occupied tile before proposing a new PI position.
-     *
-     * This soft margin can reduce local congestion and increase the probability of
-     * finding a routable layout at the expense of a temporarily larger footprint,
-     * which post-layout optimization may later shrink. Defaults to `0`.
-     */
-    uint64_t tiles_to_skip_between_pis = 0;
-    /**
-     * When enabled, randomizes the tiles_to_skip_between_pis value for each PI placement.
-     * The random value will be chosen from `0` to `tiles_to_skip_between_pis` (inclusive).
-     * This can help explore different placement strategies and potentially find better layouts.
-     * Uses the same random seed as other randomization features for reproducibility.
-     * Defaults to `false`.
-     */
-    bool randomize_tiles_to_skip_between_pis = false;
-};
-/**
- * This struct stores statistics about the graph-oriented layout design process.
- */
-struct graph_oriented_layout_design_stats
-{
-    /**
-     * Runtime of the graph-oriented layout design process.
-     */
-    mockturtle::stopwatch<>::duration time_total{};
-    /**
-     * Layout width.
-     */
-    uint64_t x_size{0ull};
-    /**
-     * Layout height.
-     */
-    uint64_t y_size{0ull};
-    /**
-     * Number of gates.
-     */
-    uint64_t num_gates{0ull};
-    /**
-     * Number of wires.
-     */
-    uint64_t num_wires{0ull};
-    /**
-     * Number of crossings.
-     */
-    uint64_t num_crossings{0ull};
-    /**
-     * Reports the statistics to the given output stream.
-     *
-     * @param out Output stream.
-     */
-    void report(std::ostream& out = std::cout) const
-    {
-        out << fmt::format("[i] total time      = {:.2f} secs\n", mockturtle::to_seconds(time_total));
-        out << fmt::format("[i] layout size     = {} × {}\n", x_size, y_size);
-        out << fmt::format("[i] num. gates      = {}\n", num_gates);
-        out << fmt::format("[i] num. wires      = {}\n", num_wires);
-        out << fmt::format("[i] num. crossings  = {}\n", num_crossings);
-    }
-};
-
 namespace detail
 {
 /**
- * Alias for a vector of tiles in a given layout.
+ * Implementation of the native hexagonal graph-oriented layout design algorithm.
  *
- * @tparam Lyt Cartesian gate-level layout type.
- */
-template <typename Lyt>
-using coord_vec_type = std::vector<tile<Lyt>>;
-/**
- * This struct defines a hash function for a nested vector of layout tiles.
- * It calculates a combined hash value for a vector of tiles based on the coordinates of each tile.
- *
- * @tparam Lyt Cartesian gate-level layout type.
- */
-template <typename Lyt>
-struct nested_vector_hash
-{
-    /**
-     * Computes a hash value for a vector of `tile` objects.
-     *
-     * @param vec The vector of tiles to be hashed.
-     * @return A combined hash value for the vector of tiles.
-     */
-    std::size_t operator()(const coord_vec_type<Lyt>& vec) const
-    {
-        std::size_t       hash  = 0ul;
-        const std::size_t prime = 0x9e3779b9;
-        for (const auto& tile : vec)
-        {
-            hash ^= std::hash<uint64_t>{}(tile.x) + prime + (hash << 6u) + (hash >> 2u);
-            hash ^= std::hash<uint64_t>{}(tile.y) + prime + (hash << 6u) + (hash >> 2u);
-            hash ^= std::hash<uint64_t>{}(tile.z) + prime + (hash << 6u) + (hash >> 2u);
-        }
-        return hash;
-    }
-};
-/**
- * A priority queue class for managing elements with associated priorities.
- * The elements are stored in a priority queue, with the highest priority elements being
- * retrieved first.
- *
- * @tparam Lyt Cartesian gate-level layout type.
- */
-template <typename Lyt>
-class priority_queue
-{
-  public:
-    /**
-     * Checks if the priority queue is empty.
-     *
-     * @return True if the priority queue is empty, false otherwise.
-     */
-    [[nodiscard]] bool empty() const
-    {
-        return elements.empty();
-    }
-    /**
-     * Adds an element to the priority queue with a given priority.
-     *
-     * @param item The element to be added.
-     * @param priority The priority of the element.
-     */
-    void put(const coord_vec_type<Lyt>& item, double priority)
-    {
-        elements.emplace(priority, counter++, item);
-    }
-    /**
-     * Retrieves and removes the element with the highest priority from the queue.
-     *
-     * @return The element with the highest priority.
-     */
-    coord_vec_type<Lyt> get()
-    {
-        coord_vec_type<Lyt> item = std::get<2>(elements.top());
-        elements.pop();
-        return item;
-    }
-
-  private:
-    /**
-     * Counter to keep track of the insertion order of elements.
-     */
-    std::size_t counter = 0ul;
-    /**
-     * Tuple containing the priority, counter, and element.
-     */
-    using queue_element = std::tuple<double, std::size_t, coord_vec_type<Lyt>>;
-    /**
-     * Priority queue containing elements with associated priorities.
-     */
-    std::priority_queue<queue_element, std::vector<queue_element>, std::greater<queue_element>> elements;
-};
-/**
- * Alias for a dictionary that maps nodes from a mockturtle network to signals in a layout.
- *
- * @tparam Lyt Cartesian gate-level layout type.
- * @tparam Ntk Type of the mockturtle network.
- */
-template <typename Lyt, typename Ntk>
-using node_dict_type = mockturtle::node_map<mockturtle::signal<Lyt>, Ntk>;
-/**
- * This enum class indicates the allowed positions for PIs.
- */
-enum class pi_locations : std::uint8_t
-{
-    /**
-     * Flag indicating if primary inputs (PIs) can be placed at the top.
-     */
-    TOP,
-    /**
-     * Flag indicating if primary inputs (PIs) can be placed at the left.
-     */
-    LEFT,
-    /**
-     * Flag indicating if primary inputs (PIs) can be placed at the top and at the left.
-     */
-    TOP_AND_LEFT
-};
-/**
- * A structure representing a search space graph.
- *
- * This struct encapsulates all the necessary data for managing a search space graph
- * during the graph-oriented layout design process. It holds the current vertex,
- * network, nodes to be placed, and other relevant information.
- *
- * @tparam Lyt The layout type.
- * @tparam Ntk The network type.
- */
-template <typename Lyt>
-struct search_space_graph
-{
-    /**
-     * The current vertex in the search space graph.
-     */
-    coord_vec_type<Lyt> current_vertex{};
-    /**
-     * The network associated with this search space graph.
-     */
-    tec_nt network;
-    /**
-     * Topological list of nodes to be placed in the layout.
-     */
-    std::vector<mockturtle::node<tec_nt>> nodes_to_place;
-    /**
-     * Enum indicating if primary inputs (PIs) can be placed at the top or left.
-     */
-    pi_locations pi_locs = pi_locations::TOP_AND_LEFT;
-    /**
-     * Flag indicating if this graph's frontier is active.
-     */
-    bool frontier_flag = true;
-    /**
-     * The cost so far for reaching each vertex in the layout.
-     */
-    std::unordered_map<coord_vec_type<Lyt>, double, detail::nested_vector_hash<Lyt>> cost_so_far{};
-    /**
-     * Priority queue containing vertices of the search space graph.
-     */
-    detail::priority_queue<Lyt> frontier{};
-    /**
-     * The cost objective used to expand a vertex in the search space graph.
-     */
-    graph_oriented_layout_design_params::cost_objective cost =
-        graph_oriented_layout_design_params::cost_objective::AREA;
-};
-/**
- * @brief Custom view class derived from mockturtle::topo_view.
- *
- * This class inherits from mockturtle::topo_view and overrides certain functions
- * to provide custom behavior.
- */
-template <typename Ntk, bool CiToCo = false, bool Randomize = false>
-class topo_view : public mockturtle::immutable_view<Ntk>
-{
-  public:
-    using node   = typename Ntk::node;
-    using signal = typename Ntk::signal;
-
-    explicit topo_view(const Ntk& ntk, const uint32_t seed_val = 42) :
-            mockturtle::immutable_view<Ntk>(ntk),
-            rng(seed_val)
-    {
-        update_topo();
-    }
-
-    [[nodiscard]] uint32_t size() const
-    {
-        return uint32_t(topo_order.size());
-    }
-
-    [[nodiscard]] uint32_t num_gates() const
-    {
-        return size() - offset();
-    }
-
-    [[nodiscard]] uint32_t node_to_index(const node& n) const
-    {
-        auto it = std::find(topo_order.begin(), topo_order.end(), n);
-        return uint32_t(std::distance(topo_order.begin(), it));
-    }
-
-    [[nodiscard]] node index_to_node(const uint32_t idx) const
-    {
-        return topo_order.at(idx);
-    }
-
-    template <typename Fn>
-    void foreach_node(Fn&& fn) const
-    {
-        mockturtle::detail::foreach_element(topo_order.cbegin(), topo_order.cend(), std::forward<Fn>(fn));
-    }
-
-    template <typename Fn>
-    void foreach_gate(Fn&& fn) const
-    {
-        mockturtle::detail::foreach_element(topo_order.cbegin() + offset(), topo_order.cend(), std::forward<Fn>(fn));
-    }
-
-    template <typename Fn>
-    void foreach_gate_reverse(Fn&& fn) const
-    {
-        mockturtle::detail::foreach_element(topo_order.crbegin(), topo_order.crend() - offset(), std::forward<Fn>(fn));
-    }
-
-  private:
-    void update_topo()
-    {
-        this->incr_trav_id();
-        this->incr_trav_id();
-        topo_order.clear();
-        topo_order.reserve(this->size());
-
-        // constants and PIs in fixed order
-        const auto c0 = this->get_node(this->get_constant(false));
-        topo_order.push_back(c0);
-        this->set_visited(c0, this->trav_id());
-
-        if (const auto c1 = this->get_node(this->get_constant(true)); this->visited(c1) != this->trav_id())
-        {
-            topo_order.push_back(c1);
-            this->set_visited(c1, this->trav_id());
-        }
-
-        // collect starting points (COs or CIs)
-        if constexpr (CiToCo)
-        {
-            std::vector<node> starts{};
-            starts.reserve(Ntk::num_cis());
-            Ntk::foreach_ci([&starts](const auto& n) { starts.push_back(n); });
-            if constexpr (Randomize)
-            {
-                std::shuffle(starts.begin(), starts.end(), rng);
-            }
-            for (const auto& n : starts)
-            {
-                create_topo_rec(n);
-            }
-        }
-        else
-        {
-            std::vector<signal> starts{};
-            starts.reserve(Ntk::num_cos());
-            Ntk::foreach_co([&starts](const auto& f) { starts.push_back(f); });
-            if constexpr (Randomize)
-            {
-                std::shuffle(starts.begin(), starts.end(), rng);
-            }
-            for (const auto& f : starts)
-            {
-                create_topo_rec(this->get_node(f));
-            }
-        }
-    }
-
-    void create_topo_rec(const node& n)
-    {
-        if constexpr (CiToCo)
-        {
-            // CI→CO readiness-based
-            // skip until all fanins are done
-            bool not_ready = false;
-            this->foreach_fanin(n,
-                                [this, &not_ready](const signal& f)
-                                {
-                                    if (this->visited(this->get_node(f)) != this->trav_id())
-                                    {
-                                        not_ready = true;
-                                    }
-                                });
-            if (not_ready || this->visited(n) == this->trav_id())
-            {
-                return;
-            }
-
-            // mark & emit
-            this->set_visited(n, this->trav_id());
-            topo_order.push_back(n);
-
-            // visit fanouts, maybe shuffled
-            if constexpr (Randomize)
-            {
-                std::vector<node> fanouts{};
-                fanouts.reserve(this->fanout_size(n));
-                this->foreach_fanout(n, [&fanouts](const node& fo) { fanouts.push_back(fo); });
-                std::shuffle(fanouts.begin(), fanouts.end(), rng);
-                for (const auto& fo : fanouts)
-                {
-                    create_topo_rec(fo);
-                }
-            }
-            else
-            {
-                this->foreach_fanout(n, [this](const node& fo) { create_topo_rec(fo); });
-            }
-        }
-        else
-        {
-            // CO→CI DFS (post-order)
-            if (this->visited(n) == this->trav_id())
-            {
-                return;
-            }
-            assert(this->visited(n) != this->trav_id() - 1);  // no cycles
-            // temporary mark
-            this->set_visited(n, this->trav_id() - 1);
-
-            // visit children (fanins), maybe shuffled
-            if constexpr (Randomize)
-            {
-                std::vector<signal> fanins{};
-                fanins.reserve(this->fanin_size(n));
-                this->foreach_fanin(n, [&fanins](const signal& f) { fanins.push_back(f); });
-                std::shuffle(fanins.begin(), fanins.end(), rng);
-                for (const auto& f : fanins)
-                {
-                    create_topo_rec(this->get_node(f));
-                }
-            }
-            else
-            {
-                this->foreach_fanin(n, [this](const signal& f) { create_topo_rec(this->get_node(f)); });
-            }
-
-            // permanent mark and append
-            this->set_visited(n, this->trav_id());
-            topo_order.push_back(n);
-        }
-    }
-
-    [[nodiscard]] uint32_t offset() const
-    {
-        // 1 constant + all PIs + maybe one more constant
-        return 1u + this->num_pis() +
-               (this->get_node(this->get_constant(true)) != this->get_node(this->get_constant(false)));
-    }
-
-    std::vector<node> topo_order;
-    std::mt19937      rng;
-};
-
-// convenient aliases for the four variants:
-template <typename Ntk>
-using topo_view_co_to_ci = topo_view<Ntk, false, false>;
-template <typename Ntk>
-using topo_view_ci_to_co = topo_view<Ntk, true, false>;
-template <typename Ntk>
-using topo_view_co_to_ci_random = topo_view<Ntk, false, true>;
-template <typename Ntk>
-using topo_view_ci_to_co_random = topo_view<Ntk, true, true>;
-
-/**
- * When checking for possible paths on a layout between two tiles SRC and DEST, one of them could also be the new tile
- * for the next gate to be placed and it therefore has to be checked if said tile is still empty
- */
-enum class new_gate_location : std::uint8_t
-{
-    /**
-     * Do not check any tiles.
-     */
-    NONE,
-    /**
-     * Check if the source tile is empty.
-     */
-    SRC,
-    /**
-     * Check if the destination tile is empty.
-     */
-    DEST
-};
-/**
- * Struct to hold information necessary for gate placement during layout generation for one vertex.
- *
- * @tparam ObstrLyt The type of the layout.
- */
-template <typename ObstrLyt>
-struct placement_info
-{
-    /**
-     * The index of the current node being placed.
-     */
-    uint64_t current_node;
-    /**
-     * The index of the current primary output.
-     */
-    uint64_t current_po;
-    /**
-     * Mapping of nodes to their positions in the layout.
-     */
-    node_dict_type<ObstrLyt, tec_nt> node2pos;
-    /**
-     * Mapping of primary input nodes to layout nodes.
-     */
-    mockturtle::node_map<mockturtle::node<ObstrLyt>, tec_nt> pi2node;
-};
-/**
- * Implementation of the graph-oriented layout design algorithm.
- * This class handles the initialization and execution of the algorithm.
- *
- * @tparam Lyt Cartesian gate-level layout type.
+ * @tparam Lyt Hexagonal gate-level layout type.
  * @tparam Ntk Network type.
  */
 template <typename Lyt, typename Ntk>
-class graph_oriented_layout_design_impl
+class graph_oriented_layout_design_hex_impl
 {
   public:
     /**
@@ -680,9 +29,9 @@ class graph_oriented_layout_design_impl
      * @param p The parameters for the graph-enhanced layout search algorithm.
      * @param st The statistics object to record execution details.
      */
-    graph_oriented_layout_design_impl(const Ntk& src, const graph_oriented_layout_design_params& p,
-                                      graph_oriented_layout_design_stats&       st,
-                                      const std::function<uint64_t(const Lyt&)> custom) :
+    graph_oriented_layout_design_hex_impl(const Ntk& src, const graph_oriented_layout_design_params& p,
+                                          graph_oriented_layout_design_stats&       st,
+                                          const std::function<uint64_t(const Lyt&)> custom) :
             ntk{initialize_network(src)},
             ps{p},
             pst{st},
@@ -710,7 +59,7 @@ class graph_oriented_layout_design_impl
         ssg_vec.resize(num_search_space_graphs);
 
         // initialize layout to keep track of current best solution
-        Lyt best_lyt{{}, twoddwave_clocking<Lyt>()};
+        Lyt best_lyt{{}, row_clocking<Lyt>()};
 
         // initialize search space graphs
         initialize();
@@ -1108,7 +457,7 @@ class graph_oriented_layout_design_impl
         if ((layout.is_empty_tile(src) && src_is_new_pos) || (layout.is_empty_tile(dest) && dest_is_new_pos) ||
             (new_gate_loc == new_gate_location::NONE))
         {
-            using dist = twoddwave_distance_functor<ObstrLyt, uint64_t>;
+            using dist = manhattan_distance_functor<ObstrLyt, uint64_t>;
             using cost = unit_cost_functor<ObstrLyt, uint8_t>;
 
             a_star_params a_star_crossing_params{};
@@ -1149,6 +498,20 @@ class graph_oriented_layout_design_impl
      * @param num_expansions The maximum number of positions to be returned (is doubled for PIs).
      * @return A vector of tiles representing the possible positions for PIs.
      */
+    [[nodiscard]] bool has_path_to_bottom_row(const ObstrLyt& layout, const tile<ObstrLyt>& src,
+                                              const new_gate_location new_gate_loc            = new_gate_location::NONE,
+                                              const bool              check_straight_inverter = false) noexcept
+    {
+        for (uint64_t x = 0u; x <= layout.x(); ++x)
+        {
+            if (!check_path(layout, src, {x, layout.y(), 0}, new_gate_loc, check_straight_inverter).empty())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
     [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions_pis(ObstrLyt& layout, const pi_locations& pi_locs,
                                                                       const uint64_t num_expansions) noexcept
     {
@@ -1207,7 +570,15 @@ class graph_oriented_layout_design_impl
         const auto check_tile = [&](const uint64_t x, const uint64_t y) noexcept
         {
             const tile<ObstrLyt> tile{x, y, 0};
-            if (!check_path(layout, tile, drain, new_gate_location::SRC).empty())
+            if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+            {
+                if (layout.is_empty_tile(tile))
+                {
+                    count_expansions++;
+                    possible_positions.push_back(tile);
+                }
+            }
+            else if (!check_path(layout, tile, drain, new_gate_location::SRC).empty())
             {
                 count_expansions++;
                 possible_positions.push_back(tile);
@@ -1284,11 +655,18 @@ class graph_oriented_layout_design_impl
     {
         coord_vec_type<ObstrLyt> possible_positions{};
 
-        const auto& pre             = fc.fanin_nodes[0];
-        const auto  pre_t           = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre]);
-        const auto  expansion_limit = std::max(layout.x() - pre_t.x, layout.y() - pre_t.y);
+        const auto& pre   = fc.fanin_nodes[0];
+        const auto  pre_t = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre]);
 
-        possible_positions.reserve(expansion_limit);
+        if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+        {
+            possible_positions.reserve(layout.x() + 1);
+        }
+        else
+        {
+            const auto expansion_limit = std::max(layout.x() - pre_t.x, layout.y() - pre_t.y);
+            possible_positions.reserve(expansion_limit);
+        }
 
         // check if path from previous tile to PO exists
         auto check_tile = [&](const uint64_t x, const uint64_t y)
@@ -1302,15 +680,28 @@ class graph_oriented_layout_design_impl
             }
         };
 
+        if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+        {
+            for (uint64_t x = 0u; x <= layout.x(); ++x)
+            {
+                check_tile(x, layout.y());
+            }
+            return possible_positions;
+        }
+
+        const auto expansion_limit = std::max(layout.x() - pre_t.x, layout.y() - pre_t.y);
         for (uint64_t k = 0ul; k <= expansion_limit; ++k)
         {
             if (pre_t.x + k <= layout.x())
             {
                 check_tile(pre_t.x + k, layout.y());
             }
-            if (pre_t.y + k < layout.y())
+            if constexpr (!is_hexagonal_layout_v<ObstrLyt>)
             {
-                check_tile(layout.x(), pre_t.y + k);
+                if (pre_t.y + k < layout.y())
+                {
+                    check_tile(layout.x(), pre_t.y + k);
+                }
             }
         }
 
@@ -1338,18 +729,15 @@ class graph_oriented_layout_design_impl
         const auto& pre   = fc.fanin_nodes[0];
         const auto  pre_t = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre]);
 
-        // check if path from previous tile to new tile and from new tile to drain exist
-        const auto check_tile = [&](const uint64_t x, const uint64_t y) noexcept
+        // check if path from previous tile to new tile and from new tile to bottom row exists
+        const auto check_tile = [&](const tile<ObstrLyt>& new_pos) noexcept
         {
-            const tile<ObstrLyt> new_pos{pre_t.x + x, pre_t.y + y, 0};
             const auto check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(pre_t));
 
             if (!check_path(layout, pre_t, new_pos, new_gate_location::DEST, check_straight_inverter).empty())
             {
                 layout.resize({layout.x() + 1, layout.y() + 1, 1});
-                const tile<ObstrLyt> drain{layout.x(), layout.y(), 0};
-
-                if (!check_path(layout, new_pos, drain, new_gate_location::SRC).empty())
+                if (has_path_to_bottom_row(layout, new_pos, new_gate_location::SRC))
                 {
                     possible_positions.push_back(new_pos);
                     count_expansions++;
@@ -1359,6 +747,23 @@ class graph_oriented_layout_design_impl
             }
         };
 
+        if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+        {
+            for (uint64_t y = pre_t.y + 1; y <= layout.y(); ++y)
+            {
+                for (uint64_t x = 0u; x <= layout.x(); ++x)
+                {
+                    check_tile({x, y, 0});
+                    if (count_expansions >= ps.num_vertex_expansions)
+                    {
+                        return possible_positions;
+                    }
+                }
+            }
+
+            return possible_positions;
+        }
+
         // iterate diagonally
         for (uint64_t k = 0ul; k < layout.x() + layout.y() + 1; ++k)
         {
@@ -1367,7 +772,7 @@ class graph_oriented_layout_design_impl
                 const auto y = k - x;
                 if ((pre_t.y + y) <= layout.y() && (pre_t.x + x) <= layout.x())
                 {
-                    check_tile(x, y);
+                    check_tile({pre_t.x + x, pre_t.y + y, 0});
                 }
                 if (count_expansions >= ps.num_vertex_expansions)
                 {
@@ -1405,10 +810,9 @@ class graph_oriented_layout_design_impl
         const auto min_x = std::max(pre1_t.x, pre2_t.x) + (pre1_t.x == pre2_t.x ? 1 : 0);
         const auto min_y = std::max(pre1_t.y, pre2_t.y) + (pre1_t.y == pre2_t.y ? 1 : 0);
 
-        // check if path from previous tiles to new tile and from new tile to drain exist
-        auto check_tile = [&](uint64_t x, uint64_t y)
+        // check if path from previous tiles to new tile and from new tile to bottom row exists
+        auto check_tile = [&](const tile<ObstrLyt>& new_pos)
         {
-            const tile<ObstrLyt> new_pos{min_x + x, min_y + y, 0};
             auto check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(pre1_t));
 
             const auto path = check_path(layout, pre1_t, new_pos, new_gate_location::DEST, check_straight_inverter);
@@ -1423,9 +827,7 @@ class graph_oriented_layout_design_impl
                 if (!check_path(layout, pre2_t, new_pos, new_gate_location::DEST, check_straight_inverter).empty())
                 {
                     layout.resize({layout.x() + 1, layout.y() + 1, 1});
-                    const tile<ObstrLyt> drain{layout.x(), layout.y(), 0};
-
-                    if (!check_path(layout, new_pos, drain, new_gate_location::SRC).empty())
+                    if (has_path_to_bottom_row(layout, new_pos, new_gate_location::SRC))
                     {
                         possible_positions.push_back(new_pos);
                         count_expansions++;
@@ -1441,6 +843,24 @@ class graph_oriented_layout_design_impl
             }
         };
 
+        if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+        {
+            const auto min_hex_y = std::max(pre1_t.y, pre2_t.y) + 1;
+            for (uint64_t y = min_hex_y; y <= layout.y(); ++y)
+            {
+                for (uint64_t x = 0u; x <= layout.x(); ++x)
+                {
+                    check_tile({x, y, 0});
+                    if (count_expansions >= ps.num_vertex_expansions)
+                    {
+                        return possible_positions;
+                    }
+                }
+            }
+
+            return possible_positions;
+        }
+
         // iterate diagonally
         for (uint64_t k = 0ul; k < layout.x() + layout.y() + 1; ++k)
         {
@@ -1449,7 +869,7 @@ class graph_oriented_layout_design_impl
                 const auto y = k - x;
                 if ((min_y + y) <= layout.y() && (min_x + x) <= layout.x())
                 {
-                    check_tile(x, y);
+                    check_tile({min_x + x, min_y + y, 0});
                 }
                 if (count_expansions >= ps.num_vertex_expansions)
                 {
@@ -1505,12 +925,15 @@ class graph_oriented_layout_design_impl
     [[nodiscard]] bool valid_layout(ObstrLyt& layout, const search_space_graph<ObstrLyt>& ssg,
                                     const placement_info<ObstrLyt>& place_info) noexcept
     {
+        if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+        {
+            return true;
+        }
+
         const auto check_tile = [&](const auto& t) noexcept
         {
             layout.resize({layout.x() + 1, layout.y() + 1, 1});
-            const tile<ObstrLyt> drain{layout.x(), layout.y(), 0};
-
-            const bool path_exists = !check_path(layout, t, drain, new_gate_location::DEST).empty();
+            const bool path_exists = has_path_to_bottom_row(layout, t, new_gate_location::DEST);
             layout.resize({layout.x() - 1, layout.y() - 1, 1});
 
             return path_exists;
@@ -1761,7 +1184,7 @@ class graph_oriented_layout_design_impl
     ObstrLyt initialize_layout(uint64_t min_layout_width)
     {
         const auto layout_depth = ps.planar ? 0 : 1;
-        Lyt        lyt{{min_layout_width - 1, 0, layout_depth}, twoddwave_clocking<Lyt>()};
+        Lyt        lyt{{min_layout_width - 1, 0, layout_depth}, row_clocking<Lyt>()};
         return obstruction_layout<Lyt>(lyt);
     }
     /**
@@ -1997,11 +1420,14 @@ class graph_oriented_layout_design_impl
 
                 if (apply_plo)
                 {
-                    fiction::post_layout_optimization_params plo_params{};
-                    plo_params.optimize_pos_only   = true;
-                    plo_params.planar_optimization = ps.planar;
+                    if constexpr (is_cartesian_layout_v<ObstrLyt>)
+                    {
+                        fiction::post_layout_optimization_params plo_params{};
+                        plo_params.optimize_pos_only   = true;
+                        plo_params.planar_optimization = ps.planar;
 
-                    fiction::post_layout_optimization(layout, plo_params);
+                        fiction::post_layout_optimization(layout, plo_params);
+                    }
                 }
 
                 const auto bb_after_plo = fiction::bounding_box_2d(layout);
@@ -2119,7 +1545,14 @@ class graph_oriented_layout_design_impl
 
         for (auto& graph : ssg_vec)
         {
-            graph.pi_locs = pattern.at(idx % pattern.size());
+            if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+            {
+                graph.pi_locs = pi_locations::TOP;
+            }
+            else
+            {
+                graph.pi_locs = pattern.at(idx % pattern.size());
+            }
             ++idx;  // move to next pattern element
 
             graph.cost_so_far[graph.current_vertex] = 0;
@@ -2368,24 +1801,12 @@ class graph_oriented_layout_design_impl
 }  // namespace detail
 
 /**
- * A scalable and efficient placement & routing approach based on spanning a search space graph of partial layouts and
- * finding a path to one of its leaves, i.e., a complete layout.
+ * A scalable and efficient placement & routing approach for hexagonal layouts based on spanning a search space graph
+ * of partial layouts and finding a path to one of its leaves, i.e., a complete layout.
  *
- * The search space graph starts with an empty layout and then expands it based on where the first node in a topological
- * sort of the logic network can be placed. Based on the position of this first node, a cost is assigned to each
- * expansion based on the position of the placed node. The vertex with the lowest cost, which is the smallest layout
- * w.r.t. the cost objective (e.g. area), is then chosen for the next expansion. This iterative process continues until
- * a leaf node is found, which is a layout with all nodes placed. The algorithm then continues to backtrack through the
- * search space graph to find other complete layouts with lower cost.
+ * This variant is intended for native hexagonal GOLD and uses row-based clocking assumptions.
  *
- * Exclusively generates 2DDWave-clocked layouts.
- *
- * This algorithm was proposed in \"A* is Born: Efficient and Scalable Physical Design for Field-coupled Nanocomputing\"
- * by S. Hofmann, M. Walter, and R. Wille in IEEE NANO 2024 (https://ieeexplore.ieee.org/document/10628808) and extended
- * in \"Physical Design for Field-coupled Nanocomputing with Discretionary Cost Objectives\" by S. Hofmann, M. Walter,
- * and R. Wille in LASCAS 2025 (https://ieeexplore.ieee.org/document/10966234).
- *
- * @tparam Lyt Cartesian gate-level layout type.
+ * @tparam Lyt Hexagonal gate-level layout type.
  * @tparam Ntk Network type.
  * @param ntk The network to be placed and routed.
  * @param ps The parameters for the A* priority routing algorithm. Defaults to an empty parameter set.
@@ -2396,17 +1817,16 @@ class graph_oriented_layout_design_impl
  * @return The smallest layout yielded by the graph-oriented layout design algorithm under the given parameters.
  */
 template <typename Lyt, typename Ntk>
-std::optional<Lyt> graph_oriented_layout_design(Ntk& ntk, graph_oriented_layout_design_params ps = {},
-                                                graph_oriented_layout_design_stats* pst                   = nullptr,
-                                                std::function<uint64_t(const Lyt&)> custom_cost_objective = nullptr)
+std::optional<Lyt> graph_oriented_layout_design_hex(Ntk& ntk, graph_oriented_layout_design_params ps = {},
+                                                    graph_oriented_layout_design_stats* pst                   = nullptr,
+                                                    std::function<uint64_t(const Lyt&)> custom_cost_objective = nullptr)
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
-    static_assert(is_cartesian_layout_v<Lyt>, "Lyt is not a Cartesian layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
     static_assert(mockturtle::is_network_type_v<Ntk>,
                   "Ntk is not a network type");  // Ntk is being converted to a technology_network anyway, therefore,
                                                  // this is the only relevant check here
 
-    // check for input degree
     if (has_high_degree_fanin_nodes(ntk, 2))
     {
         throw high_degree_fanin_exception();
@@ -2417,8 +1837,8 @@ std::optional<Lyt> graph_oriented_layout_design(Ntk& ntk, graph_oriented_layout_
         throw std::invalid_argument("No custom cost objective provided.");
     }
 
-    graph_oriented_layout_design_stats                  st{};
-    detail::graph_oriented_layout_design_impl<Lyt, Ntk> p{ntk, ps, st, custom_cost_objective};
+    graph_oriented_layout_design_stats                      st{};
+    detail::graph_oriented_layout_design_hex_impl<Lyt, Ntk> p{ntk, ps, st, custom_cost_objective};
 
     const auto result = p.run();
 
@@ -2432,4 +1852,4 @@ std::optional<Lyt> graph_oriented_layout_design(Ntk& ntk, graph_oriented_layout_
 
 }  // namespace fiction
 
-#endif  // FICTION_GRAPH_ORIENTED_LAYOUT_DESIGN_HPP
+#endif  // FICTION_GRAPH_ORIENTED_LAYOUT_DESIGN_HEX_HPP

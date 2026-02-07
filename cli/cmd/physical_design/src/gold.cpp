@@ -7,6 +7,7 @@
 #include "stores.hpp"  // NOLINT(misc-include-cleaner)
 
 #include <fiction/algorithms/physical_design/graph_oriented_layout_design.hpp>
+#include <fiction/algorithms/physical_design/graph_oriented_layout_design_hex.hpp>
 #include <fiction/types.hpp>
 #include <fiction/utils/name_utils.hpp>
 #include <fiction/utils/network_utils.hpp>
@@ -74,6 +75,8 @@ gold_command::gold_command(const environment::ptr& e) :
              "(inclusive). When tiles_to_skip_between_pis is 0, only 0 will be used. This can help explore different "
              "placement strategies and potentially find better layouts. Requires a valid seed to be set for "
              "reproducible results.");
+    add_option("--grid", grid, "Target grid for GOLD. Supported values: 'cartesian' (default) and 'hex'.", true)
+        ->set_type_name("{cartesian,hex}");
 }
 
 void gold_command::execute()
@@ -104,9 +107,24 @@ void gold_command::execute()
         ps.seed = seed;
     }
 
-    graph_oriented_layout_design<fiction::cart_gate_clk_lyt>();
+    if (grid == "hex")
+    {
+        graph_oriented_layout_design_hex();
+    }
+    else if (grid == "cartesian")
+    {
+        graph_oriented_layout_design<fiction::cart_gate_clk_lyt>();
+    }
+    else
+    {
+        env->out() << "[w] unsupported grid; use 'cartesian' or 'hex'\n";
+        ps   = {};
+        grid = "cartesian";
+        return;
+    }
 
-    ps = {};
+    ps   = {};
+    grid = "cartesian";
 }
 
 nlohmann::json gold_command::log() const
@@ -141,6 +159,39 @@ void gold_command::graph_oriented_layout_design()
             env->out() << fmt::format("[e] impossible to place and route '{}' within the given parameters\n",
                                       std::visit(get_name, ntk_ptr));
         }
+    }
+    catch (const fiction::high_degree_fanin_exception& e)
+    {
+        env->out() << fmt::format("[e] {}\n", e.what());
+    }
+    catch (...)
+    {
+        env->out() << fmt::format("[e] an error occurred while placing and routing '{}' with the given parameters\n",
+                                  std::visit(get_name, ntk_ptr));
+    }
+}
+
+void gold_command::graph_oriented_layout_design_hex()
+{
+    const auto get_name = [](auto&& ntk_ptr) -> std::string { return fiction::get_name(*ntk_ptr); };
+
+    const auto perform_physical_design = [this](auto&& ntk_ptr)
+    { return fiction::graph_oriented_layout_design_hex<fiction::hex_even_row_gate_clk_lyt>(*ntk_ptr, ps, &st); };
+
+    const auto& ntk_ptr = store<fiction::logic_network_t>().current();
+
+    try
+    {
+        const auto hex_lyt = std::visit(perform_physical_design, ntk_ptr);
+
+        if (!hex_lyt.has_value())
+        {
+            env->out() << fmt::format("[e] impossible to place and route '{}' within the given parameters\n",
+                                      std::visit(get_name, ntk_ptr));
+            return;
+        }
+
+        store<fiction::gate_layout_t>().extend() = std::make_shared<fiction::hex_even_row_gate_clk_lyt>(*hex_lyt);
     }
     catch (const fiction::high_degree_fanin_exception& e)
     {

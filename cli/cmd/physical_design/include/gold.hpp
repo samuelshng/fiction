@@ -11,6 +11,7 @@
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
+#include <string>
 
 namespace alice
 {
@@ -49,6 +50,10 @@ class gold_command final : public command
      */
     uint32_t seed{0u};
     /**
+     * Target grid used by GOLD.
+     */
+    std::string grid{"cartesian"};
+    /**
      * Parameters.
      */
     fiction::graph_oriented_layout_design_params ps{};
@@ -59,6 +64,7 @@ class gold_command final : public command
 
     template <typename Lyt>
     void graph_oriented_layout_design();
+    void graph_oriented_layout_design_hex();
 };
 
 }  // namespace alice
