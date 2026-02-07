@@ -5243,6 +5243,8 @@ Parameter ``to_delete``:
 Returns:
     A 2D vector representing the calculated offset matrix.)doc";
 
+static const char *__doc_fiction_detail_can_copy_output = R"doc()doc";
+
 static const char *__doc_fiction_detail_check_and_optimize_po_positions =
 R"doc(Utility function that checks and optimizes PO positions after each
 gate relocation iteration. This function moves POs that are not
@@ -7500,7 +7502,13 @@ coordinates that need to be cleared or reset.)doc";
 
 static const char *__doc_fiction_detail_fanout_substitution_impl = R"doc()doc";
 
-static const char *__doc_fiction_detail_fanout_substitution_impl_available_fanouts = R"doc(Queue map of available fanouts.)doc";
+static const char *__doc_fiction_detail_fanout_substitution_impl_available_fanouts = R"doc(Queue map of available fanout branches per output pin.)doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_can_copy_output = R"doc()doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_compute_fanout_sizes = R"doc()doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_fanout_sizes = R"doc(Fanout usage count per output pin in the original network.)doc";
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_fanout_substitution_impl = R"doc()doc";
 
@@ -7555,13 +7563,53 @@ Parameter ``num_fanouts``:
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_get_fanout = R"doc()doc";
 
+static const char *__doc_fiction_detail_fanout_substitution_impl_has_output_field = R"doc()doc";
+
 static const char *__doc_fiction_detail_fanout_substitution_impl_ntk_topo = R"doc(Topological view of the converted network.)doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_output_pin_key = R"doc(Key that identifies a specific output pin of a source node.)doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_output_pin_key_hash = R"doc(Hash function for output pin keys.)doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_output_pin_key_hash_operator_call =
+R"doc(Hashes an output pin key.
+
+Parameter ``key``:
+    Key to hash.
+
+Returns:
+    Hash value.)doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_output_pin_key_node = R"doc(Source node identifier.)doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_output_pin_key_operator_eq =
+R"doc(Equality operator.
+
+Parameter ``other``:
+    Other key to compare with.
+
+Returns:
+    `true` if both node and output index match.)doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_output_pin_key_output = R"doc(Output pin index.)doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_prepare_source_network = R"doc()doc";
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_ps = R"doc(Parameters controlling how fanout substitution is performed.)doc";
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_rng = R"doc(Optional helper struct holding the RNG and its distribution.)doc";
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_set_signal_output = R"doc()doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_set_signal_output_2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_signal_output = R"doc()doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_source_fanout_size = R"doc()doc";
+
+static const char *__doc_fiction_detail_fanout_substitution_impl_source_num_outputs = R"doc()doc";
 
 static const char *__doc_fiction_detail_gate_level_drvs_impl = R"doc()doc";
 
@@ -7886,6 +7934,404 @@ static const char *__doc_fiction_detail_graph_coloring_impl_pst = R"doc(Statisti
 
 static const char *__doc_fiction_detail_graph_coloring_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl =
+R"doc(Implementation of the native hexagonal graph-oriented layout design
+algorithm.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Template parameter ``Ntk``:
+    Network type.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_adjust_layout_size =
+R"doc(Adjusts the layout size based on the last position.
+
+Parameter ``position``:
+    The last position in the layout.
+
+Parameter ``layout``:
+    The layout to be adjusted.
+
+Parameter ``ssg``:
+    The search space graph.
+
+Parameter ``place_info``:
+    The placement information.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_best_acp_solution =
+R"doc(The current best solution with respect to the area-crossing product
+(ACP), initialized to the maximum possible value. This value will be
+updated as better solutions are found.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_best_area_solution =
+R"doc(The current best solution with respect to area, initialized to the
+maximum possible value. This value will be updated as better solutions
+are found.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_best_crossing_solution =
+R"doc(The current best solution with respect to the number of crossings,
+initialized to the maximum possible value. This value will be updated
+as better solutions are found.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_best_custom_solution =
+R"doc(The current best solution with respect to a custom cost objective,
+initialized to the maximum possible value. This value will be updated
+as better solutions are found.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_best_optimized_solution = R"doc(Current best solution w.r.t. area after relocating POs.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_best_wire_solution =
+R"doc(The current best solution with respect to the number of wire segments,
+initialized to the maximum possible value. This value will be updated
+as better solutions are found.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_calculate_cost = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_calculate_num_search_space_graphs =
+R"doc(Determines the number of search space graphs to generate based on the
+selected effort mode and cost objective.
+
+Parameter ``mode``:
+    The effort mode chosen for the layout design, determining the
+    level of computational effort.
+
+Parameter ``cost``:
+    The cost that specifies the optimization objective for the layout
+    design.
+
+Returns:
+    The number of search space graphs to be generated.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_check_path =
+R"doc(Checks if there is a path between the source and destination tiles in
+the given layout.
+
+Parameter ``layout``:
+    The layout to be checked.
+
+Parameter ``src``:
+    The source tile.
+
+Parameter ``dest``:
+    The destination tile.
+
+Parameter ``new_gate_loc``:
+    Enum indicating if the src or dest have to host a new gate and
+    therefore have to be empty. Defaults to `new_gate_location::NONE`.
+
+Returns:
+    A path from `src` to `dest` if one exists.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_custom_cost_objective = R"doc(Custom cost objective.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_possible_positions =
+R"doc(Retrieves the possible positions for a given node in the layout based
+on its type and preceding nodes. It determines the type of the node
+(PI, PO, single fan-in, double fan-in) and returns the corresponding
+possible positions.
+
+Parameter ``layout``:
+    The layout in which to find the possible positions.
+
+Parameter ``place_info``:
+    The placement context containing current node, primary output
+    index, node to position mapping, and PI to node mapping.
+
+Parameter ``ssg``:
+    The search space graph.
+
+Returns:
+    A vector of tiles representing the possible positions for the
+    current node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_possible_positions_double_fanin =
+R"doc(Retrieves the possible positions for a double fan-in node in the given
+layout, based on the positions of preceding nodes and a specified
+number of expansions.
+
+Parameter ``layout``:
+    The layout in which to find the possible positions for a double
+    fan-in node.
+
+Parameter ``place_info``:
+    The placement context containing current node, primary output
+    index, node to position mapping, and PI to node mapping.
+
+Parameter ``fc``:
+    A vector of nodes that precede the double fanin node.
+
+Returns:
+    A vector of tiles representing the possible positions for a double
+    fan-in node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_possible_positions_pis = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_possible_positions_pos =
+R"doc(Retrieves the possible positions for Primary Outputs (POs) in the
+given layout based on the positions of the preceding nodes.
+
+Parameter ``layout``:
+    The layout in which to find the possible positions for POs.
+
+Parameter ``place_info``:
+    The placement context containing current node, primary output
+    index, node to position mapping, and PI to node mapping.
+
+Parameter ``fc``:
+    A vector of nodes that precede the PO nodes.
+
+Returns:
+    A vector of tiles representing the possible positions for POs.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_possible_positions_single_fanin =
+R"doc(Retrieves the possible positions for a single fan-in node in the given
+layout, based on the positions of preceding nodes and a specified
+number of expansions.
+
+Parameter ``layout``:
+    The layout in which to find the possible positions for a single
+    fan-in node.
+
+Parameter ``place_info``:
+    The placement context containing current node, primary output
+    index, node to position mapping, and PI to node mapping.
+
+Parameter ``fc``:
+    A vector of nodes that precede the single fanin node.
+
+Returns:
+    A vector of tiles representing the possible positions for a single
+    fan-in node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_thread_local_dist =
+R"doc(Get thread-local distribution for generating random
+`tiles_to_skip_between_pis` values.
+
+Returns:
+    Reference to a thread-local uniform integer distribution for
+    generating random skip values.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_thread_local_rng =
+R"doc(Get thread-local random number generator for
+`tiles_to_skip_between_pis` randomization. Each thread will have its
+own RNG to avoid mutex contention.
+
+Returns:
+    Reference to a thread-local Mersenne Twister random number
+    generator.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_graph_oriented_layout_design_hex_impl =
+R"doc(Constructor for the graph-oriented layout design algorithm.
+
+Parameter ``src``:
+    The source network to be placed.
+
+Parameter ``p``:
+    The parameters for the graph-enhanced layout search algorithm.
+
+Parameter ``st``:
+    The statistics object to record execution details.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_has_path_to_bottom_row =
+R"doc(Retrieves the possible positions for Primary Inputs (PIs) in the given
+layout based on the specified criteria of positioning at the top or
+left side, with a limit on the number of possible positions.
+
+Parameter ``layout``:
+    The layout in which to find the possible positions for PIs.
+
+Parameter ``pi_locs``:
+    Struct indicating if PIs are allowed at the top or left side of
+    the layout.
+
+Parameter ``num_expansions``:
+    The maximum number of positions to be returned (is doubled for
+    PIs).
+
+Returns:
+    A vector of tiles representing the possible positions for PIs.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_improve_acp_solution =
+R"doc(Flag indicating that an initial solution has been found with the area-
+crossings product as cost objective. When set to `true`, subsequent
+search space graphs with the area-crossing product as cost objective
+can be pruned.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_improve_area_solution =
+R"doc(Flag indicating that an initial solution has been found with the
+layout area as cost objective. When set to `true`, subsequent search
+space graphs with the layout area as cost objective can be pruned.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_improve_crossing_solution =
+R"doc(Flag indicating that an initial solution has been found with the
+number of crossings as cost objective. When set to `true`, subsequent
+search space graphs with the number of crossings as cost objective can
+be pruned.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_improve_custom_solution =
+R"doc(Flag indicating that an initial solution has been found with a custom
+cost objective. When set to `true`, subsequent search space graphs
+with a custom cost objective can be pruned.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_improve_wire_solution =
+R"doc(Flag indicating that an initial solution has been found with the
+number of wire segments as cost objective. When set to `true`,
+subsequent search space graphs with the number of wire segments as
+cost objective can be pruned.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_initialize_layout =
+R"doc(Initializes the layout with minimum width
+
+Parameter ``min_layout_width``:
+    The minimum width of the layout.
+
+Returns:
+    The initialized layout.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_initialize_network = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_max_placed_nodes = R"doc(Keep track of the maximum number of placed nodes.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_ntk = R"doc(The network to be placed and routed.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs = R"doc(Number of search space graphs.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_high_efficiency = R"doc(In high-efficiency mode, only 2 search space graphs are used)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_high_effort =
+R"doc(In high-effort mode, 12 search space graphs are used: 3 (possible PI
+locations) * 2 (fanout substitution strategies) * 2 (topological
+orderings))doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_highest_effort =
+R"doc(In highest-effort mode, 48 search space graphs are used. This includes
+12 search space graphs for each of the four base cost objectives
+layout area, number of wire segments, number of wire crossings, and
+area-crossing product.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_highest_effort_custom =
+R"doc(In highest-effort mode with a custom cost function, 60 search space
+graphs are used (48 with the standard cost objectives and 12 for the
+custom one).)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_maximum_effort =
+R"doc(In maximum-effort mode, 96 search space graphs are used. It adds
+another 48 search space graphs to the 48 search space graphs from
+highest-effort mode using randomized fanout substitution strategies
+and random topological orderings.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_maximum_effort_custom =
+R"doc(In maximum-effort mode with a custom cost function, 120 search space
+graphs are used (96 with the standard cost objectives and 24 for the
+custom one).)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_place_and_route =
+R"doc(Executes a single placement step in the layout for the given network
+node. It determines the type of the node, places it accordingly, and
+checks if a solution was found.
+
+Parameter ``position``:
+    The tile representing the position for placement.
+
+Parameter ``layout``:
+    The layout in which to place the node.
+
+Parameter ``place_info``:
+    The placement context containing current node, primary output
+    index, node to position mapping, and PI to node mapping.
+
+Parameter ``ssg``:
+    The search space graph.
+
+Returns:
+    A boolean indicating if a solution was found.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_print_placement_info =
+R"doc(Outputs placement information, including the current runtime, the
+number of evaluated paths in the search space graphs and the layout
+dimensions.
+
+Parameter ``lyt``:
+    Current layout.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_ps = R"doc(Parameters.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_pst = R"doc(Statistics.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_route_double_input_node =
+R"doc(Places a node with two inputs in the layout and routes it.
+
+Parameter ``position``:
+    The tile representing the position for placement.
+
+Parameter ``layout``:
+    The layout in which to place the node.
+
+Parameter ``node2pos``:
+    A dictionary mapping nodes from the network to signals in the
+    layout.
+
+Parameter ``fc``:
+    A vector of nodes that precede the double fanin node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_route_single_input_node =
+R"doc(Places a node with a single input in the layout and routes it.
+
+Parameter ``position``:
+    The tile representing the position for placement.
+
+Parameter ``layout``:
+    The layout in which to place the node.
+
+Parameter ``node2pos``:
+    A dictionary mapping nodes from the network to signals in the
+    layout.
+
+Parameter ``fc``:
+    A vector of nodes that precede the single fanin node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_run =
+R"doc(Executes the graph-oriented layout design algorithm and returns the
+best found layout.
+
+Returns:
+    The best layout found by the algorithm.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_seed =
+R"doc(Random seed used for random fanout substitution and random topological
+ordering in maximum-effort mode.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_ssg_vec = R"doc(Vector of search space graphs.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_start = R"doc(Start time.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_timeout = R"doc(Timeout limit (in ms).)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_timeout_limit_reached = R"doc(Timeout limit reached.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_update_stats =
+R"doc(This function updates statistical metrics.
+
+Parameter ``best_lyt``:
+    The new best layout found.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_valid_layout =
+R"doc(Validates the given layout based on the nodes in the network and their
+mappings in the node dictionary. It checks if the placement of nodes
+in the layout is possible and ensures there are valid paths from each
+tile to the drain.
+
+Parameter ``layout``:
+    The layout to be validated.
+
+Parameter ``place_info``:
+    The placement context containing current node, primary output
+    index, node to position mapping, and PI to node mapping.
+
+Parameter ``ssg``:
+    The search space graph.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl =
 R"doc(Implementation of the graph-oriented layout design algorithm. This
 class handles the initialization and execution of the algorithm.
@@ -8138,6 +8584,8 @@ Parameter ``min_layout_width``:
 
 Returns:
     The initialized layout.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_initialize_network = R"doc()doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_max_placed_nodes = R"doc(Keep track of the maximum number of placed nodes.)doc";
 
@@ -8668,6 +9116,12 @@ Returns:
     The network with virtual primary inputs removed, or the original
     network if unsupported.)doc";
 
+static const char *__doc_fiction_detail_has_signal_output_pin =
+R"doc(Checks whether a network signal exposes an output-pin field.
+
+Template parameter ``Ntk``:
+    Network type.)doc";
+
 static const char *__doc_fiction_detail_hexagonalization_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_hexagonalization_impl_hexagonalization_impl = R"doc()doc";
@@ -8700,13 +9154,37 @@ static const char *__doc_fiction_detail_is_eastern_po_orientation_available = R"
 
 static const char *__doc_fiction_detail_is_fanout_substituted_impl = R"doc()doc";
 
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_compute_fanout_sizes = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_fanout_sizes = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_has_output_field = R"doc()doc";
+
 static const char *__doc_fiction_detail_is_fanout_substituted_impl_is_fanout_substituted_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_fanout_substituted_impl_ntk = R"doc()doc";
 
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_num_outputs = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_output_fanout_size = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_output_pin_key = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_output_pin_key_hash = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_output_pin_key_hash_operator_call = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_output_pin_key_node = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_output_pin_key_operator_eq = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_output_pin_key_output = R"doc()doc";
+
 static const char *__doc_fiction_detail_is_fanout_substituted_impl_ps = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_fanout_substituted_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_fanout_substituted_impl_signal_output = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_fanout_substituted_impl_substituted = R"doc()doc";
 
@@ -9256,6 +9734,21 @@ static const char *__doc_fiction_detail_new_gate_location_DEST = R"doc(Check if 
 static const char *__doc_fiction_detail_new_gate_location_NONE = R"doc(Do not check any tiles.)doc";
 
 static const char *__doc_fiction_detail_new_gate_location_SRC = R"doc(Check if the source tile is empty.)doc";
+
+static const char *__doc_fiction_detail_node_output_pin_count =
+R"doc(Returns the number of output pins for a node.
+
+Template parameter ``Ntk``:
+    Network type.
+
+Parameter ``ntk``:
+    Network instance.
+
+Parameter ``n``:
+    Node in `ntk`.
+
+Returns:
+    Number of output pins represented by `n`.)doc";
 
 static const char *__doc_fiction_detail_non_operationality_reason = R"doc(Reason why a layout is non-operational.)doc";
 
@@ -10055,6 +10548,21 @@ static const char *__doc_fiction_detail_post_layout_optimization_impl_wiring_red
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_wiring_reduction_stats = R"doc(Wiring reduction stats.)doc";
 
+static const char *__doc_fiction_detail_prepare_for_equivalence_checking =
+R"doc(Prepares a network for SAT-based equivalence checking.
+
+Multi-output networks are transformed into single-output KLUT networks
+while preserving output-pin semantics.
+
+Template parameter ``NtkOrLyt``:
+    Source network or layout type.
+
+Parameter ``ntk_or_lyt``:
+    Source network or layout.
+
+Returns:
+    Equivalent `klut_network` used for miter construction.)doc";
+
 static const char *__doc_fiction_detail_priority_queue =
 R"doc(A priority queue class for managing elements with associated
 priorities. The elements are stored in a priority queue, with the
@@ -10216,8 +10724,6 @@ Returns:
     True if gate1's ID is less than gate2's ID, false otherwise.)doc";
 
 static const char *__doc_fiction_detail_read_fgl_layout_impl_gate_storage_id = R"doc(Unique identifier for the gate.)doc";
-
-static const char *__doc_fiction_detail_read_fgl_layout_impl_gate_storage_incoming = R"doc(List of incoming connections to the gate.)doc";
 
 static const char *__doc_fiction_detail_read_fgl_layout_impl_gate_storage_loc = R"doc(Location of the gate represented its x-, y- and z-coordinate.)doc";
 
@@ -10405,7 +10911,8 @@ This struct specifies a routing objective by defining the source and
 target coordinates, and it includes a flag that indicates whether the
 primary input was the first fanin for the corresponding fanout and the
 fanout gate is asymmetric (e.g., greater than). If the flag is set to
-true, the fanin signals need to be reordered.
+true, the fanin signals need to be reordered. Additionally, the source
+output index can be stored to preserve multi-output routing semantics.
 
 Template parameter ``HexLyt``:
     The type of the hexagonal layout.)doc";
@@ -10426,7 +10933,12 @@ Parameter ``tgt``:
 Parameter ``update``:
     (Optional) A flag that, if true, indicates that the primary input
     was the first fanin and the fanout gate is asymmetric, which means
-    that the fanin signals need to be reordered. Defaults to false.)doc";
+    that the fanin signals need to be reordered. Defaults to false.
+
+Parameter ``output``:
+    (Optional) Output index of the source signal. Defaults to 0.)doc";
+
+static const char *__doc_fiction_detail_routing_objective_with_fanin_update_information_source_output = R"doc(Output index of the objective's source signal.)doc";
 
 static const char *__doc_fiction_detail_routing_objective_with_fanin_update_information_update_first_fanin =
 R"doc(Flag indicating whether the primary input was the first fanin and the
@@ -10607,6 +11119,33 @@ static const char *__doc_fiction_detail_search_space_graph_network = R"doc(The n
 static const char *__doc_fiction_detail_search_space_graph_pi_locs =
 R"doc(Enum indicating if primary inputs (PIs) can be placed at the top or
 left.)doc";
+
+static const char *__doc_fiction_detail_set_signal_output = R"doc()doc";
+
+static const char *__doc_fiction_detail_signal_output_pin =
+R"doc(Returns a signal's output pin if present, otherwise pin 0.
+
+Template parameter ``Ntk``:
+    Network type.
+
+Parameter ``s``:
+    Network signal.
+
+Returns:
+    Output pin index represented by `s`.)doc";
+
+static const char *__doc_fiction_detail_split_multioutput_network =
+R"doc(Splits all multi-output nodes in a network into dedicated single-
+output KLUT nodes.
+
+Template parameter ``Ntk``:
+    Source network type.
+
+Parameter ``src``:
+    Source network.
+
+Returns:
+    Equivalent single-output `klut_network`.)doc";
 
 static const char *__doc_fiction_detail_sweep_parameter_to_string =
 R"doc(Converts a sweep parameter to a string representation. This is used to
@@ -13066,6 +13605,8 @@ static const char *__doc_fiction_gate_level_layout_create_ge = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_create_gt = R"doc()doc";
 
+static const char *__doc_fiction_gate_level_layout_create_ha = R"doc()doc";
+
 static const char *__doc_fiction_gate_level_layout_create_le = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_create_lt = R"doc()doc";
@@ -13076,7 +13617,11 @@ static const char *__doc_fiction_gate_level_layout_create_nand = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_create_node = R"doc()doc";
 
+static const char *__doc_fiction_gate_level_layout_create_node_2 = R"doc()doc";
+
 static const char *__doc_fiction_gate_level_layout_create_node_from_literal = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_create_node_from_literals = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_create_nor = R"doc()doc";
 
@@ -13297,6 +13842,8 @@ static const char *__doc_fiction_gate_level_layout_gate_level_layout_storage_dat
 
 static const char *__doc_fiction_gate_level_layout_gate_level_layout_storage_data_num_wires = R"doc()doc";
 
+static const char *__doc_fiction_gate_level_layout_gate_level_layout_storage_data_po_outputs = R"doc()doc";
+
 static const char *__doc_fiction_gate_level_layout_gate_level_layout_storage_data_tile_node_map = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_gate_level_layout_storage_data_trav_id = R"doc()doc";
@@ -13306,8 +13853,14 @@ R"doc(! gate-level layout node
 
 `data[0].h1`: Internal (data-flow independent) fan-out size (MSB
 indicates dead nodes) `data[0].h2`: Application-specific value
-`data[1].h1`: Function literal in truth table cache `data[2].h2`:
-Visited flags)doc";
+`data[1].h1`: Total fan-out size (not used, kept for compatibility)
+`data[1].h2`: Visited flags `data[2+i].h1`: Function literal in truth
+table cache for the i-th output `data[2+i].h2`: Fan-out size for the
+i-th output (not used, kept for compatibility))doc";
+
+static const char *__doc_fiction_gate_level_layout_gate_level_layout_storage_node_child_outputs = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_gate_level_layout_storage_node_gate_level_layout_storage_node = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_gate_level_layout_storage_node_operator_eq = R"doc()doc";
 
@@ -13768,6 +14321,8 @@ static const char *__doc_fiction_gate_level_layout_is_ge = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_is_gt = R"doc()doc";
 
+static const char *__doc_fiction_gate_level_layout_is_ha = R"doc()doc";
+
 static const char *__doc_fiction_gate_level_layout_is_incoming_signal =
 R"doc(Checks whether signal `s` is incoming to tile `t`. That is, whether
 tile `t` hosts a node that has a fanin assigned to the tile that
@@ -13800,6 +14355,8 @@ static const char *__doc_fiction_gate_level_layout_is_le = R"doc()doc";
 static const char *__doc_fiction_gate_level_layout_is_lt = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_is_maj = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_is_multioutput = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_is_nand = R"doc()doc";
 
@@ -13893,6 +14450,8 @@ Returns:
 
 static const char *__doc_fiction_gate_level_layout_node_function = R"doc()doc";
 
+static const char *__doc_fiction_gate_level_layout_node_function_pin = R"doc()doc";
+
 static const char *__doc_fiction_gate_level_layout_node_to_index = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_num_cis = R"doc()doc";
@@ -13965,6 +14524,28 @@ static const char *__doc_fiction_gate_level_layout_set_output_name = R"doc()doc"
 static const char *__doc_fiction_gate_level_layout_set_value = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_set_visited = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_complement = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_operator = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_operator_eq = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_operator_lnot = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_operator_lt = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_operator_ne = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_operator_unsigned_long = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_output = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_signal = R"doc()doc";
+
+static const char *__doc_fiction_gate_level_layout_signal_signal_2 = R"doc()doc";
 
 static const char *__doc_fiction_gate_level_layout_size =
 R"doc(Does NOT return the layout dimensions but the number of nodes
@@ -14300,6 +14881,41 @@ Cost Objectives\" by S. Hofmann, M. Walter, and R. Wille in LASCAS
 
 Template parameter ``Lyt``:
     Cartesian gate-level layout type.
+
+Template parameter ``Ntk``:
+    Network type.
+
+Parameter ``ntk``:
+    The network to be placed and routed.
+
+Parameter ``ps``:
+    The parameters for the A* priority routing algorithm. Defaults to
+    an empty parameter set.
+
+Parameter ``pst``:
+    A pointer to a statistics object to record execution details.
+    Defaults to nullptr.
+
+Parameter ``custom_cost_objective``:
+    A custom cost objective that is evaluated at every expansion of
+    the search space graph. Should be a function that can be
+    calculated based on the current partial layout and returns an
+    uint64_t that should be minimized.
+
+Returns:
+    The smallest layout yielded by the graph-oriented layout design
+    algorithm under the given parameters.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_hex =
+R"doc(A scalable and efficient placement & routing approach for hexagonal
+layouts based on spanning a search space graph of partial layouts and
+finding a path to one of its leaves, i.e., a complete layout.
+
+This variant is intended for native hexagonal GOLD and uses row-based
+clocking assumptions.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
 
 Template parameter ``Ntk``:
     Network type.
@@ -14877,6 +15493,8 @@ static const char *__doc_fiction_has_cardinal_operations = R"doc()doc";
 
 static const char *__doc_fiction_has_create_dot = R"doc()doc";
 
+static const char *__doc_fiction_has_create_ha = R"doc()doc";
+
 static const char *__doc_fiction_has_dimensions = R"doc()doc";
 
 static const char *__doc_fiction_has_east = R"doc()doc";
@@ -14972,6 +15590,8 @@ static const char *__doc_fiction_has_is_gate_tile = R"doc()doc";
 static const char *__doc_fiction_has_is_ge = R"doc()doc";
 
 static const char *__doc_fiction_has_is_gt = R"doc()doc";
+
+static const char *__doc_fiction_has_is_ha = R"doc()doc";
 
 static const char *__doc_fiction_has_is_incoming_clocked = R"doc()doc";
 
@@ -17024,6 +17644,740 @@ Template parameter ``T``:
     `mutable_rank_view`.)doc";
 
 static const char *__doc_fiction_mutable_rank_view_mutable_rank_view = R"doc()doc";
+
+static const char *__doc_fiction_netlist =
+R"doc(A `mockturtle` logic network type that extends `block_network`. It
+reimplements all node creation functions to disable structural
+hashing. Furthermore, `create_buf` is overwritten such that it creates
+real buffer nodes that count towards the size of the network and
+compute the identity function. In the same way, a buffer with more
+than one fanout node is considered a fanout node (or splitter in some
+contexts) that copies an incoming signal to two or more data paths.
+
+This network is used internally for most implemented FCN physical
+design algorithms and extends `block_network` by some further
+convenience functions but is still fully compatible with the
+mockturtle network API. The function convert_network can be used to
+convert any other mockturtle network to this type.
+
+Key differences from `block_network`: - **Structural hashing
+disabled**: Unlike `block_network`, which already uses
+`storage_no_hash`, this class ensures that `_create_node` and
+`create_node` always create new nodes even if identical nodes exist.
+This is important for physical design where each gate instance must be
+tracked separately. - **Real buffer nodes**: Buffers are actual nodes
+that contribute to network size and depth, not just wire aliases. -
+**Fanout tracking**: Buffers with multiple outputs are explicitly
+tracked as fanout/splitter nodes. - **Extended function library**:
+Adds specialized ternary and custom functions (dot, and3, xor_and,
+or_and, onehot, gamble, and_xor) beyond standard `block_network`
+operations.
+
+Key differences from `klut_network` (used in `technology_network`): -
+**Storage structure**: Uses `block_storage` with `block_storage_node`
+instead of `klut_storage` with `klut_storage_node`. In
+`block_network`, function literals are stored at `data[2+i].h1` (where
+i is the output index) to support multi-output nodes, whereas
+`klut_network` stores them at `data[1].h1` since it only supports
+single-output nodes. - **Signal representation**: Uses a complex
+signal struct with bit fields (complement:1, output:1, index:61) to
+support multi-output nodes and signal inversion, whereas
+`klut_network` uses simple `uint64_t` signals. - **Fanout counting**:
+Uses `data[1].h2` for total fanout and `data[2+i].h2` for per-output
+fanout, with MSB of `data[1].h2` reserved as a dead flag.
+`klut_network` uses `data[0].h1` for total fanout only. - **Multi-
+output support**: Can create nodes with multiple outputs (e.g., half
+adders with carry and sum), which `klut_network` cannot do. - **No
+structural hashing**: `block_network` uses `storage_no_hash`, avoiding
+the hash table overhead present in `klut_network`.
+
+Most functions in this class are borrowed and reimplemented directly
+from `block_network` and are, therefore, documented to explain their
+behavior and any differences. For additional information about the
+base `block_network` API, consider `mockturtle/networks/block.hpp`.)doc";
+
+static const char *__doc_fiction_netlist_add_additional_functions =
+R"doc(Adds some further Boolean functions to the truth table cache for fixed
+indexing.
+
+This function populates the truth table cache with specialized ternary
+functions beyond the standard set inherited from `block_network`.
+These functions are added at specific literal indices so that node
+creation functions can reference them by known literal values.
+
+Functions added (in order): - **DOT (literal 20)**: a XOR (c OR (a AND
+b)) - truth table 0x52 - **AND3 (literal 22)**: a AND b AND c - truth
+table 0x80 - **XOR_AND (literal 24)**: a AND (b XOR c) - truth table
+0x28 - **OR_AND (literal 26)**: a AND (b OR c) - truth table 0xa8 -
+**ONEHOT (literal 28)**: exactly one of {a,b,c} is true - truth table
+0x16 - **GAMBLE (literal 31)**: all or none of {a,b,c} are true -
+truth table 0x81 - **AND_XOR (literal 32)**: (a XOR b) AND c - truth
+table 0x6a
+
+The truth table cache is shared across the network and uses
+`kitty::dynamic_truth_table` for representation. Each 3-input function
+requires 8 bits (2^3 entries) represented as a 64-bit word.)doc";
+
+static const char *__doc_fiction_netlist_clone =
+R"doc(Creates a deep copy of this netlist by cloning the underlying storage.
+
+Returns:
+    A new netlist instance with copied storage.)doc";
+
+static const char *__doc_fiction_netlist_clone_node =
+R"doc(Clones a node from another `block_network`, creating an equivalent
+node in this network.
+
+Retrieves truth tables from the source network and creates a new node
+connected to `children`. For single-output nodes, this copies one
+function. For multi-output nodes (e.g., half-adders), this copies all
+output functions in output-pin order to preserve each output signal's
+semantics.
+
+Parameter ``other``:
+    Source `block_network` containing the node to clone.
+
+Parameter ``source``:
+    Node index in the source network to clone.
+
+Parameter ``children``:
+    New input signals in this network to connect to the cloned node.
+
+Returns:
+    Signal pointing to the newly created clone node in this network.)doc";
+
+static const char *__doc_fiction_netlist_create_and =
+R"doc(Creates an AND gate node with two inputs.
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal of the newly created AND gate (literal 4).)doc";
+
+static const char *__doc_fiction_netlist_create_buf =
+R"doc(Creates a buffer node in the network that computes the identity
+function and counts towards the network size and depth. A buffer node
+with more than one output is called a fanout.
+
+This overrides the base `block_network::create_buf` behavior. In the
+base class, buffers are actual nodes (unlike `klut_network` where they
+are aliases). This implementation explicitly uses literal 2, which
+corresponds to the identity function in the truth table cache.
+
+Parameter ``a``:
+    Incoming signal to the newly created buffer node.
+
+Returns:
+    Outgoing signal of the newly created buffer node pointing to the
+    new node with index determined by current storage size.)doc";
+
+static const char *__doc_fiction_netlist_create_dot =
+R"doc(Creates a DOT gate implementing the function: a XOR (c OR (a AND b)).
+This is a specialized function useful for certain logic optimizations.
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Parameter ``c``:
+    Third input signal.
+
+Returns:
+    Output signal of the DOT gate (literal 20).)doc";
+
+static const char *__doc_fiction_netlist_create_ge =
+R"doc(Creates a greater-or-equal comparison gate (a >= b).
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal that is true when a >= b (literal 9).)doc";
+
+static const char *__doc_fiction_netlist_create_gt =
+R"doc(Creates a greater-than comparison gate (a > b).
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal that is true when a > b (literal 10).)doc";
+
+static const char *__doc_fiction_netlist_create_ite =
+R"doc(Creates an if-then-else (ITE/MUX) gate. Output is b if a is true,
+otherwise c.
+
+Parameter ``a``:
+    Selector/condition input signal.
+
+Parameter ``b``:
+    Then-branch input signal.
+
+Parameter ``c``:
+    Else-branch input signal.
+
+Returns:
+    Output signal of the ITE gate (literal 16).)doc";
+
+static const char *__doc_fiction_netlist_create_le =
+R"doc(Creates a less-or-equal comparison gate (a <= b).
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal that is true when a <= b (literal 11).)doc";
+
+static const char *__doc_fiction_netlist_create_lt =
+R"doc(Creates a less-than comparison gate (a < b).
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal that is true when a < b (literal 8).)doc";
+
+static const char *__doc_fiction_netlist_create_maj =
+R"doc(Creates a majority-of-three (MAJ) gate. Output is true when at least
+two of the three inputs are true.
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Parameter ``c``:
+    Third input signal.
+
+Returns:
+    Output signal of the MAJ gate (literal 14).)doc";
+
+static const char *__doc_fiction_netlist_create_nand =
+R"doc(Creates a NAND gate node with two inputs.
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal of the newly created NAND gate (literal 5).)doc";
+
+static const char *__doc_fiction_netlist_create_nary_and =
+R"doc(Creates a multi-input AND gate by building a balanced tree of binary
+AND gates.
+
+Uses `mockturtle::tree_reduce` to construct a balanced tree, which
+minimizes circuit depth. If the input vector is empty or has one
+element, appropriate simplification is applied via the initial
+constant value.
+
+Parameter ``fs``:
+    Vector of input signals to AND together.
+
+Returns:
+    Output signal representing the AND of all inputs. Returns constant
+    true if fs is empty.)doc";
+
+static const char *__doc_fiction_netlist_create_nary_or =
+R"doc(Creates a multi-input OR gate by building a balanced tree of binary OR
+gates.
+
+Uses `mockturtle::tree_reduce` to construct a balanced tree, which
+minimizes circuit depth. If the input vector is empty or has one
+element, appropriate simplification is applied via the initial
+constant value.
+
+Parameter ``fs``:
+    Vector of input signals to OR together.
+
+Returns:
+    Output signal representing the OR of all inputs. Returns constant
+    false if fs is empty.)doc";
+
+static const char *__doc_fiction_netlist_create_nary_xor =
+R"doc(Creates a multi-input XOR gate by building a balanced tree of binary
+XOR gates.
+
+Uses `mockturtle::tree_reduce` to construct a balanced tree, which
+minimizes circuit depth. If the input vector is empty or has one
+element, appropriate simplification is applied via the initial
+constant value.
+
+Parameter ``fs``:
+    Vector of input signals to XOR together.
+
+Returns:
+    Output signal representing the XOR of all inputs. Returns constant
+    false if fs is empty.)doc";
+
+static const char *__doc_fiction_netlist_create_node =
+R"doc(Internal node creation function with structural hashing disabled.
+
+This is the core node creation primitive that bypasses structural
+hashing. Unlike `klut_network`'s implementation which checks a hash
+table before creating nodes, this always creates a new node. This is
+critical for physical design where each logic gate instance must be
+tracked individually even if functionally equivalent.
+
+Implementation details specific to `block_network` storage: - Copies
+children signals into `node_data.children` - Stores function literal
+in `node_data.data[2].h1` (first output's function) - Increments
+reference counts in both `data[1].h2` (total fanout) and
+`data[2+output].h2` (per-output fanout) - Initializes node value to 0
+via `set_value` - Triggers `on_add` event callbacks
+
+Parameter ``children``:
+    Vector of input signals to the new node.
+
+Parameter ``literal``:
+    Index into the truth table cache identifying the node's Boolean
+    function.
+
+Returns:
+    Signal pointing to the newly created node (index with output=0,
+    complement=0).)doc";
+
+static const char *__doc_fiction_netlist_create_node_2 =
+R"doc(Creates a node with an arbitrary Boolean function specified by a truth
+table.
+
+This function with structural hashing disabled. Unlike the base
+`block_network` which would use structural hashing if available, this
+always creates a new node instance.
+
+The truth table is inserted into the shared cache (if not already
+present) and the resulting literal index is used to create the node.
+If children is empty (0-ary function), the function must be a constant
+and is handled by returning the appropriate constant signal.
+
+Parameter ``children``:
+    Vector of input signals to the new node.
+
+Parameter ``function``:
+    Truth table specifying the Boolean function to implement.
+
+Returns:
+    Signal pointing to the newly created node, or a constant signal if
+    children is empty.)doc";
+
+static const char *__doc_fiction_netlist_create_nor =
+R"doc(Creates a NOR gate node with two inputs.
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal of the newly created NOR gate (literal 7).)doc";
+
+static const char *__doc_fiction_netlist_create_not =
+R"doc(Creates an inverter (NOT) node in the network.
+
+Handles constant propagation: if the input signal points to a constant
+node, returns the complemented constant directly. Otherwise, creates a
+new inverter node with literal 3 (NOT function in truth table cache).
+
+Parameter ``a``:
+    Input signal to invert.
+
+Returns:
+    Output signal of the inverter node, or the complemented constant
+    if input is constant.)doc";
+
+static const char *__doc_fiction_netlist_create_or =
+R"doc(Creates an OR gate node with two inputs.
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal of the newly created OR gate (literal 6).)doc";
+
+static const char *__doc_fiction_netlist_create_xnor =
+R"doc(Creates an XNOR gate node with two inputs.
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal of the newly created XNOR gate (literal 13).)doc";
+
+static const char *__doc_fiction_netlist_create_xor =
+R"doc(Creates an XOR gate node with two inputs.
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Returns:
+    Output signal of the newly created XOR gate (literal 12).)doc";
+
+static const char *__doc_fiction_netlist_create_xor3 =
+R"doc(Creates a three-input XOR gate. Output is true when an odd number of
+inputs are true.
+
+Parameter ``a``:
+    First input signal.
+
+Parameter ``b``:
+    Second input signal.
+
+Parameter ``c``:
+    Third input signal.
+
+Returns:
+    Output signal of the XOR3 gate (literal 18).)doc";
+
+static const char *__doc_fiction_netlist_fanout_size =
+R"doc(Returns the fanout size of a node, accounting for block_network's
+structure.
+
+In `block_network`, the total fanout count is stored in `data[1].h2`.
+The MSB (most significant bit) of this field is used as a "dead" flag
+to mark deleted nodes, so it must be masked out. This is different
+from `klut_network` which stores fanout in `data[0].h1` without such
+masking.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    Fanout size of `n` (number of nodes that use `n` as an input).)doc";
+
+static const char *__doc_fiction_netlist_is_and =
+R"doc(Returns whether the given node `n` is an AND gate.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the AND function (literal 4).)doc";
+
+static const char *__doc_fiction_netlist_is_and3 =
+R"doc(Returns whether the given node `n` is a three-input AND gate (a AND b
+AND c).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the AND3 function (literal 22).)doc";
+
+static const char *__doc_fiction_netlist_is_and_xor =
+R"doc(Returns whether the given node `n` is an AND-XOR gate ((a XOR b) AND
+c).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the AND_XOR function (literal 32).)doc";
+
+static const char *__doc_fiction_netlist_is_buf =
+R"doc(Returns whether the given node `n` is a buffer node, i.e., whether `n`
+computes the identity function and is not a PI. This also returns
+`true` on fanout nodes.
+
+Checks if the function literal stored in `data[2].h1` equals 2 (the
+identity function) and verifies the node is not a primary input.
+Buffers with multiple outputs (fanout > 1) are still considered
+buffers by this function.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` is a buffer node (including fanout nodes).)doc";
+
+static const char *__doc_fiction_netlist_is_dot =
+R"doc(Returns whether the given node `n` is a DOT gate (a XOR (c OR (a AND
+b))).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the DOT function (literal 20).)doc";
+
+static const char *__doc_fiction_netlist_is_fanout =
+R"doc(Returns whether the given node `n` is a fanout node, i.e., whether `n`
+is a buffer node and has more than one output signal.
+
+A fanout node (also called a splitter) is a buffer that drives
+multiple paths in the circuit. This is important for physical design
+as fanout nodes may require special handling (e.g., buffer insertion,
+routing constraints).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` is a fanout node (buffer with fanout_size > 1).)doc";
+
+static const char *__doc_fiction_netlist_is_gamble =
+R"doc(Returns whether the given node `n` is a gamble gate (all or nothing:
+(a AND b AND c) OR (!a AND !b AND !c)).
+
+Note: Uses literal 31 instead of following the sequential pattern, as
+noted in the original code.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the GAMBLE function (literal 31).)doc";
+
+static const char *__doc_fiction_netlist_is_ge =
+R"doc(Returns whether the given node `n` is a greater-or-equal comparator (a
+>= b).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the GE function (literal 9).)doc";
+
+static const char *__doc_fiction_netlist_is_gt =
+R"doc(Returns whether the given node `n` is a greater-than comparator (a >
+b).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the GT function (literal 10).)doc";
+
+static const char *__doc_fiction_netlist_is_ha =
+R"doc(Returns whether the given node `n` is a half-adder (HA) gate.
+
+A half-adder produces two outputs: sum and carry. In this
+representation, the sum output uses literal 12 (XOR) and the carry
+output uses literal 4 (AND). Therefore, both conditions must be met to
+identify a half-adder.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the HA function (literals 4 and 12).)doc";
+
+static const char *__doc_fiction_netlist_is_inv =
+R"doc(Returns whether the given node `n` is an inverter node.
+
+Checks if the function literal equals 3 (NOT function).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` is an inverter node.)doc";
+
+static const char *__doc_fiction_netlist_is_ite =
+R"doc(Returns whether the given node `n` is an if-then-else (multiplexer)
+gate.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the ITE function (literal 16).)doc";
+
+static const char *__doc_fiction_netlist_is_le =
+R"doc(Returns whether the given node `n` is a less-or-equal comparator (a <=
+b).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the LE function (literal 11).)doc";
+
+static const char *__doc_fiction_netlist_is_lt =
+R"doc(Returns whether the given node `n` is a less-than comparator (a < b).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the LT function (literal 8).)doc";
+
+static const char *__doc_fiction_netlist_is_maj =
+R"doc(Returns whether the given node `n` is a majority gate.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the MAJ function (literal 14).)doc";
+
+static const char *__doc_fiction_netlist_is_nand =
+R"doc(Returns whether the given node `n` is a NAND gate.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the NAND function (literal 5).)doc";
+
+static const char *__doc_fiction_netlist_is_nor =
+R"doc(Returns whether the given node `n` is a NOR gate.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the NOR function (literal 7).)doc";
+
+static const char *__doc_fiction_netlist_is_onehot =
+R"doc(Returns whether the given node `n` is a one-hot gate (exactly one of
+a, b, c is true).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the ONEHOT function (literal 28).)doc";
+
+static const char *__doc_fiction_netlist_is_or =
+R"doc(Returns whether the given node `n` is an OR gate.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the OR function (literal 6).)doc";
+
+static const char *__doc_fiction_netlist_is_or_and =
+R"doc(Returns whether the given node `n` is an OR-AND gate (a AND (b OR c)).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the OR_AND function (literal 26).)doc";
+
+static const char *__doc_fiction_netlist_is_po =
+R"doc(Checks whether a node is primary output by checking if any output
+signal points to it.
+
+Unlike `klut_network` which can compare signals directly, this
+implementation must check both the node index and potentially the
+output port of the signal since `block_network` supports multi-output
+nodes.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n`'s node index is referenced by any primary output
+    signal.)doc";
+
+static const char *__doc_fiction_netlist_is_po_2 =
+R"doc(Checks whether a signal points to a primary output node.
+
+Parameter ``s``:
+    Signal to consider.
+
+Returns:
+    `true` iff the node pointed to by `s` is primary output.)doc";
+
+static const char *__doc_fiction_netlist_is_xnor =
+R"doc(Returns whether the given node `n` is an XNOR gate.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the XNOR function (literal 13).)doc";
+
+static const char *__doc_fiction_netlist_is_xor =
+R"doc(Returns whether the given node `n` is an XOR gate.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the XOR function (literal 12).)doc";
+
+static const char *__doc_fiction_netlist_is_xor3 =
+R"doc(Returns whether the given node `n` is a three-input XOR gate.
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the XOR3 function (literal 18).)doc";
+
+static const char *__doc_fiction_netlist_is_xor_and =
+R"doc(Returns whether the given node `n` is an XOR-AND gate (a AND (b XOR
+c)).
+
+Parameter ``n``:
+    Node to consider.
+
+Returns:
+    `true` iff `n` implements the XOR_AND function (literal 24).)doc";
+
+static const char *__doc_fiction_netlist_netlist =
+R"doc(Default constructor. Initializes an empty netlist and adds custom
+Boolean functions to the truth table cache.)doc";
+
+static const char *__doc_fiction_netlist_netlist_2 =
+R"doc(Constructor from shared storage. Allows creating a netlist from
+existing `block_storage`.
+
+Parameter ``s``:
+    Shared pointer to `block_storage` containing the network data.)doc";
+
+static const char *__doc_fiction_netlist_substitute_po_signals =
+R"doc(Adds additional buffer nodes for each primary output that does not
+already point to a buffer.
+
+This transformation ensures that every primary output is driven by a
+dedicated buffer node. If a PO already points to a buffer that has no
+other fanouts, it is left unchanged. If a PO points to a non-buffer
+node or a buffer with multiple fanouts (fanout node), a new buffer is
+inserted.
+
+The implementation: 1. Iterates through all primary outputs 2. For
+each PO that doesn't point to a non-fanout buffer: a. Decrements
+reference counts on the original node (both total and per-output) b.
+Creates a new buffer node c. Updates the PO signal to point to the new
+buffer
+
+This is useful for physical design where output ports may require
+dedicated driver gates.)doc";
 
 static const char *__doc_fiction_network_balancing =
 R"doc(Balances a logic network with buffer nodes that compute the identity
@@ -19936,6 +21290,8 @@ Parameter ``lyt``:
 
 Parameter ``path``:
     Path to route wires along.)doc";
+
+static const char *__doc_fiction_route_path_2 = R"doc()doc";
 
 static const char *__doc_fiction_routing_objective =
 R"doc(Routing objectives are source-target pairs.
