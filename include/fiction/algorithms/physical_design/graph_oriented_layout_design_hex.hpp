@@ -41,6 +41,7 @@ class graph_oriented_layout_design_hex_impl
             seed{p.seed.value_or(std::random_device{}())}
     {
         ntk.substitute_po_signals();
+        initialize_input_pin_order_ranks();
     }
     /**
      * Executes the graph-oriented layout design algorithm and returns the best found layout.
@@ -334,34 +335,38 @@ class graph_oriented_layout_design_hex_impl
      */
     std::atomic<bool> improve_custom_solution = false;
     /**
-     * In high-efficiency mode, only 2 search space graphs are used
+     * In high-efficiency mode, only 1 search space graph is used.
+     *
+     * In native hex mode, PIs are fixed to the top border. Therefore, no additional PI-location variants are needed.
      */
-    const uint64_t num_search_space_graphs_high_efficiency = 2u;
+    const uint64_t num_search_space_graphs_high_efficiency = 1u;
     /**
-     * In high-effort mode, 12 search space graphs are used: 3 (possible PI locations) * 2 (fanout substitution
-     * strategies) * 2 (topological orderings)
+     * In high-effort mode, 4 search space graphs are used:
+     * 1 (possible PI location: top) * 2 (fanout substitution strategies) * 2 (topological orderings).
      */
-    const uint64_t num_search_space_graphs_high_effort = 12u;
+    const uint64_t num_search_space_graphs_high_effort = 4u;
     /**
-     * In highest-effort mode, 48 search space graphs are used.
-     * This includes 12 search space graphs for each of the four base cost objectives layout area, number of wire
+     * In highest-effort mode, 16 search space graphs are used.
+     *
+     * This includes 4 search space graphs for each of the four base cost objectives layout area, number of wire
      * segments, number of wire crossings, and area-crossing product.
      */
     const uint64_t num_search_space_graphs_highest_effort = 4u * num_search_space_graphs_high_effort;
     /**
-     * In maximum-effort mode, 96 search space graphs are used.
-     * It adds another 48 search space graphs to the 48 search space graphs from highest-effort mode
-     * using randomized fanout substitution strategies and random topological orderings.
+     * In maximum-effort mode, 32 search space graphs are used.
+     *
+     * It adds another 16 search space graphs to the 16 search space graphs from highest-effort mode using randomized
+     * fanout substitution strategies and random topological orderings.
      */
     const uint64_t num_search_space_graphs_maximum_effort = 2u * num_search_space_graphs_highest_effort;
     /**
-     * In highest-effort mode with a custom cost function, 60 search space graphs are used (48 with the standard cost
-     * objectives and 12 for the custom one).
+     * In highest-effort mode with a custom cost function, 20 search space graphs are used
+     * (16 with the standard cost objectives and 4 for the custom one).
      */
     const uint64_t num_search_space_graphs_highest_effort_custom = 5u * num_search_space_graphs_high_effort;
     /**
-     * In maximum-effort mode with a custom cost function, 120 search space graphs are used (96 with the standard cost
-     * objectives and 24 for the custom one).
+     * In maximum-effort mode with a custom cost function, 40 search space graphs are used
+     * (32 with the standard cost objectives and 8 for the custom one).
      */
     const uint64_t num_search_space_graphs_maximum_effort_custom = 2u * num_search_space_graphs_highest_effort_custom;
     /**
@@ -369,9 +374,102 @@ class graph_oriented_layout_design_hex_impl
      */
     std::uint32_t seed;
     /**
+     * Primary input ranks by declaration index used for deterministic PI reordering.
+     *
+     * The value at index `i` stores the preferred rank of the `i`-th PI in declaration order.
+     */
+    std::vector<uint64_t> input_pin_order_ranks{};
+    /**
      * Thread pool for multithreaded execution to avoid thread creation overhead.
      */
     mutable std::vector<std::future<std::optional<Lyt>>> futures_pool{};
+    /**
+     * Initializes PI order ranks from user parameters.
+     *
+     * If `prefer_input_pin_order` is enabled without an explicit PI order list, declaration order is used.
+     * If an explicit order list is provided, it is validated against network PI names and converted into ranks.
+     *
+     * @throws std::invalid_argument If the provided PI order list is invalid.
+     */
+    void initialize_input_pin_order_ranks()
+    {
+        if (!ps.prefer_input_pin_order)
+        {
+            return;
+        }
+
+        const auto num_pis = ntk.num_pis();
+
+        input_pin_order_ranks.resize(num_pis);
+        for (uint64_t i = 0u; i < num_pis; ++i)
+        {
+            input_pin_order_ranks[i] = i;
+        }
+
+        if (ps.input_pin_order.empty())
+        {
+            return;
+        }
+
+        if (ps.input_pin_order.size() != num_pis)
+        {
+            throw std::invalid_argument(fmt::format("PI order list size ({}) does not match the number of PIs ({}).",
+                                                    ps.input_pin_order.size(), num_pis));
+        }
+
+        std::unordered_map<std::string, uint64_t> declaration_index_by_name{};
+        declaration_index_by_name.reserve(num_pis);
+
+        uint64_t declaration_index = 0u;
+        ntk.foreach_pi(
+            [this, &declaration_index_by_name, &declaration_index](const auto& pi)
+            {
+                const auto pi_signal = ntk.make_signal(pi);
+
+                if (!ntk.has_name(pi_signal))
+                {
+                    throw std::invalid_argument(
+                        "Explicit PI ordering requires named PIs, but at least one PI has no name.");
+                }
+
+                const auto pi_name = ntk.get_name(pi_signal);
+
+                if (const auto [_, inserted] = declaration_index_by_name.emplace(pi_name, declaration_index); !inserted)
+                {
+                    throw std::invalid_argument(
+                        fmt::format("PI names must be unique for explicit ordering. Duplicate name: '{}'.", pi_name));
+                }
+
+                ++declaration_index;
+            });
+
+        std::fill(input_pin_order_ranks.begin(), input_pin_order_ranks.end(), num_pis);
+
+        uint64_t preferred_rank = 0u;
+        for (const auto& requested_name : ps.input_pin_order)
+        {
+            if (requested_name.empty())
+            {
+                throw std::invalid_argument("PI order list contains an empty PI name.");
+            }
+
+            const auto it = declaration_index_by_name.find(requested_name);
+            if (it == declaration_index_by_name.cend())
+            {
+                throw std::invalid_argument(
+                    fmt::format("PI order list contains unknown PI name '{}'.", requested_name));
+            }
+
+            auto& rank_slot = input_pin_order_ranks[it->second];
+            if (rank_slot != num_pis)
+            {
+                throw std::invalid_argument(
+                    fmt::format("PI order list contains duplicate PI name '{}'.", requested_name));
+            }
+
+            rank_slot = preferred_rank++;
+        }
+    }
     /**
      * Get thread-local random number generator for `tiles_to_skip_between_pis` randomization.
      * Each thread will have its own RNG to avoid mutex contention.
@@ -600,20 +698,28 @@ class graph_oriented_layout_design_hex_impl
             max_iterations = layout.y() - min_y;
         }
 
-        const uint64_t expansion_limit = (pi_locs == pi_locations::TOP_AND_LEFT) ? 2 * num_expansions : num_expansions;
+        uint64_t expansion_limit = (pi_locs == pi_locations::TOP_AND_LEFT) ? 2 * num_expansions : num_expansions;
+        if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+        {
+            if (ps.prefer_input_pin_order && (pi_locs == pi_locations::TOP || pi_locs == pi_locations::TOP_AND_LEFT))
+            {
+                expansion_limit = std::max(expansion_limit, layout.x() + 1);
+            }
+        }
+
         possible_positions.reserve(expansion_limit);
 
         for (uint64_t k = 0ul; k < max_iterations; k++)
         {
             if (((pi_locs == pi_locations::TOP) || (pi_locs == pi_locations::TOP_AND_LEFT)) && min_x + k < layout.x())
             {
-                if (skip_top == 0)
+                if (skip_top != 0)
                 {
-                    check_tile(min_x + k, 0);
+                    --skip_top;
                 }
                 else
                 {
-                    --skip_top;
+                    check_tile(min_x + k, 0);
                 }
             }
             if (((pi_locs == pi_locations::LEFT) || (pi_locs == pi_locations::TOP_AND_LEFT)) && min_y + k < layout.y())
@@ -1236,6 +1342,89 @@ class graph_oriented_layout_design_hex_impl
         return cost;
     }
     /**
+     * Computes a soft penalty for violating preferred PI order for a candidate PI placement.
+     *
+     * The penalty grows with left/right order violations against already placed PIs according to the configured
+     * preferred order.
+     *
+     * @param ssg Current search-space graph.
+     * @param candidate Candidate position for the next node.
+     * @return Normalized penalty contribution to the expansion priority.
+     */
+    [[nodiscard]] double calculate_preferred_pi_order_penalty(const search_space_graph<ObstrLyt>& ssg,
+                                                              const tile<ObstrLyt>&               candidate) const
+    {
+        if (!ps.prefer_input_pin_order)
+        {
+            return 0.0;
+        }
+
+        const auto current_node_idx = static_cast<uint64_t>(ssg.current_vertex.size());
+        if (current_node_idx >= ssg.nodes_to_place.size())
+        {
+            return 0.0;
+        }
+
+        const auto current_node = ssg.nodes_to_place[current_node_idx];
+        if (!ssg.network.is_pi(current_node))
+        {
+            return 0.0;
+        }
+
+        std::unordered_map<mockturtle::node<tec_nt>, uint64_t> pi_ranks{};
+        pi_ranks.reserve(ssg.network.num_pis());
+
+        uint64_t declaration_index = 0u;
+        ssg.network.foreach_pi(
+            [this, &pi_ranks, &declaration_index](const auto& pi)
+            {
+                const uint64_t rank = declaration_index < input_pin_order_ranks.size() ?
+                                          input_pin_order_ranks[declaration_index] :
+                                          declaration_index;
+                pi_ranks[pi]        = rank;
+                ++declaration_index;
+            });
+
+        const auto current_rank_it = pi_ranks.find(current_node);
+        if (current_rank_it == pi_ranks.cend())
+        {
+            return 0.0;
+        }
+
+        const auto current_rank = current_rank_it->second;
+
+        double penalty = 0.0;
+        for (uint64_t node_idx = 0u; node_idx < current_node_idx; ++node_idx)
+        {
+            const auto prev_node = ssg.nodes_to_place[node_idx];
+            if (!ssg.network.is_pi(prev_node))
+            {
+                continue;
+            }
+
+            const auto prev_rank_it = pi_ranks.find(prev_node);
+            if (prev_rank_it == pi_ranks.cend())
+            {
+                continue;
+            }
+
+            const auto prev_rank = prev_rank_it->second;
+            const auto prev_x    = ssg.current_vertex[node_idx].x;
+
+            if (prev_rank < current_rank && prev_x >= candidate.x)
+            {
+                penalty += static_cast<double>(prev_x - candidate.x + 1u);
+            }
+            else if (prev_rank > current_rank && prev_x <= candidate.x)
+            {
+                penalty += static_cast<double>(candidate.x - prev_x + 1u);
+            }
+        }
+
+        const auto normalizer = static_cast<double>(std::max<uint64_t>(1u, ssg.network.num_pis()));
+        return penalty / normalizer;
+    }
+    /**
      * Generates the next possible positions with their priorities based on the layout and search space graph.
      *
      * @param possible_positions A vector of possible positions to be considered.
@@ -1249,6 +1438,8 @@ class graph_oriented_layout_design_hex_impl
     {
         std::vector<std::pair<coord_vec_type<ObstrLyt>, double>> next_positions;
         next_positions.reserve(2 * ps.num_vertex_expansions);
+
+        static constexpr double preferred_pi_order_penalty_weight = 0.5;
 
         for (const auto& position : possible_positions)
         {
@@ -1271,6 +1462,7 @@ class graph_oriented_layout_design_hex_impl
                     static_cast<double>((ssg.nodes_to_place.size() * ssg.nodes_to_place.size()));
 
                 double priority = remaining_nodes_to_place + layout_size + last_position;
+                priority += preferred_pi_order_penalty_weight * calculate_preferred_pi_order_penalty(ssg, position);
                 next_positions.push_back({new_sequence, priority});
             }
             else
@@ -1279,6 +1471,7 @@ class graph_oriented_layout_design_hex_impl
                                     static_cast<double>(1000 * ssg.nodes_to_place.size());
 
                 double priority = remaining_nodes_to_place + cost;
+                priority += preferred_pi_order_penalty_weight * calculate_preferred_pi_order_penalty(ssg, position);
 
                 next_positions.push_back({new_sequence, priority});
             }
@@ -1579,6 +1772,47 @@ class graph_oriented_layout_design_hex_impl
             network.foreach_co([&nodes_to_place, &network](const auto& f)
                                { nodes_to_place.push_back(network.get_node(f)); });
         };
+        // helper function to prioritize preferred network PI order at the beginning of the placement list
+        const auto reorder_pi_nodes = [&](const auto& network, auto& nodes_to_place) noexcept
+        {
+            if (!ps.prefer_input_pin_order)
+            {
+                return;
+            }
+
+            using node_t = typename std::decay_t<decltype(nodes_to_place)>::value_type;
+
+            std::unordered_map<node_t, uint64_t> pi_ranks{};
+            pi_ranks.reserve(network.num_pis());
+
+            uint64_t declaration_index = 0u;
+            network.foreach_pi(
+                [&pi_ranks, &declaration_index, this](const auto& pi)
+                {
+                    assert(declaration_index < input_pin_order_ranks.size());
+                    pi_ranks[pi] = input_pin_order_ranks[declaration_index++];
+                });
+
+            std::stable_sort(nodes_to_place.begin(), nodes_to_place.end(),
+                             [&pi_ranks](const auto& lhs, const auto& rhs) noexcept
+                             {
+                                 const auto lhs_it    = pi_ranks.find(lhs);
+                                 const auto rhs_it    = pi_ranks.find(rhs);
+                                 const bool lhs_is_pi = lhs_it != pi_ranks.cend();
+                                 const bool rhs_is_pi = rhs_it != pi_ranks.cend();
+
+                                 if (lhs_is_pi != rhs_is_pi)
+                                 {
+                                     return lhs_is_pi;
+                                 }
+                                 if (lhs_is_pi && rhs_is_pi)
+                                 {
+                                     return lhs_it->second < rhs_it->second;
+                                 }
+
+                                 return false;
+                             });
+        };
 
         // set cost objectives based on effort mode and cost objective
         const auto set_costs = [&](const uint64_t start_idx, const uint64_t end_idx, const auto cost_objective)
@@ -1589,8 +1823,8 @@ class graph_oriented_layout_design_hex_impl
             }
         };
 
-        // PIs can either be place at top, bottom, or top and bottom
-        const uint64_t num_possible_pi_locations = 3u;
+        // In native hex mode, PIs are placed on the top border only.
+        const uint64_t num_possible_pi_locations = 1u;
 
         // helper function to assign networks and nodes
         const auto assign_networks_and_nodes = [&](uint64_t base_index, auto& breadth_co_to_ci, auto& breadth_ci_to_co,
@@ -1621,6 +1855,7 @@ class graph_oriented_layout_design_hex_impl
         // prepare initial nodes to place
         std::vector<mockturtle::node<decltype(network_breadth_co_to_ci)>> nodes_to_place_breadth_co_to_ci{};
         prepare_nodes_to_place(network_breadth_co_to_ci, nodes_to_place_breadth_co_to_ci);
+        reorder_pi_nodes(network_breadth_co_to_ci, nodes_to_place_breadth_co_to_ci);
 
         // set initial cost
         for (uint64_t i = 0; i < num_search_space_graphs_high_efficiency; ++i)
@@ -1651,8 +1886,11 @@ class graph_oriented_layout_design_hex_impl
             prepare_nodes_to_place(network_breadth_ci_to_co, nodes_to_place_breadth_ci_to_co);
             prepare_nodes_to_place(network_depth_co_to_ci, nodes_to_place_depth_co_to_ci);
             prepare_nodes_to_place(network_depth_ci_to_co, nodes_to_place_depth_ci_to_co);
+            reorder_pi_nodes(network_breadth_ci_to_co, nodes_to_place_breadth_ci_to_co);
+            reorder_pi_nodes(network_depth_co_to_ci, nodes_to_place_depth_co_to_ci);
+            reorder_pi_nodes(network_depth_ci_to_co, nodes_to_place_depth_ci_to_co);
 
-            // prepare 12 search space graphs
+            // prepare 4 search space graphs
             assign_networks_and_nodes(0, network_breadth_co_to_ci, network_breadth_ci_to_co, network_depth_co_to_ci,
                                       network_depth_ci_to_co, nodes_to_place_breadth_co_to_ci,
                                       nodes_to_place_breadth_ci_to_co, nodes_to_place_depth_co_to_ci,
@@ -1707,6 +1945,10 @@ class graph_oriented_layout_design_hex_impl
                     prepare_nodes_to_place(network_breadth_ci_to_co_random, nodes_to_place_breadth_ci_to_co_random);
                     prepare_nodes_to_place(network_depth_co_to_ci_random, nodes_to_place_depth_co_to_ci_random);
                     prepare_nodes_to_place(network_depth_ci_to_co_random, nodes_to_place_depth_ci_to_co_random);
+                    reorder_pi_nodes(network_breadth_co_to_ci_random, nodes_to_place_breadth_co_to_ci_random);
+                    reorder_pi_nodes(network_breadth_ci_to_co_random, nodes_to_place_breadth_ci_to_co_random);
+                    reorder_pi_nodes(network_depth_co_to_ci_random, nodes_to_place_depth_co_to_ci_random);
+                    reorder_pi_nodes(network_depth_ci_to_co_random, nodes_to_place_depth_ci_to_co_random);
 
                     if (ps.cost != graph_oriented_layout_design_params::cost_objective::CUSTOM)
                     {
@@ -1741,7 +1983,7 @@ class graph_oriented_layout_design_hex_impl
                                                 graph_oriented_layout_design_params::cost_objective::CROSSINGS,
                                                 graph_oriented_layout_design_params::cost_objective::ACP};
 
-            // batch of 12 SSGs (all combinations of 3 different PI locations, 2 fanout substitution strategies, and 2
+            // batch of 4 SSGs (all combinations of 1 PI location, 2 fanout substitution strategies, and 2
             // topological orderings)
             const auto ssg_batch = num_search_space_graphs_high_effort;
 

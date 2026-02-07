@@ -42,6 +42,7 @@
 #include <queue>
 #include <random>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <tuple>
 #include <type_traits>
@@ -181,6 +182,20 @@ struct graph_oriented_layout_design_params
      * Enforce NOT gates to be routed non-bending only.
      */
     bool straight_inverters = false;
+    /**
+     * Prefer that primary inputs (PIs) are placed from left to right in network PI order.
+     *
+     * This is a soft preference that biases the search but does not enforce a hard feasibility constraint.
+     * Defaults to `false`.
+     */
+    bool prefer_input_pin_order = false;
+    /**
+     * Optional explicit primary input (PI) order by PI name.
+     *
+     * If non-empty and `prefer_input_pin_order` is enabled, this list overrides declaration order and defines the
+     * left-to-right PI placement order. The list must contain each PI name exactly once.
+     */
+    std::vector<std::string> input_pin_order{};
     /**
      * For each primary input (PI) considered during placement, reserve this many
      * empty tiles *after* the current frontier:
