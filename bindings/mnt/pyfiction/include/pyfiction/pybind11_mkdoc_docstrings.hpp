@@ -6728,9 +6728,6 @@ Parameter ``specification``:
 Parameter ``implementation``:
     Implementation of specified functionality.
 
-Parameter ``p``:
-    Parameters.
-
 Parameter ``st``:
     Statistics.)doc";
 
@@ -9116,12 +9113,6 @@ Returns:
     The network with virtual primary inputs removed, or the original
     network if unsupported.)doc";
 
-static const char *__doc_fiction_detail_has_signal_output_pin =
-R"doc(Checks whether a network signal exposes an output-pin field.
-
-Template parameter ``Ntk``:
-    Network type.)doc";
-
 static const char *__doc_fiction_detail_hexagonalization_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_hexagonalization_impl_hexagonalization_impl = R"doc()doc";
@@ -10551,7 +10542,7 @@ static const char *__doc_fiction_detail_post_layout_optimization_impl_wiring_red
 static const char *__doc_fiction_detail_prepare_for_equivalence_checking =
 R"doc(Prepares a network for SAT-based equivalence checking.
 
-Multi-output networks are transformed into single-output KLUT networks
+Multi-output networks are transformed into single-output kLUT networks
 while preserving output-pin semantics.
 
 Template parameter ``NtkOrLyt``:
@@ -11136,7 +11127,7 @@ Returns:
 
 static const char *__doc_fiction_detail_split_multioutput_network =
 R"doc(Splits all multi-output nodes in a network into dedicated single-
-output KLUT nodes.
+output kLUT nodes.
 
 Template parameter ``Ntk``:
     Source network type.
@@ -15644,6 +15635,8 @@ static const char *__doc_fiction_has_ordinal_operations = R"doc()doc";
 static const char *__doc_fiction_has_post_layout_optimization = R"doc()doc";
 
 static const char *__doc_fiction_has_set_layout_name = R"doc()doc";
+
+static const char *__doc_fiction_has_signal_output_pin = R"doc()doc";
 
 static const char *__doc_fiction_has_south = R"doc()doc";
 
