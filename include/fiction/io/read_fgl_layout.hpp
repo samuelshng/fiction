@@ -5,10 +5,7 @@
 #ifndef FICTION_READ_FGL_LAYOUT_HPP
 #define FICTION_READ_FGL_LAYOUT_HPP
 
-#include "fiction/layouts/cartesian_layout.hpp"
-#include "fiction/layouts/clocked_layout.hpp"
 #include "fiction/layouts/gate_level_layout.hpp"
-#include "fiction/layouts/tile_based_layout.hpp"
 #include "fiction/traits.hpp"
 #include "fiction/utils/name_utils.hpp"
 
