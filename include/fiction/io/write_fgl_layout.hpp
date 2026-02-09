@@ -229,59 +229,9 @@ class write_fgl_layout_impl
                     const auto incoming_signal_a = signal_to_tile(signals[0]);
                     const auto incoming_signal_b = signal_to_tile(signals[1]);
 
-                    if constexpr (has_is_ha_v<Lyt>)
+                    if (lyt.is_ha(gate))
                     {
-                        if (lyt.is_ha(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "HA", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_and(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "AND", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_nand(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "NAND", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_or(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "OR", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_nor(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "NOR", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_xor(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "XOR", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_xnor(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "XNOR", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_lt(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "LT", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_gt(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "GT", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_le(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "LE", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_ge(gate))
-                        {
-                            os << fmt::format(fgl::GATE, gate_id, "GE", "", coord.x, coord.y, coord.z);
-                        }
-                        else if (lyt.is_function(gate))
-                        {
-                            const auto node_fun = lyt.node_function(gate);
-
-                            os << fmt::format(fgl::GATE, gate_id, kitty::to_hex(node_fun), "", coord.x, coord.y,
-                                              coord.z);
-                        }
+                        os << fmt::format(fgl::GATE, gate_id, "HA", "", coord.x, coord.y, coord.z);
                     }
                     else if (lyt.is_and(gate))
                     {
@@ -329,6 +279,7 @@ class write_fgl_layout_impl
 
                         os << fmt::format(fgl::GATE, gate_id, kitty::to_hex(node_fun), "", coord.x, coord.y, coord.z);
                     }
+
                     os << fgl::OPEN_INCOMING;
                     os << fmt::format(fgl::SIGNAL, incoming_signal_a.x, incoming_signal_a.y, incoming_signal_a.z,
                                       signals[0].output);
