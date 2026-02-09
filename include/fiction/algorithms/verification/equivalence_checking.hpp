@@ -10,13 +10,11 @@
 #include "fiction/traits.hpp"
 #include "fiction/utils/name_utils.hpp"
 
-#include <fmt/format.h>
 #include <mockturtle/algorithms/equivalence_checking.hpp>
 #include <mockturtle/algorithms/miter.hpp>
 #include <mockturtle/networks/klut.hpp>
 #include <mockturtle/traits.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
-#include <mockturtle/views/names_view.hpp>
 #include <mockturtle/views/topo_view.hpp>
 
 #include <algorithm>
@@ -71,21 +69,6 @@ struct equivalence_checking_stats
 
 namespace detail
 {
-/**
- * @brief Checks whether a network signal exposes an output-pin field.
- *
- * @tparam Ntk Network type.
- */
-template <typename Ntk, typename = void>
-struct has_signal_output_pin : std::false_type
-{};
-
-template <typename Ntk>
-struct has_signal_output_pin<Ntk, std::void_t<decltype(std::declval<typename Ntk::signal>().output)>> : std::true_type
-{};
-
-template <typename Ntk>
-inline constexpr bool has_signal_output_pin_v = has_signal_output_pin<Ntk>::value;
 
 /**
  * @brief Returns a signal's output pin if present, otherwise pin 0.
@@ -95,14 +78,13 @@ inline constexpr bool has_signal_output_pin_v = has_signal_output_pin<Ntk>::valu
  * @return Output pin index represented by `s`.
  */
 template <typename Ntk>
-[[nodiscard]] uint32_t signal_output_pin(const typename Ntk::signal& s) noexcept
+[[nodiscard]] uint32_t signal_output_pin([[maybe_unused]] const mockturtle::signal<Ntk>& s) noexcept
 {
     if constexpr (has_signal_output_pin_v<Ntk>)
     {
         return static_cast<uint32_t>(s.output);
     }
 
-    static_cast<void>(s);
     return 0u;
 }
 
@@ -115,7 +97,7 @@ template <typename Ntk>
  * @return Number of output pins represented by `n`.
  */
 template <typename Ntk>
-[[nodiscard]] uint32_t node_output_pin_count(const Ntk& ntk, const typename Ntk::node n) noexcept
+[[nodiscard]] uint32_t node_output_pin_count(const Ntk& ntk, const mockturtle::node<Ntk>& n) noexcept
 {
     if constexpr (mockturtle::has_num_outputs_v<Ntk>)
     {
@@ -164,7 +146,7 @@ void ensure_output_pin_capacity(mockturtle::node_map<std::vector<mockturtle::sig
  * @brief Ensures bookkeeping vectors can represent a specific output pin of a node.
  *
  * @tparam Ntk Network type.
- * @param old2new Node mapping from source network signals to resulting KLUT signals.
+ * @param old2new Node mapping from source network signals to resulting kLUT signals.
  * @param required_outputs Marker vector for output pins that are required in the resulting network.
  * @param ntk Source network.
  * @param n Node to reserve output-pin capacity for.
@@ -189,7 +171,7 @@ void ensure_output_pin_capacity(mockturtle::node_map<std::vector<mockturtle::sig
 }
 
 /**
- * @brief Splits all multi-output nodes in a network into dedicated single-output KLUT nodes.
+ * @brief Splits all multi-output nodes in a network into dedicated single-output kLUT nodes.
  *
  * @tparam Ntk Source network type.
  * @param src Source network.
@@ -360,7 +342,7 @@ mockturtle::klut_network split_multioutput_network(const Ntk& src)
 /**
  * @brief Prepares a network for SAT-based equivalence checking.
  *
- * Multi-output networks are transformed into single-output KLUT networks while preserving output-pin semantics.
+ * Multi-output networks are transformed into single-output kLUT networks while preserving output-pin semantics.
  *
  * @tparam NtkOrLyt Source network or layout type.
  * @param ntk_or_lyt Source network or layout.
@@ -386,7 +368,6 @@ class equivalence_checking_impl
      *
      * @param specification Logical specification of intended functionality.
      * @param implementation Implementation of specified functionality.
-     * @param p Parameters.
      * @param st Statistics.
      */
     explicit equivalence_checking_impl(const Spec& specification, const Impl& implementation,

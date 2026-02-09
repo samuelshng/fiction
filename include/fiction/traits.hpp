@@ -1442,6 +1442,19 @@ template <class Ntk>
 inline constexpr bool has_update_ranks_v = has_update_ranks<Ntk>::value;
 #pragma endregion
 
+#pragma region has_signal_output_pin
+template <typename Ntk, typename = void>
+struct has_signal_output_pin : std::false_type
+{};
+
+template <typename Ntk>
+struct has_signal_output_pin<Ntk, std::void_t<decltype(std::declval<typename Ntk::signal>().output)>> : std::true_type
+{};
+
+template <typename Ntk>
+inline constexpr bool has_signal_output_pin_v = has_signal_output_pin<Ntk>::value;
+#pragma endregion
+
 }  // namespace fiction
 
 #endif  // FICTION_TRAITS_HPP
