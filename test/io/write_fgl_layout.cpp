@@ -142,7 +142,7 @@ void check_parsing_equiv_layout_all()
 
 TEST_CASE("Write empty gate_level layout", "[write-fgl-layout]")
 {
-    using gate_layout = cart_gate_clk_lyt;
+    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
     const gate_layout layout{{}, "empty"};
 
     std::stringstream layout_stream{};
