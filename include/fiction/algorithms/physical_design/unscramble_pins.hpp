@@ -28,7 +28,6 @@ namespace fiction
  */
 struct unscramble_pins_params
 {};
-
 /**
  * Statistics for the pin unscrambling algorithm.
  */
@@ -95,7 +94,7 @@ uint32_t calculate_rows_needed(const Lyt& lyt, const std::vector<mockturtle::nod
 
         // Find where this node is currently located
         const auto it = std::find(current_permutation.cbegin(), current_permutation.cend(), target_node);
-        if (it == current_permutation.end())
+        if (it == current_permutation.cend())
         {
             continue;
         }
@@ -118,6 +117,86 @@ uint32_t calculate_rows_needed(const Lyt& lyt, const std::vector<mockturtle::nod
 
     return max_rows;
 }
+
+template <typename Lyt>
+class unscramble_pins_impl
+{
+  public:
+    unscramble_pins_impl(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& input_order,
+                         const std::vector<mockturtle::node<Lyt>>& output_order, const unscramble_pins_params& p,
+                         unscramble_pins_stats& st) :
+            layout{lyt},
+            input_ordering{input_order},
+            output_ordering{output_order},
+            params{p},
+            pst{st}
+    {}
+
+    Lyt run()
+    {
+        mockturtle::stopwatch stop{pst.time_total};
+
+        // 1. Identify current pin orderings
+        const auto current_pis = get_current_pis();
+        const auto current_pos = get_current_pos();
+
+        // 2. Calculate unscrambling space requirements
+        const uint32_t pi_rows = calculate_rows_needed(layout, current_pis, input_ordering);
+        const uint32_t po_rows = calculate_rows_needed(layout, current_pos, output_ordering);
+
+        // Placeholder for the rest of the implementation
+        return layout.clone();
+    }
+
+  private:
+    /**
+     * The layout to unscramble.
+     */
+    const Lyt& layout;
+    /**
+     * The desired ordering of primary input nodes.
+     */
+    std::vector<mockturtle::node<Lyt>> input_ordering;
+    /**
+     * The desired ordering of primary output nodes.
+     */
+    std::vector<mockturtle::node<Lyt>> output_ordering;
+    /**
+     * Parameters for the pin unscrambling algorithm.
+     */
+    unscramble_pins_params params;
+    /**
+     * Statistics for the pin unscrambling algorithm.
+     */
+    unscramble_pins_stats& pst;
+
+    /**
+     * Identifies the current primary input nodes in the layout.
+     *
+     * @return Vector of primary input nodes.
+     */
+    std::vector<mockturtle::node<Lyt>> get_current_pis() const
+    {
+        std::vector<mockturtle::node<Lyt>> pis{};
+        pis.reserve(layout.num_pis());
+        layout.foreach_pi([&pis](const auto& pi) { pis.push_back(pi); });
+
+        return pis;
+    }
+    /**
+     * Identifies the current primary output nodes in the layout.
+     *
+     * @return Vector of primary output nodes.
+     */
+    std::vector<mockturtle::node<Lyt>> get_current_pos() const
+    {
+        std::vector<mockturtle::node<Lyt>> pos{};
+        pos.reserve(layout.num_pos());
+        layout.foreach_po([&pos, this](const auto& po) { pos.push_back(layout.get_node(po)); });
+
+        return pos;
+    }
+};
 
 }  // namespace detail
 
@@ -149,8 +228,17 @@ Lyt unscramble_pins(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& in
 
     assert(lyt.is_clocking_scheme("ROW") && "Layout must be row-wise clocked");
 
-    // Placeholder
-    return lyt.clone();
+    unscramble_pins_stats             st{};
+    detail::unscramble_pins_impl<Lyt> p{lyt, input_order, output_order, ps, st};
+
+    const auto result = p.run();
+
+    if (pst)
+    {
+        *pst = st;
+    }
+
+    return result;
 }
 
 }  // namespace fiction
