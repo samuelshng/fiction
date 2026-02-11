@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Implement Pin Ordering Networks to Unscramble Input/Output Pins in a Layout**
-      _Link: [./tracks/pin_ordering_networks_20260209/](./tracks/pin_ordering_networks_20260209/)_
+- [~] **Track: Implement Pin Ordering Networks to Unscramble Input/Output Pins in a Layout**
+  _Link: [./tracks/pin_ordering_networks_20260209/](./tracks/pin_ordering_networks_20260209/)_
