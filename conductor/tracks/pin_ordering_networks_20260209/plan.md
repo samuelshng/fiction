@@ -19,10 +19,10 @@ This plan outlines the steps for implementing a physical design algorithm to uns
 
 ## Phase 2: Core Algorithm Implementation for Hexagonal Layouts
 
-- [ ] **Task: Implement Core Helpers for Metric-Based Routing.**
-  - [ ] Subtask: Implement `determine_pin_coordinates`: Extract layout coordinates for a given vector of pin nodes.
-  - [ ] Subtask: Implement `calculate_rows_needed`: Calculate the maximum vertical space (rows) required based on horizontal displacement (`dist * 2`).
-  - [ ] Subtask: Write unit tests for these helper functions to verify distance and row calculations.
+- [x] **Task: Implement Core Helpers for Metric-Based Routing.**
+  - [x] Subtask: Implement `determine_pin_coordinates`: Extract layout coordinates for a given vector of pin nodes.
+  - [x] Subtask: Implement `calculate_rows_needed`: Calculate the maximum vertical space (rows) required based on horizontal displacement (`dist * 2`).
+  - [x] Subtask: Write unit tests for these helper functions to verify distance and row calculations.
 
 - [ ] **Task: Implement the A\* Routing Logic.**
   - [ ] Subtask: Use the calculated rows to determine the routing area.
