@@ -4,12 +4,16 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "fiction/utils/debug/network_writer.hpp"
+#include "utils/equivalence_checking_utils.hpp"
+
 #include <fiction/algorithms/physical_design/unscramble_pins.hpp>
 #include <fiction/layouts/clocked_layout.hpp>
 #include <fiction/layouts/gate_level_layout.hpp>
 #include <fiction/layouts/hexagonal_layout.hpp>
 #include <fiction/layouts/tile_based_layout.hpp>
 
+#include <algorithm>
 #include <numeric>
 #include <vector>
 
@@ -203,6 +207,71 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
                 // Slot 1 wants x1 (at x=0). Dist=2. Rows=4.
                 CHECK(detail::calculate_rows_needed(layout, current_pis, target_small) == 4);
             }
+        }
+    }
+}
+
+TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
+{
+    using gate_layout =
+        gate_level_layout<clocked_layout<tile_based_layout<hexagonal_layout<offset::ucoord_t, odd_row_hex>>>>;
+
+    SECTION("2-input AND gate")
+    {
+        gate_layout layout{{4, 4}, row_clocking<gate_layout>()};
+
+        const auto x1 = layout.create_pi("x1", {1, 0});
+        const auto x2 = layout.create_pi("x2", {2, 0});
+        const auto a1 = layout.create_and(x1, x2, {1, 1});
+        layout.create_po(a1, "f1", {1, 2});
+
+        const std::vector pis{layout.get_node(x1), layout.get_node(x2)};
+
+        SECTION("PI permutations")
+        {
+            auto target_pis = pis;
+            std::sort(target_pis.begin(), target_pis.end());
+
+            do
+            {
+                check_eq(layout, unscramble_pins(layout, target_pis, {}));
+            } while (std::next_permutation(target_pis.begin(), target_pis.end()));
+        }
+    }
+
+    SECTION("Multiple outputs")
+    {
+        gate_layout layout{{4, 4}, row_clocking<gate_layout>()};
+
+        const auto x1 = layout.create_pi("x1", {0, 0});
+        const auto x2 = layout.create_pi("x2", {1, 0});
+        const auto x3 = layout.create_pi("x3", {2, 0});
+
+        const auto buf1 = layout.create_buf(x1, {0, 1});
+        const auto and1 = layout.create_and(x2, x3, {1, 1});
+
+        const auto buf2 = layout.create_buf(buf1, {1, 2});
+        const auto fo1  = layout.create_buf(and1, {2, 2});
+
+        const auto or1  = layout.create_or(buf2, fo1, {1, 3});
+        const auto buf3 = layout.create_buf(fo1, {2, 3});
+
+        const auto po1 = layout.create_po(or1, "po1", {1, 4});
+        const auto po2 = layout.create_po(buf3, "po2", {3, 4});
+
+        debug::write_dot_layout<gate_layout, gate_layout_hexagonal_drawer<gate_layout>>(layout, "hex_multi_output");
+
+        const std::vector pos{layout.get_node(po1), layout.get_node(po2)};
+
+        SECTION("PO permutations")
+        {
+            auto target_pos = pos;
+            std::sort(target_pos.begin(), target_pos.end());
+
+            do
+            {
+                check_eq(layout, unscramble_pins(layout, {}, target_pos));
+            } while (std::next_permutation(target_pos.begin(), target_pos.end()));
         }
     }
 }
