@@ -5243,6 +5243,27 @@ Parameter ``to_delete``:
 Returns:
     A 2D vector representing the calculated offset matrix.)doc";
 
+static const char *__doc_fiction_detail_calculate_rows_needed =
+R"doc(Calculates the number of rows required to route the pins from their
+current locations to the desired permutation slots. Assumes pointy-top
+hexagonal layout constraints where horizontal movement requires
+vertical steps (2 rows per 1 column shift).
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The layout.
+
+Parameter ``current_permutation``:
+    The current order of pins (nodes).
+
+Parameter ``desired_permutation``:
+    The desired order of pins (nodes).
+
+Returns:
+    The maximum number of rows required.)doc";
+
 static const char *__doc_fiction_detail_can_copy_output = R"doc()doc";
 
 static const char *__doc_fiction_detail_check_and_optimize_po_positions =
@@ -6546,6 +6567,21 @@ Parameter ``offset``:
 
 Returns:
     The new coordinates of the tile after adjustment.)doc";
+
+static const char *__doc_fiction_detail_determine_pin_coordinates =
+R"doc(Extracts the layout coordinates for a given list of pin nodes.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The layout.
+
+Parameter ``pins``:
+    Vector of pin nodes.
+
+Returns:
+    Vector of coordinates corresponding to the pins.)doc";
 
 static const char *__doc_fiction_detail_displacement_robustness_domain_impl = R"doc()doc";
 
@@ -11228,6 +11264,18 @@ static const char *__doc_fiction_detail_topo_view_topo_order = R"doc()doc";
 static const char *__doc_fiction_detail_topo_view_topo_view = R"doc()doc";
 
 static const char *__doc_fiction_detail_topo_view_update_topo = R"doc()doc";
+
+static const char *__doc_fiction_detail_unscramble_pins_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_unscramble_pins_impl_layout = R"doc(The layout to unscramble.)doc";
+
+static const char *__doc_fiction_detail_unscramble_pins_impl_params = R"doc(Parameters for the pin unscrambling algorithm.)doc";
+
+static const char *__doc_fiction_detail_unscramble_pins_impl_pst = R"doc(Statistics for the pin unscrambling algorithm.)doc";
+
+static const char *__doc_fiction_detail_unscramble_pins_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_unscramble_pins_impl_unscramble_pins_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_update_to_delete_list =
 R"doc(Update the to-delete list based on a possible path in a
@@ -23878,6 +23926,45 @@ static const char *__doc_fiction_unrecognized_cell_definition_exception_line = R
 static const char *__doc_fiction_unrecognized_cell_definition_exception_unrecognized_cell_definition_exception = R"doc()doc";
 
 static const char *__doc_fiction_unrecognized_cell_definition_exception_where = R"doc()doc";
+
+static const char *__doc_fiction_unscramble_pins =
+R"doc(A physical design algorithm to unscramble input and output pin
+orderings in placed and routed pointy-top row-wise clocked hexagonal
+gate-level layouts.
+
+This algorithm takes an existing gate-level layout and reorders its
+primary inputs and outputs according to a specified target ordering.
+
+@note This significantly increases the area footprint of the layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The gate-level layout to unscramble.
+
+Parameter ``input_order``:
+    The desired ordering of primary input nodes.
+
+Parameter ``output_order``:
+    The desired ordering of primary output nodes.
+
+Parameter ``ps``:
+    Parameters for the algorithm.
+
+Parameter ``pst``:
+    Statistics for the algorithm.
+
+Returns:
+    A new gate-level layout with unscrambled pins.)doc";
+
+static const char *__doc_fiction_unscramble_pins_params = R"doc(Parameters for the pin unscrambling algorithm.)doc";
+
+static const char *__doc_fiction_unscramble_pins_stats = R"doc(Statistics for the pin unscrambling algorithm.)doc";
+
+static const char *__doc_fiction_unscramble_pins_stats_duration = R"doc()doc";
+
+static const char *__doc_fiction_unscramble_pins_stats_report = R"doc()doc";
 
 static const char *__doc_fiction_unsuccessful_gate_design_error =
 R"doc(Exception thrown if the gate design was unsuccessful. Depending on the
