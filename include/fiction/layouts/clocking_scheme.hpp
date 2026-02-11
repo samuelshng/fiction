@@ -157,18 +157,18 @@ class clocking_scheme
 namespace clock_name
 {
 
-inline constexpr const char* OPEN          = "OPEN";
-inline constexpr const char* COLUMNAR      = "COLUMNAR";
-inline constexpr const char* ROW           = "ROW";
-inline constexpr const char* TWODDWAVE     = "2DDWAVE";
-inline constexpr const char* TWODDWAVE_HEX = "2DDWAVEHEX";
-inline constexpr const char* USE           = "USE";
-inline constexpr const char* RES           = "RES";
-inline constexpr const char* ESR           = "ESR";
-inline constexpr const char* CFE           = "CFE";
-inline constexpr const char* RIPPLE        = "RIPPLE";
-inline constexpr const char* SRS           = "SRS";
-inline constexpr const char* BANCS         = "BANCS";
+inline constexpr auto OPEN          = "OPEN";
+inline constexpr auto COLUMNAR      = "COLUMNAR";
+inline constexpr auto ROW           = "ROW";
+inline constexpr auto TWODDWAVE     = "2DDWAVE";
+inline constexpr auto TWODDWAVE_HEX = "2DDWAVEHEX";
+inline constexpr auto USE           = "USE";
+inline constexpr auto RES           = "RES";
+inline constexpr auto ESR           = "ESR";
+inline constexpr auto CFE           = "CFE";
+inline constexpr auto RIPPLE        = "RIPPLE";
+inline constexpr auto SRS           = "SRS";
+inline constexpr auto BANCS         = "BANCS";
 
 }  // namespace clock_name
 
