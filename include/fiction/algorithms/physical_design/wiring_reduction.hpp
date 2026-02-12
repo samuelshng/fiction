@@ -795,6 +795,23 @@ template <typename Lyt, typename WiringReductionLyt>
     }
     return new_coord;
 }
+
+/**
+ * Collects incoming signals (including output pin indices) for a given tile.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt Layout to query.
+ * @param t Tile whose incoming signals are requested.
+ * @return All incoming signals of `t`.
+ */
+template <typename Lyt>
+[[nodiscard]] std::vector<mockturtle::signal<Lyt>> collect_incoming_signals(const Lyt& lyt, const tile<Lyt>& t) noexcept
+{
+    std::vector<mockturtle::signal<Lyt>> incoming{};
+    incoming.reserve(lyt.fanin_size(lyt.get_node(t)));
+    lyt.foreach_fanin(lyt.get_node(t), [&incoming](const auto& fin) { incoming.push_back(fin); });
+    return incoming;
+}
 /**
  * This function adjusts the tile and gates in the layout after deleting wires, specifically when traversing
  * in the horizontal search direction. It updates the signals and coordinates accordingly based on the offset matrix.
@@ -810,25 +827,29 @@ template <typename Lyt, typename WiringReductionLyt>
  * @param signals Vector to store signals for the adjusted coordinates.
  */
 template <typename Lyt, typename LytCpy>
-void adjust_tile_horizontal_search_dir(Lyt& lyt, const LytCpy& layout_copy, tile<Lyt>& fanin,
+void adjust_tile_horizontal_search_dir(Lyt& lyt, const LytCpy& layout_copy, mockturtle::signal<Lyt>& fanin,
                                        const offset_matrix& offset_mtrx, const tile<Lyt>& old_coord,
                                        const uint64_t& offset, std::vector<mockturtle::signal<Lyt>>& signals) noexcept
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
     static_assert(is_cartesian_layout_v<Lyt>, "Lyt is not a Cartesian layout");
 
-    if (fanin.y == old_coord.y)
+    auto fanin_tile = static_cast<tile<Lyt>>(fanin);
+
+    if (fanin_tile.y == old_coord.y)
     {
-        signals.push_back(lyt.make_signal(lyt.get_node({fanin.x, fanin.y - offset, fanin.z})));
+        signals.push_back(
+            lyt.make_signal(lyt.get_node({fanin_tile.x, fanin_tile.y - offset, fanin_tile.z}), fanin.output));
     }
     else
     {
         bool traversing_deleted_wires = false;
 
         // check if traversing through deleted wires
-        if (offset_mtrx[fanin.y + 1][fanin.x] != offset_mtrx[fanin.y][fanin.x])
+        if (offset_mtrx[fanin_tile.y + 1][fanin_tile.x] != offset_mtrx[fanin_tile.y][fanin_tile.x])
         {
-            fanin                    = {fanin.x, fanin.y, 0};
+            fanin_tile               = {fanin_tile.x, fanin_tile.y, 0};
+            fanin.index              = static_cast<uint64_t>(fanin_tile);
             traversing_deleted_wires = true;
         }
 
@@ -840,21 +861,31 @@ void adjust_tile_horizontal_search_dir(Lyt& lyt, const LytCpy& layout_copy, tile
             for (uint64_t o = 0; o < offset; ++o)
             {
                 offset_offset++;
-                if ((fanin.y > 0) && (offset_mtrx[fanin.y][fanin.x] != offset_mtrx[fanin.y - 1][fanin.x]) &&
-                    (layout_copy.incoming_data_flow(fanin)[0].y != fanin.y))
+                const auto incoming = collect_incoming_signals(layout_copy, fanin_tile);
+                if (incoming.empty())
                 {
-                    fanin = {fanin.x, fanin.y - 1, fanin.z};
+                    break;
+                }
+
+                if ((fanin_tile.y > 0) &&
+                    (offset_mtrx[fanin_tile.y][fanin_tile.x] != offset_mtrx[fanin_tile.y - 1][fanin_tile.x]) &&
+                    (static_cast<tile<Lyt>>(incoming[0]).y != fanin_tile.y))
+                {
+                    fanin_tile  = {fanin_tile.x, fanin_tile.y - 1, fanin_tile.z};
+                    fanin.index = static_cast<uint64_t>(fanin_tile);
                 }
                 else
                 {
-                    fanin = layout_copy.incoming_data_flow(fanin)[0];
+                    fanin = incoming[0];
                     break;
                 }
             }
         }
 
+        fanin_tile = static_cast<tile<Lyt>>(fanin);
         // create signals for the new coordinates
-        signals.push_back(lyt.make_signal(lyt.get_node({fanin.x, fanin.y - offset + offset_offset, fanin.z})));
+        signals.push_back(lyt.make_signal(
+            lyt.get_node({fanin_tile.x, fanin_tile.y - offset + offset_offset, fanin_tile.z}), fanin.output));
     }
 }
 /**
@@ -872,25 +903,29 @@ void adjust_tile_horizontal_search_dir(Lyt& lyt, const LytCpy& layout_copy, tile
  * @param signals Vector to store signals for the adjusted coordinates.
  */
 template <typename Lyt, typename LytCpy>
-void adjust_tile_vertical_search_dir(Lyt& lyt, const LytCpy& layout_copy, tile<Lyt>& fanin,
+void adjust_tile_vertical_search_dir(Lyt& lyt, const LytCpy& layout_copy, mockturtle::signal<Lyt>& fanin,
                                      const offset_matrix& offset_mtrx, const tile<Lyt>& old_coord,
                                      const uint64_t offset, std::vector<mockturtle::signal<Lyt>>& signals) noexcept
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
     static_assert(is_cartesian_layout_v<Lyt>, "Lyt is not a Cartesian layout");
 
-    if (fanin.x == old_coord.x)
+    auto fanin_tile = static_cast<tile<Lyt>>(fanin);
+
+    if (fanin_tile.x == old_coord.x)
     {
-        signals.push_back(lyt.make_signal(lyt.get_node({fanin.x - offset, fanin.y, fanin.z})));
+        signals.push_back(
+            lyt.make_signal(lyt.get_node({fanin_tile.x - offset, fanin_tile.y, fanin_tile.z}), fanin.output));
     }
     else
     {
         bool traversing_deleted_wires = false;
 
         // check if traversing through deleted wires
-        if (offset_mtrx[fanin.y][fanin.x + 1] != offset_mtrx[fanin.y][fanin.x])
+        if (offset_mtrx[fanin_tile.y][fanin_tile.x + 1] != offset_mtrx[fanin_tile.y][fanin_tile.x])
         {
-            fanin                    = {fanin.x, fanin.y, 0};
+            fanin_tile               = {fanin_tile.x, fanin_tile.y, 0};
+            fanin.index              = static_cast<uint64_t>(fanin_tile);
             traversing_deleted_wires = true;
         }
 
@@ -902,21 +937,31 @@ void adjust_tile_vertical_search_dir(Lyt& lyt, const LytCpy& layout_copy, tile<L
             for (uint64_t o = 0; o < offset; ++o)
             {
                 excess_offset++;
-                if ((fanin.x > 0) && (offset_mtrx[fanin.y][fanin.x] != offset_mtrx[fanin.y][fanin.x - 1]) &&
-                    (layout_copy.incoming_data_flow(fanin)[0].x != fanin.x))
+                const auto incoming = collect_incoming_signals(layout_copy, fanin_tile);
+                if (incoming.empty())
                 {
-                    fanin = {fanin.x - 1, fanin.y, fanin.z};
+                    break;
+                }
+
+                if ((fanin_tile.x > 0) &&
+                    (offset_mtrx[fanin_tile.y][fanin_tile.x] != offset_mtrx[fanin_tile.y][fanin_tile.x - 1]) &&
+                    (static_cast<tile<Lyt>>(incoming[0]).x != fanin_tile.x))
+                {
+                    fanin_tile  = {fanin_tile.x - 1, fanin_tile.y, fanin_tile.z};
+                    fanin.index = static_cast<uint64_t>(fanin_tile);
                 }
                 else
                 {
-                    fanin = layout_copy.incoming_data_flow(fanin)[0];
+                    fanin = incoming[0];
                     break;
                 }
             }
         }
 
+        fanin_tile = static_cast<tile<Lyt>>(fanin);
         // create signals for the new coordinates
-        signals.push_back(lyt.make_signal(lyt.get_node({fanin.x - offset + excess_offset, fanin.y, fanin.z})));
+        signals.push_back(lyt.make_signal(
+            lyt.get_node({fanin_tile.x - offset + excess_offset, fanin_tile.y, fanin_tile.z}), fanin.output));
     }
 }
 /**
@@ -957,7 +1002,7 @@ void adjust_tile(Lyt& lyt, const LytCpy& layout_copy, const WiringReductionLyt& 
             layout_copy.get_node(old_coord),
             [&lyt, &signals, &offset, &old_coord, &layout_copy, &offset_mtrx, &wiring_reduction_lyt](const auto& fi)
             {
-                auto fanin = static_cast<tile<Lyt>>(fi);
+                auto fanin = fi;
 
                 if (wiring_reduction_lyt.get_search_direction() == search_direction::HORIZONTAL)
                 {

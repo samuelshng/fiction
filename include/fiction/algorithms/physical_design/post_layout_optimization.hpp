@@ -143,14 +143,29 @@ template <typename Lyt>
 struct fanin_fanout_data
 {
     /**
-     * This vector holds the layout coordinates of all fan-in connections to the gate.
+     * Represents one fan-out target and the output pin of the moved gate that feeds this target.
      */
-    std::vector<tile<Lyt>> fanins;
+    struct fanout_target
+    {
+        /**
+         * Tile position of the fan-out target.
+         */
+        tile<Lyt> target{};
+        /**
+         * Output pin index used at the moved gate to feed the fan-out target.
+         */
+        uint8_t source_output{0u};
+    };
 
     /**
-     * This vector holds the layout coordinates of all fan-out connections from the gate.
+     * This vector holds all fan-in signals to the gate including output pin indices.
      */
-    std::vector<tile<Lyt>> fanouts;
+    std::vector<mockturtle::signal<Lyt>> fanins;
+
+    /**
+     * This vector holds all fan-out targets and the output pin used to drive them.
+     */
+    std::vector<fanout_target> fanouts;
 
     /**
      * During the gate relocation process, this vector holds temporary layout coordinates that need to be cleared or
@@ -574,8 +589,8 @@ class post_layout_optimization_impl
             static_cast<double>(area_before - area_after) / static_cast<double>(area_before) * 100.0;
         pst.area_improvement = std::round(area_percentage_difference * 100) / 100.0;
 
-        pst.num_wires_after     = plyt.num_wires() - plyt.num_pis() - plyt.num_pos();
-        pst.num_crossings_after = plyt.num_crossings();
+        pst.num_wires_after     = layout.num_wires() - layout.num_pis() - layout.num_pos();
+        pst.num_crossings_after = layout.num_crossings();
     }
 
   private:
@@ -630,29 +645,49 @@ class post_layout_optimization_impl
     {
         phmap::parallel_flat_hash_set<tile<ObstrLyt>> moved_tiles{};
         moved_tiles.reserve(deleted_coords.size());
-        for (const auto& tile : deleted_coords)
+        for (const auto& deleted_tile : deleted_coords)
         {
-            const auto ground = lyt.below(tile);
-            const auto above  = lyt.above(tile);
+            const auto ground = lyt.below(deleted_tile);
+            const auto above  = lyt.above(deleted_tile);
 
             if (lyt.is_empty_tile(ground) && lyt.is_wire_tile(above))
             {
-                const auto incoming_tile = lyt.incoming_data_flow(above).front();
-                const auto outgoing_tile = lyt.outgoing_data_flow(above).front();
+                std::vector<mockturtle::signal<ObstrLyt>> incoming_signals{};
+                incoming_signals.reserve(1);
+                lyt.foreach_fanin(lyt.get_node(above),
+                                  [&incoming_signals](const auto& fin) { incoming_signals.push_back(fin); });
+                if (incoming_signals.empty())
+                {
+                    continue;
+                }
+
+                const auto incoming_signal = incoming_signals.front();
+                const auto outgoing_tiles  = lyt.outgoing_data_flow(above);
+                if (outgoing_tiles.empty())
+                {
+                    continue;
+                }
+                const auto outgoing_tile = outgoing_tiles.front();
 
                 // move wire from z=1 to z=0
-                lyt.move_node(lyt.get_node(above), ground, {lyt.make_signal(lyt.get_node(incoming_tile))});
+                lyt.move_node(lyt.get_node(above), ground, {incoming_signal});
 
                 // if outgoing tile has other incoming signals (e.g. AND), update children
-                if (const auto in_flow = lyt.incoming_data_flow(outgoing_tile); !in_flow.empty())
-                {
-                    const auto front = in_flow.front();
+                std::vector<mockturtle::signal<ObstrLyt>> in_flow{};
+                in_flow.reserve(lyt.fanin_size(lyt.get_node(outgoing_tile)));
+                lyt.foreach_fanin(lyt.get_node(outgoing_tile), [&in_flow](const auto& fin) { in_flow.push_back(fin); });
 
-                    if (std::find(deleted_coords.cbegin(), deleted_coords.cend(), front) == deleted_coords.cend() ||
-                        std::find(moved_tiles.cbegin(), moved_tiles.cend(), front) != moved_tiles.cend())
+                if (!in_flow.empty())
+                {
+                    const auto front      = in_flow.front();
+                    const auto front_tile = static_cast<tile<ObstrLyt>>(front);
+
+                    if (std::find(deleted_coords.cbegin(), deleted_coords.cend(), front_tile) ==
+                            deleted_coords.cend() ||
+                        std::find(moved_tiles.cbegin(), moved_tiles.cend(), front_tile) != moved_tiles.cend())
                     {
                         lyt.move_node(lyt.get_node(outgoing_tile), outgoing_tile,
-                                      {lyt.make_signal(lyt.get_node(ground)), lyt.make_signal(lyt.get_node(front))});
+                                      {lyt.make_signal(lyt.get_node(ground)), front});
                     }
                 }
                 // otherwise, the wire is the only incoming signal
@@ -668,7 +703,7 @@ class post_layout_optimization_impl
                     lyt.clear_obstructed_coordinate(above);
                 }
 
-                moved_tiles.insert(tile);
+                moved_tiles.insert(deleted_tile);
             }
         }
     }
@@ -715,103 +750,138 @@ class post_layout_optimization_impl
     {
         fanin_fanout_data<ObstrLyt> ffd{};
 
-        auto fanin1  = tile<ObstrLyt>{};
-        auto fanin2  = tile<ObstrLyt>{};
-        auto fanout1 = tile<ObstrLyt>{};
-        auto fanout2 = tile<ObstrLyt>{};
+        mockturtle::signal<ObstrLyt> fanin1{};
+        mockturtle::signal<ObstrLyt> fanin2{};
+        bool                         has_fanin1 = false;
+        bool                         has_fanin2 = false;
+
+        typename fanin_fanout_data<ObstrLyt>::fanout_target fanout1{};
+        typename fanin_fanout_data<ObstrLyt>::fanout_target fanout2{};
+        bool                                                has_fanout1 = false;
+        bool                                                has_fanout2 = false;
 
         phmap::parallel_flat_hash_set<tile<ObstrLyt>> fanins_set{};
         fanins_set.reserve(lyt.num_wires() + lyt.num_gates() - 2);
         phmap::parallel_flat_hash_set<tile<ObstrLyt>> fanouts_set{};
         fanouts_set.reserve(lyt.num_wires() + lyt.num_gates() - 2);
 
-        lyt.foreach_fanin(lyt.get_node(op),
-                          [&lyt, &fanins_set, &op, &fanin1, &fanin2, &ffd, this](const auto& fin)
-                          {
-                              auto fanin = static_cast<tile<ObstrLyt>>(fin);
-                              if (fanins_set.find(fanin) == fanins_set.cend())
-                              {
+        lyt.foreach_fanin(
+            lyt.get_node(op),
+            [&lyt, &fanins_set, &op, &fanin1, &fanin2, &has_fanin1, &has_fanin2, &ffd, this](const auto& fin)
+            {
+                auto fanin         = static_cast<tile<ObstrLyt>>(fin);
+                auto source_signal = fin;
 
-                                  // add fanin to the respective route
-                                  add_fanin_to_route(op, fanins_set.empty(), ffd);
-                                  add_fanin_to_route(fanin, fanins_set.empty(), ffd);
+                if (fanins_set.find(fanin) == fanins_set.cend())
+                {
+                    // add fanin to the respective route
+                    add_fanin_to_route(op, fanins_set.empty(), ffd);
+                    add_fanin_to_route(fanin, fanins_set.empty(), ffd);
 
-                                  // continue until gate or primary input (PI) is found
-                                  while (lyt.is_wire_tile(fanin) && lyt.fanout_size(lyt.get_node(fanin)) == 1 &&
-                                         !lyt.is_pi_tile(fanin))
-                                  {
-                                      ffd.to_clear.push_back(fanin);
-                                      fanin = lyt.incoming_data_flow(fanin).front();
+                    // continue until gate or primary input (PI) is found
+                    while (lyt.is_wire_tile(fanin) && lyt.fanout_size(lyt.get_node(fanin)) == 1 &&
+                           !lyt.is_pi_tile(fanin))
+                    {
+                        ffd.to_clear.push_back(fanin);
+                        std::vector<mockturtle::signal<ObstrLyt>> incoming_signals{};
+                        incoming_signals.reserve(1);
+                        lyt.foreach_fanin(lyt.get_node(fanin),
+                                          [&incoming_signals](const auto& in) { incoming_signals.push_back(in); });
+                        if (incoming_signals.empty())
+                        {
+                            break;
+                        }
+                        source_signal = incoming_signals.front();
+                        fanin         = static_cast<tile<ObstrLyt>>(source_signal);
 
-                                      // add fanin to the respective route
-                                      add_fanin_to_route(fanin, fanins_set.empty(), ffd);
-                                  }
+                        // add fanin to the respective route
+                        add_fanin_to_route(fanin, fanins_set.empty(), ffd);
+                    }
 
-                                  // set the respective fanin based on the route
-                                  if (fanins_set.empty())
-                                  {
-                                      fanin1 = fanin;
-                                  }
-                                  else
-                                  {
-                                      fanin2 = fanin;
-                                  }
+                    source_signal.index = static_cast<uint64_t>(fanin);
 
-                                  fanins_set.insert(fanin);
-                              }
-                          });
+                    // set the respective fanin based on the route
+                    if (fanins_set.empty())
+                    {
+                        fanin1     = source_signal;
+                        has_fanin1 = true;
+                    }
+                    else
+                    {
+                        fanin2     = source_signal;
+                        has_fanin2 = true;
+                    }
+
+                    fanins_set.insert(fanin);
+                }
+            });
         // same for fanouts
-        lyt.foreach_fanout(lyt.get_node(op),
-                           [&lyt, &fanouts_set, &op, &fanout1, &fanout2, &ffd, this](const auto& fout)
-                           {
-                               tile<ObstrLyt> fanout = lyt.get_tile(fout);
+        lyt.foreach_fanout(
+            lyt.get_node(op),
+            [&lyt, &fanouts_set, &op, &fanout1, &fanout2, &has_fanout1, &has_fanout2, &ffd, this](const auto& fout)
+            {
+                tile<ObstrLyt> fanout = lyt.get_tile(fout);
+                uint8_t        source_output{0u};
 
-                               if (fanouts_set.find(fanout) == fanouts_set.cend())
-                               {
+                lyt.foreach_fanin(lyt.get_node(fanout),
+                                  [&source_output, &op](const auto& fin) -> bool
+                                  {
+                                      if (static_cast<tile<ObstrLyt>>(fin) == op)
+                                      {
+                                          source_output = fin.output;
+                                          return false;
+                                      }
+                                      return true;
+                                  });
 
-                                   // add fanout to the respective route
-                                   add_fanout_to_route(op, fanouts_set.empty(), ffd);
-                                   add_fanout_to_route(fanout, fanouts_set.empty(), ffd);
+                if (fanouts_set.find(fanout) == fanouts_set.cend())
+                {
 
-                                   // continue until gate or primary output (PO) is found
-                                   while (lyt.is_wire_tile(fanout) && lyt.fanout_size(lyt.get_node(fanout)) != 0 &&
-                                          lyt.fanout_size(lyt.get_node(fanout)) != 2)
-                                   {
-                                       ffd.to_clear.push_back(fanout);
-                                       fanout = lyt.outgoing_data_flow(fanout).front();
+                    // add fanout to the respective route
+                    add_fanout_to_route(op, fanouts_set.empty(), ffd);
+                    add_fanout_to_route(fanout, fanouts_set.empty(), ffd);
 
-                                       // add fanout to the respective route
-                                       add_fanout_to_route(fanout, fanouts_set.empty(), ffd);
-                                   }
+                    // continue until gate or primary output (PO) is found
+                    while (lyt.is_wire_tile(fanout) && lyt.fanout_size(lyt.get_node(fanout)) != 0 &&
+                           lyt.fanout_size(lyt.get_node(fanout)) != 2)
+                    {
+                        ffd.to_clear.push_back(fanout);
+                        fanout = lyt.outgoing_data_flow(fanout).front();
 
-                                   // set the respective fanout based on the route
-                                   if (fanouts_set.empty())
-                                   {
-                                       fanout1 = fanout;
-                                   }
-                                   else
-                                   {
-                                       fanout2 = fanout;
-                                   }
+                        // add fanout to the respective route
+                        add_fanout_to_route(fanout, fanouts_set.empty(), ffd);
+                    }
 
-                                   fanouts_set.insert(fanout);
-                               }
-                           });
+                    // set the respective fanout based on the route
+                    if (fanouts_set.empty())
+                    {
+                        fanout1     = {fanout, source_output};
+                        has_fanout1 = true;
+                    }
+                    else
+                    {
+                        fanout2     = {fanout, source_output};
+                        has_fanout2 = true;
+                    }
+
+                    fanouts_set.insert(fanout);
+                }
+            });
 
         // add fanins and fanouts if existing
-        if (!fanin1.is_dead())
+        if (has_fanin1)
         {
             ffd.fanins.push_back(fanin1);
         }
-        if (!fanin2.is_dead())
+        if (has_fanin2)
         {
             ffd.fanins.push_back(fanin2);
         }
-        if (!fanout1.is_dead())
+        if (has_fanout1)
         {
             ffd.fanouts.push_back(fanout1);
         }
-        if (!fanout2.is_dead())
+        if (has_fanout2)
         {
             ffd.fanouts.push_back(fanout2);
         }
@@ -878,9 +948,9 @@ class post_layout_optimization_impl
      *         `false` if the relocation resulted in no movement (i.e., `new_pos` is the same as `old_pos`).
      */
     bool check_new_position(ObstrLyt& lyt, const tile<ObstrLyt>& new_pos, uint64_t& num_gate_relocations,
-                            tile<ObstrLyt>& current_pos, const std::vector<tile<Lyt>>& fanins,
-                            const std::vector<tile<Lyt>>& fanouts, bool& moved_gate,
-                            const tile<ObstrLyt>& old_pos) noexcept
+                            tile<ObstrLyt>& current_pos, const std::vector<mockturtle::signal<ObstrLyt>>& fanins,
+                            const std::vector<typename fanin_fanout_data<ObstrLyt>::fanout_target>& fanouts,
+                            bool& moved_gate, const tile<ObstrLyt>& old_pos) noexcept
     {
         if (lyt.is_empty_tile(new_pos) && lyt.is_empty_tile({new_pos.x, new_pos.y, 1}))
         {
@@ -898,22 +968,24 @@ class post_layout_optimization_impl
             // get paths for fanins and fanouts
             if (!fanins.empty())
             {
-                new_path_from_fanin_1_to_gate = get_path_and_obstruct(lyt, fanins[0], new_pos);
+                new_path_from_fanin_1_to_gate =
+                    get_path_and_obstruct(lyt, static_cast<tile<ObstrLyt>>(fanins[0]), new_pos);
             }
 
             if (fanins.size() == 2)
             {
-                new_path_from_fanin_2_to_gate = get_path_and_obstruct(lyt, fanins[1], new_pos);
+                new_path_from_fanin_2_to_gate =
+                    get_path_and_obstruct(lyt, static_cast<tile<ObstrLyt>>(fanins[1]), new_pos);
             }
 
             if (!fanouts.empty())
             {
-                new_path_from_gate_to_fanout_1 = get_path_and_obstruct(lyt, new_pos, fanouts[0]);
+                new_path_from_gate_to_fanout_1 = get_path_and_obstruct(lyt, new_pos, fanouts[0].target);
             }
 
             if (fanouts.size() == 2)
             {
-                new_path_from_gate_to_fanout_2 = get_path_and_obstruct(lyt, new_pos, fanouts[1]);
+                new_path_from_gate_to_fanout_2 = get_path_and_obstruct(lyt, new_pos, fanouts[1].target);
             }
 
             if (!(!fanins.empty() && new_path_from_fanin_1_to_gate.empty()) &&
@@ -924,47 +996,49 @@ class post_layout_optimization_impl
                 for (const auto& path : {new_path_from_fanin_1_to_gate, new_path_from_fanin_2_to_gate,
                                          new_path_from_gate_to_fanout_1, new_path_from_gate_to_fanout_2})
                 {
-                    if (!path.empty())
+                    for (const auto& tile : path)
                     {
-                        route_path(lyt, path);
-                        for (const auto& tile : path)
-                        {
-                            lyt.obstruct_coordinate(tile);
-                        }
+                        lyt.obstruct_coordinate(tile);
                     }
+                }
+
+                if (!new_path_from_fanin_1_to_gate.empty())
+                {
+                    route_path(lyt, fanins[0], new_path_from_fanin_1_to_gate);
+                }
+                if (!new_path_from_fanin_2_to_gate.empty() && fanins.size() == 2)
+                {
+                    route_path(lyt, fanins[1], new_path_from_fanin_2_to_gate);
+                }
+                if (!new_path_from_gate_to_fanout_1.empty())
+                {
+                    route_path(lyt, lyt.make_signal(lyt.get_node(new_pos), fanouts[0].source_output),
+                               new_path_from_gate_to_fanout_1);
+                }
+                if (!new_path_from_gate_to_fanout_2.empty() && fanouts.size() == 2)
+                {
+                    route_path(lyt, lyt.make_signal(lyt.get_node(new_pos), fanouts[1].source_output),
+                               new_path_from_gate_to_fanout_2);
                 }
 
                 moved_gate = true;
 
-                // update children based on number of fanins
-                if (fanins.size() == 2)
-                {
-                    lyt.move_node(lyt.get_node(new_pos), new_pos,
-                                  {
-                                      lyt.make_signal(lyt.get_node(new_path_from_fanin_1_to_gate.end()[-2])),
-                                      lyt.make_signal(lyt.get_node(new_path_from_fanin_2_to_gate.end()[-2])),
-                                  });
-                }
-                else if (fanins.size() == 1)
-                {
-                    lyt.move_node(lyt.get_node(new_pos), new_pos,
-                                  {lyt.make_signal(lyt.get_node(new_path_from_fanin_1_to_gate.end()[-2]))});
-                }
+                // update children of moved gate to preserve exact source output pins.
+                std::vector<mockturtle::signal<ObstrLyt>> moved_gate_signals{};
+                moved_gate_signals.reserve(lyt.fanin_size(lyt.get_node(new_pos)));
+                lyt.foreach_fanin(lyt.get_node(new_pos),
+                                  [&moved_gate_signals](const auto& fin) { moved_gate_signals.push_back(fin); });
+                lyt.move_node(lyt.get_node(new_pos), new_pos, moved_gate_signals);
 
                 // update children of fanouts
                 for (const auto& fanout : fanouts)
                 {
                     std::vector<mockturtle::signal<ObstrLyt>> signals{};
-                    signals.reserve(lyt.fanin_size(lyt.get_node(fanout)));
+                    signals.reserve(lyt.fanin_size(lyt.get_node(fanout.target)));
 
-                    lyt.foreach_fanin(lyt.get_node(fanout),
-                                      [&lyt, &signals](const auto& i)
-                                      {
-                                          auto fout = static_cast<tile<ObstrLyt>>(i);
-                                          signals.push_back(lyt.make_signal(lyt.get_node(fout)));
-                                      });
+                    lyt.foreach_fanin(lyt.get_node(fanout.target), [&signals](const auto& i) { signals.push_back(i); });
 
-                    lyt.move_node(lyt.get_node(fanout), fanout, signals);
+                    lyt.move_node(lyt.get_node(fanout.target), fanout.target, signals);
                 }
 
                 if (new_pos == old_pos)
@@ -1003,24 +1077,42 @@ class post_layout_optimization_impl
      * @param old_path_from_gate_to_fanout_2 The original routing path from the gate to the second fan-out (if exists).
      * @param current_pos Current position of the gate after relocation attempt.
      * @param old_pos Original position of the gate before relocation attempt.
-     * @param fanouts Vector of fanout tiles connected to the gate.
+     * @param fanins Vector of fanin signals connected to the gate.
+     * @param fanouts Vector of fanout targets connected to the gate.
      */
-    void restore_original_wiring(ObstrLyt& lyt, const layout_coordinate_path<ObstrLyt> old_path_from_fanin_1_to_gate,
-                                 const layout_coordinate_path<ObstrLyt> old_path_from_fanin_2_to_gate,
-                                 const layout_coordinate_path<ObstrLyt> old_path_from_gate_to_fanout_1,
-                                 const layout_coordinate_path<ObstrLyt> old_path_from_gate_to_fanout_2,
-                                 const tile<ObstrLyt>& current_pos, const tile<ObstrLyt>& old_pos,
-                                 const std::vector<tile<Lyt>> fanouts) noexcept
+    void
+    restore_original_wiring(ObstrLyt& lyt, const layout_coordinate_path<ObstrLyt> old_path_from_fanin_1_to_gate,
+                            const layout_coordinate_path<ObstrLyt> old_path_from_fanin_2_to_gate,
+                            const layout_coordinate_path<ObstrLyt> old_path_from_gate_to_fanout_1,
+                            const layout_coordinate_path<ObstrLyt> old_path_from_gate_to_fanout_2,
+                            const tile<ObstrLyt>& current_pos, const tile<ObstrLyt>& old_pos,
+                            const std::vector<mockturtle::signal<ObstrLyt>>&                        fanins,
+                            const std::vector<typename fanin_fanout_data<ObstrLyt>::fanout_target>& fanouts) noexcept
     {
         lyt.move_node(lyt.get_node(current_pos), old_pos, {});
+
+        if (!old_path_from_fanin_1_to_gate.empty() && !fanins.empty())
+        {
+            route_path(lyt, fanins[0], old_path_from_fanin_1_to_gate);
+        }
+        if (!old_path_from_fanin_2_to_gate.empty() && fanins.size() == 2)
+        {
+            route_path(lyt, fanins[1], old_path_from_fanin_2_to_gate);
+        }
+        if (!old_path_from_gate_to_fanout_1.empty() && !fanouts.empty())
+        {
+            route_path(lyt, lyt.make_signal(lyt.get_node(old_pos), fanouts[0].source_output),
+                       old_path_from_gate_to_fanout_1);
+        }
+        if (!old_path_from_gate_to_fanout_2.empty() && fanouts.size() == 2)
+        {
+            route_path(lyt, lyt.make_signal(lyt.get_node(old_pos), fanouts[1].source_output),
+                       old_path_from_gate_to_fanout_2);
+        }
 
         for (const auto& r : {old_path_from_fanin_1_to_gate, old_path_from_fanin_2_to_gate,
                               old_path_from_gate_to_fanout_1, old_path_from_gate_to_fanout_2})
         {
-            if (!r.empty())
-            {
-                route_path<ObstrLyt, layout_coordinate_path<ObstrLyt>>(lyt, r);
-            }
             for (const auto& t : r)
             {
                 lyt.obstruct_coordinate(t);
@@ -1037,12 +1129,7 @@ class post_layout_optimization_impl
         std::vector<mockturtle::signal<ObstrLyt>> signals{};
         signals.reserve(lyt.fanin_size(lyt.get_node(old_pos)));
 
-        lyt.foreach_fanin(lyt.get_node(old_pos),
-                          [&lyt, &signals](const auto& i)
-                          {
-                              auto fanin = static_cast<tile<ObstrLyt>>(i);
-                              signals.push_back(lyt.make_signal(lyt.get_node(fanin)));
-                          });
+        lyt.foreach_fanin(lyt.get_node(old_pos), [&signals](const auto& i) { signals.push_back(i); });
 
         lyt.move_node(lyt.get_node(old_pos), old_pos, signals);
 
@@ -1050,16 +1137,12 @@ class post_layout_optimization_impl
         for (const auto& fanout : fanouts)
         {
             std::vector<mockturtle::signal<ObstrLyt>> fout_signals{};
-            fout_signals.reserve(lyt.fanin_size(lyt.get_node(fanout)));
+            fout_signals.reserve(lyt.fanin_size(lyt.get_node(fanout.target)));
 
-            lyt.foreach_fanin(lyt.get_node(fanout),
-                              [&lyt, &fout_signals](const auto& i)
-                              {
-                                  auto fout = static_cast<tile<ObstrLyt>>(i);
-                                  fout_signals.push_back(lyt.make_signal(lyt.get_node(fout)));
-                              });
+            lyt.foreach_fanin(lyt.get_node(fanout.target),
+                              [&fout_signals](const auto& i) { fout_signals.push_back(i); });
 
-            lyt.move_node(lyt.get_node(fanout), fanout, fout_signals);
+            lyt.move_node(lyt.get_node(fanout.target), fanout.target, fout_signals);
         }
     }
     /**
@@ -1089,12 +1172,12 @@ class post_layout_optimization_impl
         // determine minimum coordinates for new placements
         if (!fanins.empty())
         {
-            min_x =
-                std::max_element(fanins.cbegin(), fanins.cend(), [](const auto& a, const auto& b) { return a.x < b.x; })
-                    ->x;
-            min_y =
-                std::max_element(fanins.cbegin(), fanins.cend(), [](const auto& a, const auto& b) { return a.y < b.y; })
-                    ->y;
+            for (const auto& fanin : fanins)
+            {
+                const auto fanin_tile = static_cast<tile<ObstrLyt>>(fanin);
+                min_x                 = std::max(min_x, fanin_tile.x);
+                min_y                 = std::max(min_y, fanin_tile.y);
+            }
         }
 
         const auto max_x        = old_pos.x;
@@ -1106,12 +1189,20 @@ class post_layout_optimization_impl
         // if gate is directly connected to one of its fanins, no improvement is possible
         for (const auto& fanin : fanins)
         {
-            for (const auto& i : lyt.incoming_data_flow(old_pos))
+            bool has_direct_connection = false;
+            lyt.foreach_fanin(lyt.get_node(old_pos),
+                              [&fanin, &has_direct_connection](const auto& i) -> bool
+                              {
+                                  if (i == fanin)
+                                  {
+                                      has_direct_connection = true;
+                                      return false;
+                                  }
+                                  return true;
+                              });
+            if (has_direct_connection)
             {
-                if (i == fanin)
-                {
-                    return false;
-                }
+                return false;
             }
         }
 
@@ -1131,17 +1222,17 @@ class post_layout_optimization_impl
         {
             std::vector<mockturtle::signal<ObstrLyt>> fins{};
             fins.reserve(2);
-            lyt.foreach_fanin(lyt.get_node(fanout),
-                              [&lyt, &fins, &old_pos](const auto& i)
+            lyt.foreach_fanin(lyt.get_node(fanout.target),
+                              [&fins, &old_pos](const auto& i)
                               {
                                   auto fout = static_cast<tile<ObstrLyt>>(i);
                                   if (fout != old_pos)
                                   {
-                                      fins.push_back(lyt.make_signal(lyt.get_node(fout)));
+                                      fins.push_back(i);
                                   }
                               });
 
-            lyt.move_node(lyt.get_node(fanout), fanout, fins);
+            lyt.move_node(lyt.get_node(fanout.target), fanout.target, fins);
         }
 
         // remove children of gate to be moved
@@ -1197,7 +1288,7 @@ class post_layout_optimization_impl
         {
             restore_original_wiring(lyt, old_path_from_fanin_1_to_gate, old_path_from_fanin_2_to_gate,
                                     old_path_from_gate_to_fanout_1, old_path_from_gate_to_fanout_2, current_pos,
-                                    old_pos, fanouts);
+                                    old_pos, fanins, fanouts);
             return false;
         }
 
