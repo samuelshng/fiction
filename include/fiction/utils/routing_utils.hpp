@@ -25,7 +25,7 @@ namespace fiction
 template <typename Lyt>
 struct routing_objective
 {
-    const coordinate<Lyt> source, target;
+    coordinate<Lyt> source, target;
     /**
      * Equality operator.
      * @tparam OtherLyt Type of other layout.

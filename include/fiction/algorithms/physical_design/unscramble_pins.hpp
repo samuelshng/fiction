@@ -9,6 +9,7 @@
 #include "fiction/traits.hpp"
 #include "fiction/utils/network_utils.hpp"
 #include "fiction/utils/placement_utils.hpp"
+#include "fiction/utils/routing_utils.hpp"
 
 #include <mockturtle/traits.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
@@ -65,6 +66,58 @@ std::vector<tile<Lyt>> determine_pin_coordinates(const Lyt& lyt, const std::vect
     return coords;
 }
 /**
+ * Calculates the horizontal permutation distances for each desired slot.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt The layout.
+ * @param current_permutation The current order of pins (nodes).
+ * @param desired_permutation The desired order of pins (nodes).
+ * @return Vector of horizontal distances per desired slot.
+ */
+template <typename Lyt>
+std::vector<uint32_t> calculate_permutation_distances(const Lyt&                                lyt,
+                                                      const std::vector<mockturtle::node<Lyt>>& current_permutation,
+                                                      const std::vector<mockturtle::node<Lyt>>& desired_permutation)
+{
+    std::vector<uint32_t> distances(desired_permutation.size(), 0u);
+
+    if (desired_permutation.empty() || current_permutation.empty())
+    {
+        return distances;
+    }
+
+    const auto current_coords = determine_pin_coordinates(lyt, current_permutation);
+
+    for (size_t i = 0; i < desired_permutation.size(); ++i)
+    {
+        if (i >= current_coords.size())
+        {
+            break;
+        }
+
+        const auto target_node = desired_permutation[i];
+
+        // Find where this node is currently located
+        const auto it = std::find(current_permutation.cbegin(), current_permutation.cend(), target_node);
+        if (it == current_permutation.cend())
+        {
+            continue;
+        }
+
+        // Current location of the node
+        const auto current_idx  = static_cast<size_t>(std::distance(current_permutation.cbegin(), it));
+        const auto source_coord = current_coords[current_idx];
+
+        // Target x-coordinate is the x-coordinate of the i-th slot (from current_coords[i])
+        const auto target_x = current_coords[i].x;
+
+        distances[i] =
+            static_cast<uint32_t>(std::abs(static_cast<int32_t>(source_coord.x) - static_cast<int32_t>(target_x)));
+    }
+
+    return distances;
+}
+/**
  * Calculates the number of rows required to route the pins from their current locations to the desired permutation
  * slots. Assumes pointy-top hexagonal layout constraints where horizontal movement requires vertical steps (2 rows per
  * 1 column shift).
@@ -84,31 +137,12 @@ uint32_t calculate_rows_needed(const Lyt& lyt, const std::vector<mockturtle::nod
         return 0;
     }
 
-    const auto current_coords = determine_pin_coordinates(lyt, current_permutation);
+    const auto distances = calculate_permutation_distances(lyt, current_permutation, desired_permutation);
 
     uint32_t max_rows = 0;
 
-    for (size_t i = 0; i < desired_permutation.size(); ++i)
+    for (const auto dist : distances)
     {
-        const auto target_node = desired_permutation[i];
-
-        // Find where this node is currently located
-        const auto it = std::find(current_permutation.cbegin(), current_permutation.cend(), target_node);
-        if (it == current_permutation.cend())
-        {
-            continue;
-        }
-
-        // Current location of the node
-        const auto current_idx  = static_cast<size_t>(std::distance(current_permutation.cbegin(), it));
-        const auto source_coord = current_coords[current_idx];
-
-        // Target x-coordinate is the x-coordinate of the i-th slot (from current_coords[i])
-        const auto target_x = current_coords[i].x;
-
-        const auto dist =
-            static_cast<uint32_t>(std::abs(static_cast<int32_t>(source_coord.x) - static_cast<int32_t>(target_x)));
-
         // Hexagonal constraint: 2 rows per 1 unit of horizontal distance.
         const uint32_t rows = dist * 2;
 
@@ -116,6 +150,81 @@ uint32_t calculate_rows_needed(const Lyt& lyt, const std::vector<mockturtle::nod
     }
 
     return max_rows;
+}
+
+/**
+ * Creates a new layout with space reserved for PI/PO unscrambling rows.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt The original layout.
+ * @param pi_rows Rows reserved for input unscrambling.
+ * @param po_rows Rows reserved for output unscrambling.
+ * @return New layout with extended height and original clocking/name.
+ */
+template <typename Lyt>
+Lyt create_extended_layout(const Lyt& lyt, const uint32_t pi_rows, const uint32_t po_rows)
+{
+    const aspect_ratio<Lyt> new_ar{lyt.x(), lyt.y() + pi_rows + po_rows, lyt.z()};
+    return Lyt{new_ar, lyt.get_clocking_scheme(), lyt.get_layout_name()};
+}
+/**
+ * Places new PIs in the top row and creates routing objectives to their original locations (shifted by pi_rows). The
+ * objectives are sorted by their horizontal permutation distance to prioritize longer routes first.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt The original layout.
+ * @param new_layout The new layout to place PIs in.
+ * @param current_pis The current PI ordering.
+ * @param desired_pis The desired PI ordering.
+ * @param pi_rows Rows reserved for input unscrambling.
+ * @return Routing objectives sorted by permutation distance.
+ */
+template <typename Lyt>
+std::vector<routing_objective<Lyt>>
+create_pi_routing_objectives(const Lyt& lyt, Lyt& new_layout, const std::vector<mockturtle::node<Lyt>>& current_pis,
+                             const std::vector<mockturtle::node<Lyt>>& desired_pis, const uint32_t pi_rows)
+{
+    // Current PI coordinates define the slot x-positions for the desired ordering.
+    const auto current_pi_coords = determine_pin_coordinates(lyt, current_pis);
+    // Precompute horizontal distances to sort objectives by route length.
+    const auto pi_distances = calculate_permutation_distances(lyt, current_pis, desired_pis);
+
+    std::vector<std::pair<uint32_t, routing_objective<Lyt>>> pi_objectives{};
+    pi_objectives.reserve(desired_pis.size());
+
+    for (size_t i = 0; i < desired_pis.size(); ++i)
+    {
+        if (i >= current_pi_coords.size())
+        {
+            break;
+        }
+
+        const auto desired_node = desired_pis[i];
+        const auto slot_x       = current_pi_coords[i].x;
+
+        // Place new PI in the top row of the new layout at the desired x-coordinate.
+        const tile<Lyt> source{slot_x, 0};
+        const auto      pi_name = lyt.get_name(desired_node);
+        new_layout.create_pi(pi_name, source);
+
+        // Route to the original PI coordinate, shifted down by the PI routing rows.
+        const auto      original_coord = lyt.get_tile(desired_node);
+        const tile<Lyt> target{original_coord.x, original_coord.y + pi_rows, original_coord.z};
+
+        pi_objectives.push_back({pi_distances[i], {source, target}});
+    }
+
+    // Sort objectives by distance (descending) to prioritize longer routes first.
+    std::sort(pi_objectives.begin(), pi_objectives.end(),
+              [](const auto& lhs, const auto& rhs) { return lhs.first > rhs.first; });
+
+    // Extract routing objectives from the sorted (distance, objective) pairs.
+    std::vector<routing_objective<Lyt>> pi_routing_objectives{};
+    pi_routing_objectives.reserve(pi_objectives.size());
+    std::transform(pi_objectives.cbegin(), pi_objectives.cend(), std::back_inserter(pi_routing_objectives),
+                   [](const auto& entry) { return entry.second; });
+
+    return pi_routing_objectives;
 }
 
 template <typename Lyt>
@@ -144,13 +253,20 @@ class unscramble_pins_impl
         const uint32_t pi_rows = calculate_rows_needed(layout, current_pis, input_ordering);
         const uint32_t po_rows = calculate_rows_needed(layout, current_pos, output_ordering);
 
+        // 3. Instantiate new layout with extended height
+        auto new_layout = create_extended_layout(layout, pi_rows, po_rows);
+
+        // 4. Place new PIs and create routing objectives to the original PI locations (shifted by pi_rows)
+        [[maybe_unused]] const auto pi_routing_objectives =
+            create_pi_routing_objectives(layout, new_layout, current_pis, input_ordering, pi_rows);
+
         // Placeholder for the rest of the implementation
-        return layout.clone();
+        return layout;
     }
 
   private:
     /**
-     * The layout to unscramble.
+     * The original layout to unscramble.
      */
     const Lyt& layout;
     /**

@@ -209,6 +209,111 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
             }
         }
     }
+
+    SECTION("calculate_permutation_distances")
+    {
+        SECTION("Identity")
+        {
+            const auto distances = detail::calculate_permutation_distances(layout, current_pis, current_pis);
+            REQUIRE(distances.size() == 3);
+            CHECK(distances[0] == 0);
+            CHECK(distances[1] == 0);
+            CHECK(distances[2] == 0);
+        }
+
+        SECTION("Swap")
+        {
+            const std::vector target{layout.get_node(x2), layout.get_node(x1), layout.get_node(x3)};
+            const auto        distances = detail::calculate_permutation_distances(layout, current_pis, target);
+            REQUIRE(distances.size() == 3);
+            CHECK(distances[0] == 2);
+            CHECK(distances[1] == 2);
+            CHECK(distances[2] == 0);
+        }
+
+        SECTION("Empty desired")
+        {
+            const auto distances = detail::calculate_permutation_distances(layout, current_pis, {});
+            CHECK(distances.empty());
+        }
+
+        SECTION("Missing node in current permutation")
+        {
+            const auto        x4 = layout.create_pi("x4", {6, 0});
+            const std::vector target{layout.get_node(x4), layout.get_node(x2), layout.get_node(x3)};
+            const auto        distances = detail::calculate_permutation_distances(layout, current_pis, target);
+            REQUIRE(distances.size() == 3);
+            CHECK(distances[0] == 0);
+            CHECK(distances[1] == 0);
+            CHECK(distances[2] == 0);
+        }
+
+        SECTION("Desired shorter than current")
+        {
+            const std::vector target{layout.get_node(x2), layout.get_node(x1)};
+            const auto        distances = detail::calculate_permutation_distances(layout, current_pis, target);
+            REQUIRE(distances.size() == 2);
+            CHECK(distances[0] == 2);
+            CHECK(distances[1] == 2);
+        }
+    }
+
+    SECTION("create_extended_layout")
+    {
+        const auto new_layout = detail::create_extended_layout(layout, 4, 6);
+        CHECK(new_layout.x() == layout.x());
+        CHECK(new_layout.y() == layout.y() + 10);
+        CHECK(new_layout.z() == layout.z());
+    }
+
+    SECTION("create_pi_routing_objectives")
+    {
+        const std::vector desired{layout.get_node(x2), layout.get_node(x1), layout.get_node(x3)};
+        auto              new_layout = detail::create_extended_layout(layout, 4, 0);
+
+        const auto objectives = detail::create_pi_routing_objectives(layout, new_layout, current_pis, desired, 4);
+
+        REQUIRE(objectives.size() == 3);
+        CHECK(new_layout.num_pis() == 3);
+
+        const auto distance = [](const auto& obj)
+        {
+            return static_cast<uint32_t>(
+                std::abs(static_cast<int32_t>(obj.source.x) - static_cast<int32_t>(obj.target.x)));
+        };
+
+        CHECK(distance(objectives[0]) >= distance(objectives[1]));
+        CHECK(distance(objectives[1]) >= distance(objectives[2]));
+
+        SECTION("Targets shifted by pi_rows")
+        {
+            for (const auto& [source, target] : objectives)
+            {
+                CHECK(target.y >= 4);
+            }
+        }
+    }
+
+    SECTION("create_pi_routing_objectives empty desired")
+    {
+        auto       new_layout = detail::create_extended_layout(layout, 2, 0);
+        const auto objectives = detail::create_pi_routing_objectives(layout, new_layout, current_pis, {}, 2);
+        CHECK(objectives.empty());
+        CHECK(new_layout.num_pis() == 0);
+    }
+
+    SECTION("create_pi_routing_objectives desired shorter")
+    {
+        const std::vector desired{layout.get_node(x2)};
+        auto              new_layout = detail::create_extended_layout(layout, 3, 0);
+
+        const auto objectives = detail::create_pi_routing_objectives(layout, new_layout, current_pis, desired, 3);
+
+        REQUIRE(objectives.size() == 1);
+        CHECK(new_layout.num_pis() == 1);
+        CHECK(objectives[0].source.y == 0);
+        CHECK(objectives[0].target.y >= 3);
+    }
 }
 
 TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
