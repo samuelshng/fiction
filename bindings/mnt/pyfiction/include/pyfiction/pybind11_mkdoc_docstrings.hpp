@@ -5243,6 +5243,24 @@ Parameter ``to_delete``:
 Returns:
     A 2D vector representing the calculated offset matrix.)doc";
 
+static const char *__doc_fiction_detail_calculate_permutation_distances =
+R"doc(Calculates the horizontal permutation distances for each desired slot.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The layout.
+
+Parameter ``current_permutation``:
+    The current order of pins (nodes).
+
+Parameter ``desired_permutation``:
+    The desired order of pins (nodes).
+
+Returns:
+    Vector of horizontal distances per desired slot.)doc";
+
 static const char *__doc_fiction_detail_calculate_rows_needed =
 R"doc(Calculates the number of rows required to route the pins from their
 current locations to the desired permutation slots. Assumes pointy-top
@@ -5945,6 +5963,51 @@ static const char *__doc_fiction_detail_count_gate_types_impl_run = R"doc()doc";
 static const char *__doc_fiction_detail_create_array =
 R"doc(From https://stackoverflow.com/questions/57756557/initializing-a-
 stdarray-with-a-constant-value)doc";
+
+static const char *__doc_fiction_detail_create_extended_layout =
+R"doc(Creates a new layout with space reserved for PI/PO unscrambling rows.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The original layout.
+
+Parameter ``pi_rows``:
+    Rows reserved for input unscrambling.
+
+Parameter ``po_rows``:
+    Rows reserved for output unscrambling.
+
+Returns:
+    New layout with extended height and original clocking/name.)doc";
+
+static const char *__doc_fiction_detail_create_pi_routing_objectives =
+R"doc(Places new PIs in the top row and creates routing objectives to their
+original locations (shifted by pi_rows). The objectives are sorted by
+their horizontal permutation distance to prioritize longer routes
+first.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The original layout.
+
+Parameter ``new_layout``:
+    The new layout to place PIs in.
+
+Parameter ``current_pis``:
+    The current PI ordering.
+
+Parameter ``desired_pis``:
+    The desired PI ordering.
+
+Parameter ``pi_rows``:
+    Rows reserved for input unscrambling.
+
+Returns:
+    Routing objectives sorted by permutation distance.)doc";
 
 static const char *__doc_fiction_detail_create_wiring_reduction_layout =
 R"doc(Create a wiring_reduction_layout suitable for finding excess wiring
@@ -11267,7 +11330,7 @@ static const char *__doc_fiction_detail_topo_view_update_topo = R"doc()doc";
 
 static const char *__doc_fiction_detail_unscramble_pins_impl = R"doc()doc";
 
-static const char *__doc_fiction_detail_unscramble_pins_impl_layout = R"doc(The layout to unscramble.)doc";
+static const char *__doc_fiction_detail_unscramble_pins_impl_layout = R"doc(The original layout to unscramble.)doc";
 
 static const char *__doc_fiction_detail_unscramble_pins_impl_params = R"doc(Parameters for the pin unscrambling algorithm.)doc";
 
