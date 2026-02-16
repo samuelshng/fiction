@@ -11,8 +11,10 @@
 #include <fiction/layouts/gate_level_layout.hpp>
 #include <fiction/layouts/hexagonal_layout.hpp>
 #include <fiction/layouts/tile_based_layout.hpp>
+#include <fiction/utils/debug/network_writer.hpp>
 
 #include <algorithm>
+#include <filesystem>
 #include <vector>
 
 using namespace fiction;
@@ -262,7 +264,7 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         const auto new_layout = detail::create_extended_layout(layout, 4, 6);
         CHECK(new_layout.x() == layout.x());
         CHECK(new_layout.y() == layout.y() + 10);
-        CHECK(new_layout.z() == layout.z());
+        CHECK(new_layout.z() == std::max(layout.z(), static_cast<decltype(layout.z())>(1)));
     }
 
     SECTION("copy_layout_with_offset")
@@ -435,7 +437,7 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         const auto distance = [](const auto& obj)
         {
             return static_cast<uint32_t>(
-                std::abs(static_cast<int32_t>(obj.source.x) - static_cast<int32_t>(obj.target.x)));
+                std::abs(static_cast<int32_t>(obj.objective.source.x) - static_cast<int32_t>(obj.objective.target.x)));
         };
 
         CHECK(distance(objectives[0]) >= distance(objectives[1]));
@@ -443,9 +445,9 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
 
         SECTION("Targets shifted by pi_rows")
         {
-            for (const auto& [source, target] : objectives)
+            for (const auto& item : objectives)
             {
-                CHECK(target.y >= 4);
+                CHECK(item.objective.target.y >= 4);
             }
         }
     }
@@ -467,8 +469,79 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
 
         REQUIRE(objectives.size() == 1);
         CHECK(new_layout.num_pis() == 1);
-        CHECK(objectives[0].source.y == 0);
-        CHECK(objectives[0].target.y >= 3);
+        CHECK(objectives[0].objective.source.y == 0);
+        CHECK(objectives[0].objective.target.y >= 3);
+    }
+
+    SECTION("create_po_routing_objectives")
+    {
+        const std::vector desired{layout.get_node(po2), layout.get_node(po1), layout.get_node(po3)};
+        auto              new_layout = detail::create_extended_layout(layout, 2, 4);
+
+        detail::copy_layout_with_offset(layout, new_layout, 2);
+
+        const auto objectives = detail::create_po_routing_objectives(layout, new_layout, current_pos, desired, 2, 4);
+
+        REQUIRE(objectives.size() == 3);
+        CHECK(new_layout.num_pos() == 0);
+
+        const auto distance = [](const auto& obj)
+        {
+            return static_cast<uint32_t>(
+                std::abs(static_cast<int32_t>(obj.objective.source.x) - static_cast<int32_t>(obj.objective.target.x)));
+        };
+
+        CHECK(distance(objectives[0]) >= distance(objectives[1]));
+        CHECK(distance(objectives[1]) >= distance(objectives[2]));
+
+        for (const auto& item : objectives)
+        {
+            CHECK(item.objective.source.y == 12);
+            CHECK(item.objective.target.y == 16);
+            CHECK_FALSE(new_layout.is_empty_tile(item.objective.source));
+        }
+    }
+
+    SECTION("route_pi_objectives_with_a_star")
+    {
+        const std::vector desired{layout.get_node(x2), layout.get_node(x1), layout.get_node(x3)};
+        auto              new_layout = detail::create_extended_layout(layout, 4, 0);
+
+        detail::copy_layout_with_offset(layout, new_layout, 4);
+
+        const auto objectives = detail::create_pi_routing_objectives(layout, new_layout, current_pis, desired, 4);
+        REQUIRE(objectives.size() == 3);
+
+        const std::filesystem::path dot_dir{"build/test_dot_layouts"};
+        std::filesystem::create_directories(dot_dir);
+        debug::write_dot_layout<gate_layout, gate_layout_hexagonal_drawer<gate_layout, false, false>>(
+            new_layout, "route_pi_objectives_with_a_star_before_routing", dot_dir);
+
+        detail::route_pi_objectives_with_a_star(new_layout, objectives);
+        CHECK(new_layout.num_pis() == 3);
+    }
+
+    SECTION("route_po_objectives_with_a_star_and_create_pos")
+    {
+        const std::vector desired{layout.get_node(po2), layout.get_node(po1), layout.get_node(po3)};
+        auto              new_layout = detail::create_extended_layout(layout, 2, 4);
+
+        detail::copy_layout_with_offset(layout, new_layout, 2);
+
+        const auto objectives = detail::create_po_routing_objectives(layout, new_layout, current_pos, desired, 2, 4);
+        REQUIRE(objectives.size() == 3);
+
+        const std::filesystem::path dot_dir{"build/test_dot_layouts"};
+        std::filesystem::create_directories(dot_dir);
+        debug::write_dot_layout<gate_layout, gate_layout_hexagonal_drawer<gate_layout, false, false>>(
+            new_layout, "route_po_objectives_with_a_star_and_create_pos_before_routing", dot_dir);
+
+        detail::route_po_objectives_with_a_star_and_create_pos(new_layout, objectives);
+
+        CHECK(new_layout.num_pos() == 3);
+        CHECK(new_layout.is_po_tile(objectives[0].objective.target));
+        CHECK(new_layout.is_po_tile(objectives[1].objective.target));
+        CHECK(new_layout.is_po_tile(objectives[2].objective.target));
     }
 
     SECTION("route_objectives_with_a_star")
