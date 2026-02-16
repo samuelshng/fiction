@@ -6,13 +6,12 @@
 #define FICTION_UNSCRAMBLE_PINS_HPP
 
 #include "fiction/algorithms/path_finding/a_star.hpp"
-#include "fiction/layouts/clocking_scheme.hpp"
 #include "fiction/layouts/obstruction_layout.hpp"
 #include "fiction/traits.hpp"
-#include "fiction/utils/network_utils.hpp"
 #include "fiction/utils/routing_utils.hpp"
 
 #include <mockturtle/traits.hpp>
+#include <mockturtle/utils/node_map.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
 
 #include <algorithm>
@@ -177,8 +176,8 @@ Lyt create_extended_layout(const Lyt& lyt, const uint32_t pi_rows, const uint32_
     return Lyt{new_ar, lyt.get_clocking_scheme(), lyt.get_layout_name()};
 }
 /**
- * Copies all nodes from the original layout to the new layout with a vertical offset. This includes PIs, gates, wires,
- * and POs, along with all their connections. The copied nodes are placed at coordinates shifted by `y_offset` rows.
+ * Copies all internal nodes (gates and wires) from the original layout to the new layout with a vertical offset.
+ * Primary inputs and outputs are intentionally omitted.
  *
  * @tparam Lyt Gate-level layout type.
  * @param original_lyt The original layout to copy from.
@@ -191,15 +190,13 @@ void copy_layout_with_offset(const Lyt& original_lyt, Lyt& target_lyt, const uin
     // Map from original nodes to copied signals in the target layout
     mockturtle::node_map<mockturtle::signal<Lyt>, Lyt> node2signal{original_lyt};
 
-    // Step 1: Copy PIs with shifted coordinates
+    // Step 1: Map PI nodes to shifted coordinate signals without creating PI nodes.
     original_lyt.foreach_pi(
         [&](const auto& pi)
         {
             const auto      original_coord = original_lyt.get_tile(pi);
             const tile<Lyt> shifted_coord{original_coord.x, original_coord.y + y_offset, original_coord.z};
-            const auto      pi_name    = original_lyt.get_name(pi);
-            const auto      new_signal = target_lyt.create_pi(pi_name, shifted_coord);
-            node2signal[pi]            = new_signal;
+            node2signal[pi] = static_cast<mockturtle::signal<Lyt>>(shifted_coord);
         });
 
     // Step 2: Copy all non-PI/non-PO nodes with shifted coordinates.
@@ -236,27 +233,7 @@ void copy_layout_with_offset(const Lyt& original_lyt, Lyt& target_lyt, const uin
             node2signal[node] = new_signal;
         });
 
-    // Step 3: Copy POs with shifted coordinates
-    original_lyt.foreach_po(
-        [&](const auto& po_signal, uint32_t index)
-        {
-            const auto po_node    = original_lyt.get_node(po_signal);
-            auto       new_signal = node2signal[po_node];
-
-            // Apply complementation if the PO has a complemented signal (just complement the signal, don't create a NOT
-            // gate)
-            if (original_lyt.is_complemented(po_signal))
-            {
-                new_signal = !new_signal;
-            }
-
-            const auto      po_name        = original_lyt.get_output_name(index);
-            const auto      original_coord = original_lyt.po_at(index);
-            const auto      original_tile  = static_cast<tile<Lyt>>(original_coord);
-            const tile<Lyt> shifted_coord{original_tile.x, original_tile.y + y_offset, original_tile.z};
-
-            target_lyt.create_po(new_signal, po_name, shifted_coord);
-        });
+    // Step 3: Original POs are intentionally not copied and will be recreated later.
 }
 /**
  * Places new PIs in the top row and creates routing objectives to their original locations (shifted by pi_rows). The
