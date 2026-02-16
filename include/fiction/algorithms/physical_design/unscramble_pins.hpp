@@ -5,10 +5,11 @@
 #ifndef FICTION_UNSCRAMBLE_PINS_HPP
 #define FICTION_UNSCRAMBLE_PINS_HPP
 
+#include "fiction/algorithms/path_finding/a_star.hpp"
 #include "fiction/layouts/clocking_scheme.hpp"
+#include "fiction/layouts/obstruction_layout.hpp"
 #include "fiction/traits.hpp"
 #include "fiction/utils/network_utils.hpp"
-#include "fiction/utils/placement_utils.hpp"
 #include "fiction/utils/routing_utils.hpp"
 
 #include <mockturtle/traits.hpp>
@@ -34,8 +35,16 @@ struct unscramble_pins_params
  */
 struct unscramble_pins_stats
 {
+    /**
+     * Total runtime of the algorithm.
+     */
     mockturtle::stopwatch<>::duration time_total{0};
 
+    /**
+     * Reports collected runtime statistics.
+     *
+     * @param out Output stream.
+     */
     void report(std::ostream& out = std::cout) const
     {
         out << fmt::format("[i] total time = {:.2f} secs\n", mockturtle::to_seconds(time_total));
@@ -168,6 +177,88 @@ Lyt create_extended_layout(const Lyt& lyt, const uint32_t pi_rows, const uint32_
     return Lyt{new_ar, lyt.get_clocking_scheme(), lyt.get_layout_name()};
 }
 /**
+ * Copies all nodes from the original layout to the new layout with a vertical offset. This includes PIs, gates, wires,
+ * and POs, along with all their connections. The copied nodes are placed at coordinates shifted by `y_offset` rows.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param original_lyt The original layout to copy from.
+ * @param target_lyt The target layout to copy to (must have sufficient space).
+ * @param y_offset The vertical offset (in rows) to shift all coordinates by.
+ */
+template <typename Lyt>
+void copy_layout_with_offset(const Lyt& original_lyt, Lyt& target_lyt, const uint32_t y_offset)
+{
+    // Map from original nodes to copied signals in the target layout
+    mockturtle::node_map<mockturtle::signal<Lyt>, Lyt> node2signal{original_lyt};
+
+    // Step 1: Copy PIs with shifted coordinates
+    original_lyt.foreach_pi(
+        [&](const auto& pi)
+        {
+            const auto      original_coord = original_lyt.get_tile(pi);
+            const tile<Lyt> shifted_coord{original_coord.x, original_coord.y + y_offset, original_coord.z};
+            const auto      pi_name    = original_lyt.get_name(pi);
+            const auto      new_signal = target_lyt.create_pi(pi_name, shifted_coord);
+            node2signal[pi]            = new_signal;
+        });
+
+    // Step 2: Copy all non-PI/non-PO nodes with shifted coordinates.
+    original_lyt.foreach_gate(
+        [&](const auto& node)
+        {
+            // POs are recreated in Step 3 and must therefore be skipped here.
+            if (original_lyt.is_po(node))
+            {
+                return;
+            }
+
+            // Collect copied fanins and preserve complemented edges.
+            std::vector<mockturtle::signal<Lyt>> new_children{};
+            new_children.reserve(original_lyt.fanin_size(node));
+            original_lyt.foreach_fanin(node,
+                                       [&](const auto& fanin_signal)
+                                       {
+                                           const auto fanin_node = original_lyt.get_node(fanin_signal);
+                                           auto       new_signal = node2signal[fanin_node];
+                                           if (original_lyt.is_complemented(fanin_signal))
+                                           {
+                                               new_signal = !new_signal;
+                                           }
+                                           new_children.push_back(new_signal);
+                                       });
+
+            const auto      original_coord = original_lyt.get_tile(node);
+            const tile<Lyt> shifted_coord{original_coord.x, original_coord.y + y_offset, original_coord.z};
+
+            const auto new_signal =
+                target_lyt.create_node(new_children, original_lyt.node_function(node), shifted_coord);
+
+            node2signal[node] = new_signal;
+        });
+
+    // Step 3: Copy POs with shifted coordinates
+    original_lyt.foreach_po(
+        [&](const auto& po_signal, uint32_t index)
+        {
+            const auto po_node    = original_lyt.get_node(po_signal);
+            auto       new_signal = node2signal[po_node];
+
+            // Apply complementation if the PO has a complemented signal (just complement the signal, don't create a NOT
+            // gate)
+            if (original_lyt.is_complemented(po_signal))
+            {
+                new_signal = !new_signal;
+            }
+
+            const auto      po_name        = original_lyt.get_output_name(index);
+            const auto      original_coord = original_lyt.po_at(index);
+            const auto      original_tile  = static_cast<tile<Lyt>>(original_coord);
+            const tile<Lyt> shifted_coord{original_tile.x, original_tile.y + y_offset, original_tile.z};
+
+            target_lyt.create_po(new_signal, po_name, shifted_coord);
+        });
+}
+/**
  * Places new PIs in the top row and creates routing objectives to their original locations (shifted by pi_rows). The
  * objectives are sorted by their horizontal permutation distance to prioritize longer routes first.
  *
@@ -184,6 +275,11 @@ std::vector<routing_objective<Lyt>>
 create_pi_routing_objectives(const Lyt& lyt, Lyt& new_layout, const std::vector<mockturtle::node<Lyt>>& current_pis,
                              const std::vector<mockturtle::node<Lyt>>& desired_pis, const uint32_t pi_rows)
 {
+    if (pi_rows == 0 || desired_pis.empty())
+    {
+        return {};
+    }
+
     // Current PI coordinates define the slot x-positions for the desired ordering.
     const auto current_pi_coords = determine_pin_coordinates(lyt, current_pis);
     // Precompute horizontal distances to sort objectives by route length.
@@ -226,6 +322,34 @@ create_pi_routing_objectives(const Lyt& lyt, Lyt& new_layout, const std::vector<
 
     return pi_routing_objectives;
 }
+/**
+ * Routes all objectives sequentially using A* with crossings enabled.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt Layout to route on.
+ * @param objectives Routing objectives in priority order.
+ */
+template <typename Lyt>
+void route_objectives_with_a_star(Lyt& lyt, const std::vector<routing_objective<Lyt>>& objectives)
+{
+    a_star_params params{};
+    params.crossings = true;
+
+    for (const auto& objective : objectives)
+    {
+        // Wrap layout in obstruction_layout for A* to respect already-placed elements
+        obstruction_layout obstr_lyt{lyt};
+
+        const auto path = a_star<layout_coordinate_path<obstruction_layout<Lyt>>>(
+            obstr_lyt, {objective.source, objective.target}, euclidean_distance_functor<obstruction_layout<Lyt>>(),
+            unit_cost_functor<obstruction_layout<Lyt>>(), params);
+
+        if (!path.empty())
+        {
+            route_path(lyt, path);  // Route on the original layout, not the obstruction_layout copy
+        }
+    }
+}
 
 template <typename Lyt>
 class unscramble_pins_impl
@@ -245,6 +369,12 @@ class unscramble_pins_impl
     {
         mockturtle::stopwatch stop{pst.time_total};
 
+        // Output unscrambling is not integrated yet.
+        if (input_ordering.empty())
+        {
+            return layout;
+        }
+
         // 1. Identify current pin orderings
         const auto current_pis = get_current_pis();
         const auto current_pos = get_current_pos();
@@ -256,11 +386,20 @@ class unscramble_pins_impl
         // 3. Instantiate new layout with extended height
         auto new_layout = create_extended_layout(layout, pi_rows, po_rows);
 
-        // 4. Place new PIs and create routing objectives to the original PI locations (shifted by pi_rows)
-        [[maybe_unused]] const auto pi_routing_objectives =
+        // 4. Copy the original layout content to the new layout with vertical offset
+        copy_layout_with_offset(layout, new_layout, pi_rows);
+
+        // 5. Place new PIs and create routing objectives to the original PI locations (shifted by pi_rows)
+        const auto pi_routing_objectives =
             create_pi_routing_objectives(layout, new_layout, current_pis, input_ordering, pi_rows);
 
-        // Placeholder for the rest of the implementation
+        // 6. Route PI objectives in priority order
+        if (!pi_routing_objectives.empty())
+        {
+            route_objectives_with_a_star(new_layout, pi_routing_objectives);
+        }
+
+        // Input routing stage is executed above; final integration still returns the original layout for now.
         return layout;
     }
 

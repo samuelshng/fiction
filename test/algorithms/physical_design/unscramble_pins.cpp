@@ -4,7 +4,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "fiction/utils/debug/network_writer.hpp"
 #include "utils/equivalence_checking_utils.hpp"
 
 #include <fiction/algorithms/physical_design/unscramble_pins.hpp>
@@ -14,7 +13,6 @@
 #include <fiction/layouts/tile_based_layout.hpp>
 
 #include <algorithm>
-#include <numeric>
 #include <vector>
 
 using namespace fiction;
@@ -266,6 +264,163 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         CHECK(new_layout.z() == layout.z());
     }
 
+    SECTION("copy_layout_with_offset")
+    {
+        SECTION("Empty layout")
+        {
+            const gate_layout empty_layout{{4, 4}, row_clocking<gate_layout>()};
+            auto              target = detail::create_extended_layout(empty_layout, 2, 0);
+
+            detail::copy_layout_with_offset(empty_layout, target, 2);
+
+            CHECK(target.num_pis() == 0);
+            CHECK(target.num_gates() == 0);
+            CHECK(target.num_wires() == 0);
+            CHECK(target.num_pos() == 0);
+        }
+
+        SECTION("PI only")
+        {
+            gate_layout pi_layout{{4, 4}, row_clocking<gate_layout>()};
+            pi_layout.create_pi("pi1", {0, 0});
+            pi_layout.create_pi("pi2", {2, 0});
+
+            auto target = detail::create_extended_layout(pi_layout, 3, 0);
+            detail::copy_layout_with_offset(pi_layout, target, 3);
+
+            CHECK(target.num_pis() == 2);
+            CHECK(target.get_tile(target.pi_at(0)) == tile<gate_layout>{0, 3});
+            CHECK(target.get_tile(target.pi_at(1)) == tile<gate_layout>{2, 3});
+            CHECK(target.get_name(target.pi_at(0)) == "pi1");
+            CHECK(target.get_name(target.pi_at(1)) == "pi2");
+        }
+
+        SECTION("Simple gate")
+        {
+            gate_layout simple{{4, 4}, row_clocking<gate_layout>()};
+            const auto  pi1      = simple.create_pi("x1", {0, 0});
+            const auto  pi2      = simple.create_pi("x2", {2, 0});
+            const auto  and_gate = simple.create_and(pi1, pi2, {1, 1});
+            simple.create_po(and_gate, "f1", {1, 2});
+
+            auto target = detail::create_extended_layout(simple, 2, 0);
+            detail::copy_layout_with_offset(simple, target, 2);
+
+            CHECK(target.num_pis() == 2);
+            CHECK(target.num_gates() == 1);
+            CHECK(target.num_pos() == 1);
+
+            // Check coordinates shifted by 2
+            CHECK(target.get_tile(target.pi_at(0)) == tile<gate_layout>{0, 2});
+            CHECK(target.get_tile(target.pi_at(1)) == tile<gate_layout>{2, 2});
+            CHECK(target.get_tile(target.get_node(target.po_at(0))) == tile<gate_layout>{1, 4});
+
+            // Check names preserved
+            CHECK(target.get_name(target.pi_at(0)) == "x1");
+            CHECK(target.get_name(target.pi_at(1)) == "x2");
+            CHECK(target.get_output_name(0) == "f1");
+        }
+
+        SECTION("Complex layout with buffers")
+        {
+            gate_layout complex{{6, 6}, row_clocking<gate_layout>()};
+            const auto  pi1 = complex.create_pi("in1", {0, 0});
+            const auto  pi2 = complex.create_pi("in2", {2, 0});
+
+            const auto buf1 = complex.create_buf(pi1, {0, 1});
+            const auto buf2 = complex.create_buf(pi2, {2, 1});
+
+            const auto or_gate = complex.create_or(buf1, buf2, {1, 2});
+            complex.create_po(or_gate, "out1", {1, 3});
+
+            auto target = detail::create_extended_layout(complex, 4, 0);
+            detail::copy_layout_with_offset(complex, target, 4);
+
+            CHECK(target.num_pis() == complex.num_pis());
+            CHECK(target.num_wires() == complex.num_wires());
+            CHECK(target.num_gates() == complex.num_gates());
+            CHECK(target.num_pos() == complex.num_pos());
+
+            // Check all coordinates shifted by 4
+            CHECK(target.get_tile(target.pi_at(0)) == tile<gate_layout>{0, 4});
+            CHECK(target.get_tile(target.pi_at(1)) == tile<gate_layout>{2, 4});
+            CHECK(target.get_tile(target.get_node(target.po_at(0))) == tile<gate_layout>{1, 7});
+        }
+
+        SECTION("Layout with multiple gates")
+        {
+            gate_layout multi{{6, 6}, row_clocking<gate_layout>()};
+            const auto  pi1 = multi.create_pi("a", {0, 0});
+            const auto  pi2 = multi.create_pi("b", {2, 0});
+            const auto  pi3 = multi.create_pi("c", {4, 0});
+
+            const auto and1 = multi.create_and(pi1, pi2, {0, 1});
+            const auto or1  = multi.create_or(pi2, pi3, {2, 1});
+
+            const auto xor1 = multi.create_xor(and1, or1, {1, 2});
+            multi.create_po(xor1, "result", {1, 3});
+
+            auto target = detail::create_extended_layout(multi, 5, 0);
+            detail::copy_layout_with_offset(multi, target, 5);
+
+            CHECK(target.num_pis() == 3);
+            CHECK(target.num_gates() == 3);
+            CHECK(target.num_pos() == 1);
+
+            // Verify y-coordinates are all shifted by 5
+            CHECK(target.get_tile(target.pi_at(0)).y == 5);
+            CHECK(target.get_tile(target.pi_at(1)).y == 5);
+            CHECK(target.get_tile(target.pi_at(2)).y == 5);
+            CHECK(target.get_tile(target.get_node(target.po_at(0))).y == 8);
+        }
+
+        SECTION("Layout with inverted signals")
+        {
+            gate_layout inv_layout{{4, 4}, row_clocking<gate_layout>()};
+            const auto  pi1  = inv_layout.create_pi("x", {0, 0});
+            const auto  inv1 = inv_layout.create_not(pi1, {0, 1});
+            inv_layout.create_po(inv1, "not_x", {0, 2});
+
+            auto target = detail::create_extended_layout(inv_layout, 3, 0);
+            detail::copy_layout_with_offset(inv_layout, target, 3);
+
+            CHECK(target.num_pis() == 1);
+            CHECK(target.num_gates() == 1);
+            CHECK(target.num_pos() == 1);
+
+            // Check the NOT gate exists
+            bool found_not_gate = false;
+            target.foreach_gate(
+                [&](const auto& gate)
+                {
+                    if (target.is_inv(gate))
+                    {
+                        found_not_gate = true;
+                    }
+                });
+            CHECK(found_not_gate);
+        }
+
+        SECTION("Zero offset")
+        {
+            gate_layout zero_offset{{4, 4}, row_clocking<gate_layout>()};
+            const auto  pi1  = zero_offset.create_pi("x", {0, 0});
+            const auto  buf1 = zero_offset.create_buf(pi1, {0, 1});
+            zero_offset.create_po(buf1, "f", {0, 2});
+
+            auto target = detail::create_extended_layout(zero_offset, 0, 0);
+            detail::copy_layout_with_offset(zero_offset, target, 0);
+
+            CHECK(target.num_pis() == zero_offset.num_pis());
+            CHECK(target.num_wires() == zero_offset.num_wires());
+            CHECK(target.num_pos() == zero_offset.num_pos());
+
+            // Check coordinates are the same
+            CHECK(target.get_tile(target.pi_at(0)) == tile<gate_layout>{0, 0});
+            CHECK(target.get_tile(target.get_node(target.po_at(0))) == tile<gate_layout>{0, 2});
+        }
+    }
+
     SECTION("create_pi_routing_objectives")
     {
         const std::vector desired{layout.get_node(x2), layout.get_node(x1), layout.get_node(x3)};
@@ -314,6 +469,30 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         CHECK(objectives[0].source.y == 0);
         CHECK(objectives[0].target.y >= 3);
     }
+
+    SECTION("route_objectives_with_a_star")
+    {
+        gate_layout routing_layout{{6, 6}, row_clocking<gate_layout>()};
+
+        const auto a = routing_layout.create_pi("a", {0, 0});
+        const auto b = routing_layout.create_pi("b", {2, 0});
+
+        const auto route_po1 = routing_layout.create_po(a, "po1", {0, 4});
+        const auto route_po2 = routing_layout.create_po(b, "po2", {2, 4});
+
+        const auto before_wires = routing_layout.num_wires();
+
+        const std::vector objectives{
+            routing_objective<gate_layout>{{0, 0}, {0, 4}},
+            routing_objective<gate_layout>{{2, 0}, {2, 4}},
+        };
+
+        detail::route_objectives_with_a_star(routing_layout, objectives);
+
+        CHECK(routing_layout.num_wires() > before_wires);
+        CHECK(routing_layout.get_node(tile<gate_layout>{0, 4}) == routing_layout.get_node(route_po1));
+        CHECK(routing_layout.get_node(tile<gate_layout>{2, 4}) == routing_layout.get_node(route_po2));
+    }
 }
 
 TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
@@ -323,7 +502,7 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
 
     SECTION("2-input AND gate")
     {
-        gate_layout layout{{4, 4}, row_clocking<gate_layout>()};
+        gate_layout layout{{4, 4, 1}, row_clocking<gate_layout>()};
 
         const auto x1 = layout.create_pi("x1", {1, 0});
         const auto x2 = layout.create_pi("x2", {2, 0});
@@ -346,7 +525,7 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
 
     SECTION("Multiple outputs")
     {
-        gate_layout layout{{4, 4}, row_clocking<gate_layout>()};
+        gate_layout layout{{4, 4, 1}, row_clocking<gate_layout>()};
 
         const auto x1 = layout.create_pi("x1", {0, 0});
         const auto x2 = layout.create_pi("x2", {1, 0});
@@ -363,8 +542,6 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
 
         const auto po1 = layout.create_po(or1, "po1", {1, 4});
         const auto po2 = layout.create_po(buf3, "po2", {3, 4});
-
-        debug::write_dot_layout<gate_layout, gate_layout_hexagonal_drawer<gate_layout>>(layout, "hex_multi_output");
 
         const std::vector pos{layout.get_node(po1), layout.get_node(po2)};
 
