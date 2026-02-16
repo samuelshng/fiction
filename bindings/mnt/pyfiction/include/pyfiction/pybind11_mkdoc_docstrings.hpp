@@ -5950,6 +5950,24 @@ static const char *__doc_fiction_detail_convert_network_impl_ntk = R"doc()doc";
 
 static const char *__doc_fiction_detail_convert_network_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_copy_layout_with_offset =
+R"doc(Copies all nodes from the original layout to the new layout with a
+vertical offset. This includes PIs, gates, wires, and POs, along with
+all their connections. The copied nodes are placed at coordinates
+shifted by `y_offset` rows.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``original_lyt``:
+    The original layout to copy from.
+
+Parameter ``target_lyt``:
+    The target layout to copy to (must have sufficient space).
+
+Parameter ``y_offset``:
+    The vertical offset (in rows) to shift all coordinates by.)doc";
+
 static const char *__doc_fiction_detail_count_gate_types_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_count_gate_types_impl_count_gate_types_impl = R"doc()doc";
@@ -10993,6 +11011,18 @@ R"doc(Default constructor.
 
 Parameter ``seed``:
     The seed for the random number generator.)doc";
+
+static const char *__doc_fiction_detail_route_objectives_with_a_star =
+R"doc(Routes all objectives sequentially using A* with crossings enabled.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to route on.
+
+Parameter ``objectives``:
+    Routing objectives in priority order.)doc";
 
 static const char *__doc_fiction_detail_routing_objective_with_fanin_update_information =
 R"doc(Encapsulates a routing objective with fanin update information.
@@ -24025,9 +24055,13 @@ static const char *__doc_fiction_unscramble_pins_params = R"doc(Parameters for t
 
 static const char *__doc_fiction_unscramble_pins_stats = R"doc(Statistics for the pin unscrambling algorithm.)doc";
 
-static const char *__doc_fiction_unscramble_pins_stats_duration = R"doc()doc";
+static const char *__doc_fiction_unscramble_pins_stats_duration = R"doc(Total runtime of the algorithm.)doc";
 
-static const char *__doc_fiction_unscramble_pins_stats_report = R"doc()doc";
+static const char *__doc_fiction_unscramble_pins_stats_report =
+R"doc(Reports collected runtime statistics.
+
+Parameter ``out``:
+    Output stream.)doc";
 
 static const char *__doc_fiction_unsuccessful_gate_design_error =
 R"doc(Exception thrown if the gate design was unsuccessful. Depending on the
