@@ -4,13 +4,19 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "utils/blueprints/network_blueprints.hpp"
 #include "utils/equivalence_checking_utils.hpp"
 
+#include <fiction/algorithms/physical_design/graph_oriented_layout_design.hpp>
+#include <fiction/algorithms/physical_design/hexagonalization.hpp>
 #include <fiction/algorithms/physical_design/unscramble_pins.hpp>
+#include <fiction/layouts/cartesian_layout.hpp>
 #include <fiction/layouts/clocked_layout.hpp>
 #include <fiction/layouts/gate_level_layout.hpp>
 #include <fiction/layouts/hexagonal_layout.hpp>
 #include <fiction/layouts/tile_based_layout.hpp>
+#include <fiction/networks/technology_network.hpp>
+#include <fiction/types.hpp>
 #include <fiction/utils/debug/network_writer.hpp>
 
 #include <algorithm>
@@ -18,6 +24,34 @@
 #include <vector>
 
 using namespace fiction;
+
+namespace
+{
+
+template <typename Ntk>
+hex_even_row_gate_clk_lyt generate_extended_hex_layout_from_network(const Ntk& ntk)
+{
+    using cart_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+
+    graph_oriented_layout_design_params gold_params{};
+    gold_params.mode                  = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    gold_params.cost                  = graph_oriented_layout_design_params::cost_objective::WIRES;
+    gold_params.seed                  = 0u;
+    gold_params.return_first          = true;
+    gold_params.enable_multithreading = true;
+    gold_params.timeout               = 10000u;
+
+    const auto cart_layout_opt = graph_oriented_layout_design<cart_layout>(ntk, gold_params);
+    REQUIRE(cart_layout_opt.has_value());
+
+    hexagonalization_params hex_params{};
+    hex_params.input_pin_extension  = hexagonalization_params::io_pin_extension_mode::EXTEND;
+    hex_params.output_pin_extension = hexagonalization_params::io_pin_extension_mode::EXTEND;
+
+    return hexagonalization<hex_even_row_gate_clk_lyt, cart_layout>(*cart_layout_opt, hex_params);
+}
+
+}  // namespace
 
 TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
 {
@@ -628,6 +662,91 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
             {
                 check_eq(layout, unscramble_pins(layout, {}, target_pos));
             } while (std::next_permutation(target_pos.begin(), target_pos.end()));
+        }
+    }
+
+    SECTION("Larger layout sampled permutations")
+    {
+        using hex_layout = hex_even_row_gate_clk_lyt;
+
+        const auto ntk    = blueprints::clpl<technology_network>();
+        const auto layout = generate_extended_hex_layout_from_network(ntk);
+
+        std::vector<mockturtle::node<hex_layout>> pis{};
+        pis.reserve(layout.num_pis());
+        layout.foreach_pi([&pis](const auto& pi) { pis.push_back(pi); });
+
+        std::vector<mockturtle::node<hex_layout>> pos{};
+        pos.reserve(layout.num_pos());
+        layout.foreach_po([&layout, &pos](const auto& po) { pos.push_back(layout.get_node(po)); });
+
+        REQUIRE(pis.size() == 5);
+        REQUIRE(pos.size() == 2);
+
+        const auto sampled_permutations = [](const auto& ordering)
+        {
+            using node_t = typename std::decay_t<decltype(ordering)>::value_type;
+
+            std::vector<std::vector<node_t>> samples{};
+
+            const auto add_unique = [&samples](const std::vector<node_t>& candidate)
+            {
+                if (std::find(samples.cbegin(), samples.cend(), candidate) == samples.cend())
+                {
+                    samples.push_back(candidate);
+                }
+            };
+
+            add_unique(ordering);
+
+            auto reversed = ordering;
+            std::reverse(reversed.begin(), reversed.end());
+            add_unique(reversed);
+
+            if (ordering.size() >= 2)
+            {
+                auto endpoints_swapped = ordering;
+                std::swap(endpoints_swapped.front(), endpoints_swapped.back());
+                add_unique(endpoints_swapped);
+            }
+
+            if (ordering.size() >= 3)
+            {
+                auto rotated_left = ordering;
+                std::rotate(rotated_left.begin(), std::next(rotated_left.begin()), rotated_left.end());
+                add_unique(rotated_left);
+            }
+
+            return samples;
+        };
+
+        const auto pi_samples = sampled_permutations(pis);
+        const auto po_samples = sampled_permutations(pos);
+
+        SECTION("Sampled PI permutations")
+        {
+            for (const auto& target_pis : pi_samples)
+            {
+                check_eq(layout, unscramble_pins(layout, target_pis, {}));
+            }
+        }
+
+        SECTION("Sampled PO permutations")
+        {
+            for (const auto& target_pos : po_samples)
+            {
+                check_eq(layout, unscramble_pins(layout, {}, target_pos));
+            }
+        }
+
+        SECTION("Sampled combined PI/PO permutations")
+        {
+            const auto num_samples = std::min(pi_samples.size(), po_samples.size());
+
+            for (size_t i = 0; i < num_samples; ++i)
+            {
+                check_eq(layout, unscramble_pins(layout, pi_samples[i], po_samples[i]));
+            }
         }
     }
 }
