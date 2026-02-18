@@ -67,6 +67,10 @@ namespace detail
 template <typename Lyt>
 std::vector<tile<Lyt>> determine_pin_coordinates(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& pins)
 {
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
     std::vector<tile<Lyt>> coords{};
     coords.reserve(pins.size());
     for (const auto& pin : pins)
@@ -90,6 +94,10 @@ std::vector<uint32_t> calculate_permutation_distances(const Lyt&                
                                                       const std::vector<mockturtle::node<Lyt>>& current_permutation,
                                                       const std::vector<mockturtle::node<Lyt>>& desired_permutation)
 {
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
     std::vector<uint32_t> distances(desired_permutation.size(), 0u);
 
     if (desired_permutation.empty() || current_permutation.empty())
@@ -143,6 +151,10 @@ template <typename Lyt>
 uint32_t calculate_rows_needed(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& current_permutation,
                                const std::vector<mockturtle::node<Lyt>>& desired_permutation)
 {
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
     if (desired_permutation.empty() || current_permutation.empty())
     {
         return 0;
@@ -174,6 +186,10 @@ uint32_t calculate_rows_needed(const Lyt& lyt, const std::vector<mockturtle::nod
 template <typename Lyt>
 Lyt create_extended_layout(const Lyt& lyt, const uint32_t pi_rows, const uint32_t po_rows)
 {
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
     const auto              crossing_layer = std::max(lyt.z(), static_cast<decltype(lyt.z())>(1));
     const aspect_ratio<Lyt> new_ar{lyt.x(), lyt.y() + pi_rows + po_rows, crossing_layer};
     return Lyt{new_ar, lyt.get_clocking_scheme(), lyt.get_layout_name()};
@@ -191,6 +207,13 @@ Lyt create_extended_layout(const Lyt& lyt, const uint32_t pi_rows, const uint32_
 template <typename SrcLyt, typename DstLyt>
 void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, const uint32_t y_offset)
 {
+    static_assert(is_gate_level_layout_v<SrcLyt>, "SrcLyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<SrcLyt>, "SrcLyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<SrcLyt>, "SrcLyt does not have pointy-top hexagonal orientation");
+    static_assert(is_gate_level_layout_v<DstLyt>, "DstLyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<DstLyt>, "DstLyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<DstLyt>, "DstLyt does not have pointy-top hexagonal orientation");
+
     // Map from original nodes to copied signals in the target layout
     mockturtle::node_map<mockturtle::signal<DstLyt>, SrcLyt> node2signal{original_lyt};
 
@@ -275,6 +298,13 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
                              const std::vector<mockturtle::node<OrigLyt>>& current_pis,
                              const std::vector<mockturtle::node<OrigLyt>>& desired_pis, const uint32_t pi_rows)
 {
+    static_assert(is_gate_level_layout_v<OrigLyt>, "OrigLyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<OrigLyt>, "OrigLyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<OrigLyt>, "OrigLyt does not have pointy-top hexagonal orientation");
+    static_assert(is_gate_level_layout_v<WorkLyt>, "WorkLyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<WorkLyt>, "WorkLyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<WorkLyt>, "WorkLyt does not have pointy-top hexagonal orientation");
+
     if (desired_pis.empty())
     {
         return {};
@@ -332,6 +362,10 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
 template <typename Lyt>
 void route_objectives_with_a_star(Lyt& lyt, const std::vector<routing_objective<Lyt>>& objectives)
 {
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
     a_star_params params{};
     params.crossings = true;
 
@@ -356,6 +390,10 @@ void route_objectives_with_a_star(Lyt& lyt, const std::vector<routing_objective<
 template <typename Lyt>
 void route_pi_objectives_with_a_star(Lyt& lyt, const std::vector<pi_routing_objective<Lyt>>& objectives)
 {
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
     a_star_params params{};
     params.crossings = true;
 
@@ -410,6 +448,13 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
     const OrigLyt& lyt, WorkLyt& new_layout, const std::vector<mockturtle::node<OrigLyt>>& current_pos,
     const std::vector<mockturtle::node<OrigLyt>>& desired_pos, const uint32_t pi_rows, const uint32_t po_rows)
 {
+    static_assert(is_gate_level_layout_v<OrigLyt>, "OrigLyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<OrigLyt>, "OrigLyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<OrigLyt>, "OrigLyt does not have pointy-top hexagonal orientation");
+    static_assert(is_gate_level_layout_v<WorkLyt>, "WorkLyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<WorkLyt>, "WorkLyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<WorkLyt>, "WorkLyt does not have pointy-top hexagonal orientation");
+
     std::vector<po_routing_objective<WorkLyt>> po_objectives{};
 
     if (desired_pos.empty() || current_pos.empty())
@@ -507,6 +552,10 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
 template <typename Lyt>
 void route_po_objectives_with_a_star_and_create_pos(Lyt& lyt, const std::vector<po_routing_objective<Lyt>>& objectives)
 {
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
     a_star_params params{};
     params.crossings = true;
 
@@ -534,6 +583,10 @@ void route_po_objectives_with_a_star_and_create_pos(Lyt& lyt, const std::vector<
 template <typename Lyt>
 class unscramble_pins_impl
 {
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
   public:
     unscramble_pins_impl(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& input_order,
                          const std::vector<mockturtle::node<Lyt>>& output_order, const unscramble_pins_params& p,
