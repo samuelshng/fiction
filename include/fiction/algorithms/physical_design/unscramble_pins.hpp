@@ -275,7 +275,7 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
                              const std::vector<mockturtle::node<OrigLyt>>& current_pis,
                              const std::vector<mockturtle::node<OrigLyt>>& desired_pis, const uint32_t pi_rows)
 {
-    if (pi_rows == 0 || desired_pis.empty())
+    if (desired_pis.empty())
     {
         return {};
     }
@@ -306,6 +306,12 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
         // Route to the original PI coordinate, shifted down by the PI routing rows.
         const auto          original_coord = lyt.get_tile(desired_node);
         const tile<WorkLyt> target{original_coord.x, original_coord.y + pi_rows, original_coord.z};
+
+        // If source and target are identical, PI placement is already complete and no routing objective is needed.
+        if (source == target)
+        {
+            continue;
+        }
 
         pi_objectives.push_back({pi_distances[i], {source, target}});
     }
