@@ -5951,10 +5951,9 @@ static const char *__doc_fiction_detail_convert_network_impl_ntk = R"doc()doc";
 static const char *__doc_fiction_detail_convert_network_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_copy_layout_with_offset =
-R"doc(Copies all nodes from the original layout to the new layout with a
-vertical offset. This includes PIs, gates, wires, and POs, along with
-all their connections. The copied nodes are placed at coordinates
-shifted by `y_offset` rows.
+R"doc(Copies all internal nodes (gates and wires) from the original layout
+to the new layout with a vertical offset. Primary inputs and outputs
+are intentionally omitted.
 
 Template parameter ``Lyt``:
     Gate-level layout type.
