@@ -5955,8 +5955,11 @@ R"doc(Copies all internal nodes (gates and wires) from the original layout
 to the new layout with a vertical offset. Primary inputs and outputs
 are intentionally omitted.
 
-Template parameter ``Lyt``:
-    Gate-level layout type.
+Template parameter ``SrcLyt``:
+    Source gate-level layout type.
+
+Template parameter ``DstLyt``:
+    Target gate-level layout type.
 
 Parameter ``original_lyt``:
     The original layout to copy from.
@@ -6005,8 +6008,11 @@ original locations (shifted by pi_rows). The objectives are sorted by
 their horizontal permutation distance to prioritize longer routes
 first.
 
-Template parameter ``Lyt``:
-    Gate-level layout type.
+Template parameter ``OrigLyt``:
+    Original gate-level layout type.
+
+Template parameter ``WorkLyt``:
+    Working gate-level layout type.
 
 Parameter ``lyt``:
     The original layout.
@@ -6025,6 +6031,39 @@ Parameter ``pi_rows``:
 
 Returns:
     Routing objectives sorted by permutation distance.)doc";
+
+static const char *__doc_fiction_detail_create_po_routing_objectives =
+R"doc(Places output source anchors at shifted original PO locations and
+creates routing objectives towards new PO slots in the bottom
+extension area.
+
+Template parameter ``OrigLyt``:
+    Original gate-level layout type.
+
+Template parameter ``WorkLyt``:
+    Working gate-level layout type.
+
+Parameter ``lyt``:
+    Original layout.
+
+Parameter ``new_layout``:
+    Extended/copied layout.
+
+Parameter ``current_pos``:
+    Current PO ordering.
+
+Parameter ``desired_pos``:
+    Desired PO ordering.
+
+Parameter ``pi_rows``:
+    Rows reserved for input unscrambling (vertical offset of copied
+    logic).
+
+Parameter ``po_rows``:
+    Rows reserved for output unscrambling.
+
+Returns:
+    Output routing objectives with associated output names.)doc";
 
 static const char *__doc_fiction_detail_create_wiring_reduction_layout =
 R"doc(Create a wiring_reduction_layout suitable for finding excess wiring
@@ -10405,6 +10444,16 @@ static const char *__doc_fiction_detail_pi_locations_TOP_AND_LEFT =
 R"doc(Flag indicating if primary inputs (PIs) can be placed at the top and
 at the left.)doc";
 
+static const char *__doc_fiction_detail_pi_routing_objective =
+R"doc(Routing objective bundle for input unscrambling.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_pi_routing_objective_distance = R"doc(Horizontal routing distance used for objective prioritization.)doc";
+
+static const char *__doc_fiction_detail_pi_routing_objective_objective = R"doc(Geometric source/target routing objective.)doc";
+
 static const char *__doc_fiction_detail_place_outputs =
 R"doc(Places the primary outputs (POs) in the layout.
 
@@ -10450,6 +10499,18 @@ static const char *__doc_fiction_detail_placement_info_current_node = R"doc(The 
 static const char *__doc_fiction_detail_placement_info_current_po = R"doc(The index of the current primary output.)doc";
 
 static const char *__doc_fiction_detail_placement_info_node2pos = R"doc(Mapping of nodes to their positions in the layout.)doc";
+
+static const char *__doc_fiction_detail_po_routing_objective =
+R"doc(Routing objective bundle for output unscrambling.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_po_routing_objective_distance = R"doc(Horizontal routing distance used for objective prioritization.)doc";
+
+static const char *__doc_fiction_detail_po_routing_objective_objective = R"doc(Geometric source/target routing objective.)doc";
+
+static const char *__doc_fiction_detail_po_routing_objective_output_name = R"doc(Output name associated with the routing objective.)doc";
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl = R"doc()doc";
 
@@ -11022,6 +11083,32 @@ Parameter ``lyt``:
 
 Parameter ``objectives``:
     Routing objectives in priority order.)doc";
+
+static const char *__doc_fiction_detail_route_pi_objectives_with_a_star =
+R"doc(Routes PI unscrambling objectives sequentially using A* with crossings
+enabled.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to route on.
+
+Parameter ``objectives``:
+    PI routing objectives in priority order.)doc";
+
+static const char *__doc_fiction_detail_route_po_objectives_with_a_star_and_create_pos =
+R"doc(Routes output objectives sequentially and creates new POs at target
+coordinates.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to route on.
+
+Parameter ``objectives``:
+    Output routing objectives with output names.)doc";
 
 static const char *__doc_fiction_detail_routing_objective_with_fanin_update_information =
 R"doc(Encapsulates a routing objective with fanin update information.
