@@ -59,8 +59,7 @@ namespace detail
 /**
  * Extracts the layout coordinates for a given list of pin nodes.
  *
- * @tparam SrcLyt Source gate-level layout type.
- * @tparam DstLyt Target gate-level layout type.
+ * @tparam Lyt Gate-level layout type.
  * @param lyt The layout.
  * @param pins Vector of pin nodes.
  * @return Vector of coordinates corresponding to the pins.
@@ -183,7 +182,8 @@ Lyt create_extended_layout(const Lyt& lyt, const uint32_t pi_rows, const uint32_
  * Copies all internal nodes (gates and wires) from the original layout to the new layout with a vertical offset.
  * Primary inputs and outputs are intentionally omitted.
  *
- * @tparam Lyt Gate-level layout type.
+ * @tparam SrcLyt Source gate-level layout type.
+ * @tparam DstLyt Target gate-level layout type.
  * @param original_lyt The original layout to copy from.
  * @param target_lyt The target layout to copy to (must have sufficient space).
  * @param y_offset The vertical offset (in rows) to shift all coordinates by.
@@ -242,8 +242,7 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
 /**
  * Routing objective bundle for input unscrambling.
  *
- * @tparam OrigLyt Original gate-level layout type.
- * @tparam WorkLyt Working gate-level layout type.
+ * @tparam Lyt Gate-level layout type.
  */
 template <typename Lyt>
 struct pi_routing_objective
@@ -261,7 +260,8 @@ struct pi_routing_objective
  * Places new PIs in the top row and creates routing objectives to their original locations (shifted by pi_rows). The
  * objectives are sorted by their horizontal permutation distance to prioritize longer routes first.
  *
- * @tparam Lyt Gate-level layout type.
+ * @tparam OrigLyt Original gate-level layout type.
+ * @tparam WorkLyt Working gate-level layout type.
  * @param lyt The original layout.
  * @param new_layout The new layout to place PIs in.
  * @param current_pis The current PI ordering.
@@ -395,7 +395,8 @@ struct po_routing_objective
  * Places output source anchors at shifted original PO locations and creates routing objectives towards new PO slots in
  * the bottom extension area.
  *
- * @tparam Lyt Gate-level layout type.
+ * @tparam OrigLyt Original gate-level layout type.
+ * @tparam WorkLyt Working gate-level layout type.
  * @param lyt Original layout.
  * @param new_layout Extended/copied layout.
  * @param current_pos Current PO ordering.
