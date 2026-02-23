@@ -3720,6 +3720,25 @@ two variables.
 Returns:
     Disjunction in two variables.)doc";
 
+static const char *__doc_fiction_create_return_path_reference_layout =
+R"doc(Creates a non-routed reference layout in the same footprint used by
+return-path routing.
+
+The returned layout contains the shifted original circuit and corridor
+clock assignments, but no routed return paths.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``original_layout``:
+    Original layout.
+
+Parameter ``params``:
+    Return-path routing parameters.
+
+Returns:
+    Non-routed reference layout matching the routed footprint.)doc";
+
 static const char *__doc_fiction_create_xnor_tt =
 R"doc(Creates and returns a truth table that implements the negated
 exclusive disjunction in two variables.
@@ -5143,6 +5162,18 @@ Parameter ``value``:
 Returns:
     The string representation of the value.)doc";
 
+static const char *__doc_fiction_detail_apply_default_inner_to_outer_order =
+R"doc(Applies default inner-to-outer ordering to PO-PI route pairs.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``pairs``:
+    Route pairs.
+
+Returns:
+    Inner-to-outer ordered pairs.)doc";
+
 static const char *__doc_fiction_detail_apply_gate_library_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_apply_gate_library_impl_apply_gate_library_impl = R"doc()doc";
@@ -5216,6 +5247,89 @@ Parameter ``defect_lyt``:
 
 Returns:
     A `CellLyt` object representing the generated cell layout.)doc";
+
+static const char *__doc_fiction_detail_apply_routing_whitelist_obstructions =
+R"doc(Applies routing whitelist restrictions as explicit coordinate
+obstructions.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Working obstruction-aware layout.
+
+Parameter ``routing_whitelist``:
+    Allowed routing coordinates.
+
+Parameter ``route_pairs``:
+    Ordered route pairs.
+
+Parameter ``route_waypoints``:
+    Waypoints for each pair in `route_pairs`.)doc";
+
+static const char *__doc_fiction_detail_apply_user_pin_routing_order =
+R"doc(Applies an explicit user-provided routing order to PO-PI pairs.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``pairs``:
+    Route pairs in index order.
+
+Parameter ``pin_routing_order``:
+    User-provided pair order.
+
+Returns:
+    Reordered pairs.)doc";
+
+static const char *__doc_fiction_detail_assign_corridor_clock_numbers =
+R"doc(Assigns explicit clock overrides in the newly added return corridors.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Working layout.
+
+Parameter ``core_x``:
+    Maximum x-coordinate of the shifted original layout.
+
+Parameter ``core_y``:
+    Original maximum y-coordinate of the unshifted layout.
+
+Parameter ``top_margin``:
+    Top margin used to shift the original layout.)doc";
+
+static const char *__doc_fiction_detail_assign_path_clock_gradient =
+R"doc(Assigns a local clock gradient along a routed path.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Path``:
+    Path type.
+
+Parameter ``lyt``:
+    Working layout.
+
+Parameter ``path``:
+    Routed path.
+
+Parameter ``keep_existing_target_clock``:
+    If true and the path target is occupied, the target's current
+    clock is preserved.)doc";
+
+static const char *__doc_fiction_detail_assign_route_lanes =
+R"doc(Assigns lane indices according to pair order.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``pairs``:
+    Route pairs in routing order.
+
+Returns:
+    Route pairs with assigned lane indices.)doc";
 
 static const char *__doc_fiction_detail_calculate_offset_matrix =
 R"doc(Calculate an offset matrix based on a to-delete list in a
@@ -5799,6 +5913,33 @@ Parameter ``workers``:
 
 static const char *__doc_fiction_detail_clustercomplete_impl_workers = R"doc(Vector containing all workers.)doc";
 
+static const char *__doc_fiction_detail_collect_fanin_edge_keys =
+R"doc(Collects all fanin edges of a layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``respect_clocking``:
+    If `true`, collect only clock-valid fanin edges.
+
+Returns:
+    Directed fanin edge keys.)doc";
+
+static const char *__doc_fiction_detail_collect_occupied_tile_keys =
+R"doc(Collects all occupied tile keys of a layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Occupied tile keys.)doc";
+
 static const char *__doc_fiction_detail_color_routing_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_color_routing_impl_color_routing_impl = R"doc()doc";
@@ -5970,6 +6111,25 @@ Parameter ``target_lyt``:
 Parameter ``y_offset``:
     The vertical offset (in rows) to shift all coordinates by.)doc";
 
+static const char *__doc_fiction_detail_copy_layout_with_vertical_offset =
+R"doc(Copies a layout into another layout with a vertical offset while
+preserving PI and PO semantics.
+
+Template parameter ``SrcLyt``:
+    Source layout type.
+
+Template parameter ``DstLyt``:
+    Destination layout type.
+
+Parameter ``original_lyt``:
+    Source layout.
+
+Parameter ``target_lyt``:
+    Destination layout.
+
+Parameter ``y_offset``:
+    Vertical shift to apply.)doc";
+
 static const char *__doc_fiction_detail_count_gate_types_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_count_gate_types_impl_count_gate_types_impl = R"doc()doc";
@@ -5985,6 +6145,27 @@ R"doc(From https://stackoverflow.com/questions/57756557/initializing-a-
 stdarray-with-a-constant-value)doc";
 
 static const char *__doc_fiction_detail_create_extended_layout =
+R"doc(Creates a new layout with additional top, bottom, and right margins.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Original layout.
+
+Parameter ``top_margin``:
+    Top margin in rows.
+
+Parameter ``bottom_margin``:
+    Bottom margin in rows.
+
+Parameter ``right_margin``:
+    Right margin in columns.
+
+Returns:
+    Extended layout with preserved clocking scheme and layout name.)doc";
+
+static const char *__doc_fiction_detail_create_extended_layout_2 =
 R"doc(Creates a new layout with space reserved for PI/PO unscrambling rows.
 
 Template parameter ``Lyt``:
@@ -6001,6 +6182,25 @@ Parameter ``po_rows``:
 
 Returns:
     New layout with extended height and original clocking/name.)doc";
+
+static const char *__doc_fiction_detail_create_ordered_return_route_pairs =
+R"doc(Creates deterministic PO-PI route pairs and assigns lane indices
+according to routing order.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Working layout.
+
+Parameter ``num_pairs``:
+    Number of pairs to create.
+
+Parameter ``pin_routing_order``:
+    Optional explicit pair order.
+
+Returns:
+    Route pairs with lane assignments.)doc";
 
 static const char *__doc_fiction_detail_create_pi_routing_objectives =
 R"doc(Places new PIs in the top row and creates routing objectives to their
@@ -6064,6 +6264,57 @@ Parameter ``po_rows``:
 
 Returns:
     Output routing objectives with associated output names.)doc";
+
+static const char *__doc_fiction_detail_create_return_route_pairs =
+R"doc(Creates deterministic PO-PI route pairs in index order.
+
+Pairing is index-based: PO[i] is connected to PI[i].
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Working layout.
+
+Parameter ``num_pairs``:
+    Number of pairs to create.
+
+Returns:
+    Vector of route pairs in index order.)doc";
+
+static const char *__doc_fiction_detail_create_return_route_waypoints =
+R"doc(Creates deterministic routing waypoints for a single return pair.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``pair``:
+    Return pair description.
+
+Parameter ``core_x``:
+    Maximum x-coordinate of the shifted original layout.
+
+Parameter ``core_y``:
+    Original maximum y-coordinate of the unshifted layout.
+
+Parameter ``top_margin``:
+    Top margin used to shift the original layout.
+
+Parameter ``lane_spacing``:
+    Lane spacing.
+
+Returns:
+    Ordered waypoint list ending in the PI target.)doc";
+
+static const char *__doc_fiction_detail_create_unrestricted_clocking_scheme =
+R"doc(Creates a temporary unrestricted clocking scheme for path search.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Returns:
+    Clocking scheme with one phase, allowing movement to every
+    adjacent coordinate.)doc";
 
 static const char *__doc_fiction_detail_create_wiring_reduction_layout =
 R"doc(Create a wiring_reduction_layout suitable for finding excess wiring
@@ -6702,6 +6953,33 @@ Parameter ``pins``:
 Returns:
     Vector of coordinates corresponding to the pins.)doc";
 
+static const char *__doc_fiction_detail_determine_required_lane_margin =
+R"doc(Computes an effective lane-based margin for the return corridor.
+
+Parameter ``num_pairs``:
+    Number of routed PO-PI pairs.
+
+Parameter ``lane_spacing``:
+    Spacing between neighboring lanes.
+
+Parameter ``requested_margin``:
+    User-requested minimum margin.
+
+Returns:
+    Effective margin.)doc";
+
+static const char *__doc_fiction_detail_determine_required_top_margin =
+R"doc(Computes the effective top margin for the return corridor.
+
+Parameter ``num_pairs``:
+    Number of routed PO-PI pairs.
+
+Parameter ``params``:
+    Routing parameters.
+
+Returns:
+    Effective top margin.)doc";
+
 static const char *__doc_fiction_detail_displacement_robustness_domain_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_displacement_robustness_domain_impl_all_possible_sidb_displacements =
@@ -6802,6 +7080,30 @@ Parameter ``lyt``:
 
 Parameter ``status``:
     The operational status of the provided layout.)doc";
+
+static const char *__doc_fiction_detail_draw_dot_edges =
+R"doc(Draws all edges of a layout into a DOT edge stream.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Drawer``:
+    Drawer type.
+
+Parameter ``lyt``:
+    Layout to draw.
+
+Parameter ``drawer``:
+    Drawer instance.
+
+Parameter ``overlay``:
+    Overlay edge information.
+
+Parameter ``params``:
+    Overlay visualization parameters.
+
+Parameter ``edges``:
+    Output edge stream.)doc";
 
 static const char *__doc_fiction_detail_east_south_edge_coloring = R"doc()doc";
 
@@ -7624,13 +7926,17 @@ routing signals between the gate and its fan-in/fan-out connections.
 Template parameter ``Lyt``:
     Cartesian gate-level layout type.)doc";
 
-static const char *__doc_fiction_detail_fanin_fanout_data_fanins =
-R"doc(This vector holds the layout coordinates of all fan-in connections to
-the gate.)doc";
+static const char *__doc_fiction_detail_fanin_fanout_data_fanout_target =
+R"doc(Represents one fan-out target and the output pin of the moved gate
+that feeds this target.)doc";
+
+static const char *__doc_fiction_detail_fanin_fanout_data_fanout_target_source_output = R"doc(Output pin index used at the moved gate to feed the fan-out target.)doc";
+
+static const char *__doc_fiction_detail_fanin_fanout_data_fanout_target_target = R"doc(Tile position of the fan-out target.)doc";
 
 static const char *__doc_fiction_detail_fanin_fanout_data_fanouts =
-R"doc(This vector holds the layout coordinates of all fan-out connections
-from the gate.)doc";
+R"doc(This vector holds all fan-out targets and the output pin used to drive
+them.)doc";
 
 static const char *__doc_fiction_detail_fanin_fanout_data_route_fanin_1_to_gate =
 R"doc(This layout_coordinate_path object represents the path for routing
@@ -7762,6 +8068,26 @@ static const char *__doc_fiction_detail_fanout_substitution_impl_signal_output =
 static const char *__doc_fiction_detail_fanout_substitution_impl_source_fanout_size = R"doc()doc";
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_source_num_outputs = R"doc()doc";
+
+static const char *__doc_fiction_detail_find_a_star_path =
+R"doc(Finds a path between two coordinates using A* and planar routing
+constraints.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Working layout.
+
+Parameter ``objective``:
+    Source-target objective.
+
+Parameter ``use_unrestricted_clocking``:
+    If true, runs A* with a temporary unrestricted one-phase clocking
+    scheme.
+
+Returns:
+    Found path, or empty path if none exists.)doc";
 
 static const char *__doc_fiction_detail_gate_level_drvs_impl = R"doc()doc";
 
@@ -8155,6 +8481,38 @@ Parameter ``cost``:
 Returns:
     The number of search space graphs to be generated.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_calculate_preferred_pi_order_penalty =
+R"doc(Computes a soft penalty for violating preferred PI order for a
+candidate PI placement.
+
+The penalty grows with left/right order violations against already
+placed PIs according to the configured preferred order.
+
+Parameter ``ssg``:
+    Current search-space graph.
+
+Parameter ``candidate``:
+    Candidate position for the next node.
+
+Returns:
+    Normalized penalty contribution to the expansion priority.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_calculate_preferred_po_order_penalty =
+R"doc(Computes a soft penalty for violating preferred PO order for a
+candidate PO placement.
+
+The penalty grows with left/right order violations against already
+placed POs according to the configured preferred order.
+
+Parameter ``ssg``:
+    Current search-space graph.
+
+Parameter ``candidate``:
+    Candidate position for the next node.
+
+Returns:
+    Normalized penalty contribution to the expansion priority.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_check_path =
 R"doc(Checks if there is a path between the source and destination tiles in
 the given layout.
@@ -8332,6 +8690,17 @@ number of wire segments as cost objective. When set to `true`,
 subsequent search space graphs with the number of wire segments as
 cost objective can be pruned.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_initialize_input_pin_order_ranks =
+R"doc(Initializes PI order ranks from user parameters.
+
+If `prefer_input_pin_order` is enabled without an explicit PI order
+list, declaration order is used. If an explicit order list is
+provided, it is validated against network PI names and converted into
+ranks.
+
+Throws:
+    std::invalid_argument If the provided PI order list is invalid.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_initialize_layout =
 R"doc(Initializes the layout with minimum width
 
@@ -8343,40 +8712,77 @@ Returns:
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_initialize_network = R"doc()doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_initialize_output_pin_order_ranks =
+R"doc(Initializes PO order ranks from user parameters.
+
+If `prefer_output_pin_order` is enabled without an explicit PO order
+list, declaration order is used. If an explicit order list is
+provided, it is validated against network PO names and converted into
+ranks.
+
+Throws:
+    std::invalid_argument If the provided PO order list is invalid.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_input_pin_order_ranks =
+R"doc(Primary input ranks by declaration index used for deterministic PI
+reordering.
+
+The value at index `i` stores the preferred rank of the `i`-th PI in
+declaration order.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_max_placed_nodes = R"doc(Keep track of the maximum number of placed nodes.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_ntk = R"doc(The network to be placed and routed.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs = R"doc(Number of search space graphs.)doc";
 
-static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_high_efficiency = R"doc(In high-efficiency mode, only 2 search space graphs are used)doc";
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_high_efficiency =
+R"doc(In high-efficiency mode, only 1 search space graph is used.
+
+In native hex mode, PIs are fixed to the top border. Therefore, no
+additional PI-location variants are needed.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_high_effort =
-R"doc(In high-effort mode, 12 search space graphs are used: 3 (possible PI
-locations) * 2 (fanout substitution strategies) * 2 (topological
-orderings))doc";
+R"doc(In high-effort mode, 4 search space graphs are used: 1 (possible PI
+location: top) * 2 (fanout substitution strategies) * 2 (topological
+orderings).)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_highest_effort =
-R"doc(In highest-effort mode, 48 search space graphs are used. This includes
-12 search space graphs for each of the four base cost objectives
-layout area, number of wire segments, number of wire crossings, and
-area-crossing product.)doc";
+R"doc(In highest-effort mode, 16 search space graphs are used.
+
+This includes 4 search space graphs for each of the four base cost
+objectives layout area, number of wire segments, number of wire
+crossings, and area-crossing product.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_highest_effort_custom =
-R"doc(In highest-effort mode with a custom cost function, 60 search space
-graphs are used (48 with the standard cost objectives and 12 for the
+R"doc(In highest-effort mode with a custom cost function, 20 search space
+graphs are used (16 with the standard cost objectives and 4 for the
 custom one).)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_maximum_effort =
-R"doc(In maximum-effort mode, 96 search space graphs are used. It adds
-another 48 search space graphs to the 48 search space graphs from
-highest-effort mode using randomized fanout substitution strategies
-and random topological orderings.)doc";
+R"doc(In maximum-effort mode, 32 search space graphs are used.
+
+It adds another 16 search space graphs to the 16 search space graphs
+from highest-effort mode using randomized fanout substitution
+strategies and random topological orderings.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_maximum_effort_custom =
-R"doc(In maximum-effort mode with a custom cost function, 120 search space
-graphs are used (96 with the standard cost objectives and 24 for the
+R"doc(In maximum-effort mode with a custom cost function, 40 search space
+graphs are used (32 with the standard cost objectives and 8 for the
 custom one).)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_output_pin_order_ranks =
+R"doc(Primary output ranks by declaration index used for deterministic PO
+reordering.
+
+The value at index `i` stores the preferred rank of the `i`-th PO in
+declaration order.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_output_pin_order_ranks_by_name =
+R"doc(Explicit primary output ranks by PO name.
+
+This map is populated only if an explicit `output_pin_order` list is
+provided.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_place_and_route =
 R"doc(Executes a single placement step in the layout for the given network
@@ -9839,6 +10245,32 @@ the canvas SiDBs satisfies the criteria for physical validity.)doc";
 
 static const char *__doc_fiction_detail_layout_invalidity_reason_POTENTIAL_POSITIVE_CHARGES = R"doc(Positive SiDBs can potentially occur.)doc";
 
+static const char *__doc_fiction_detail_materialize_path_segment =
+R"doc(Materializes a routed path segment and returns the resulting signal at
+the segment end.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Path``:
+    Path type.
+
+Parameter ``lyt``:
+    Working layout.
+
+Parameter ``source_signal``:
+    Driving signal at the segment source.
+
+Parameter ``path``:
+    Path segment from source to endpoint.
+
+Parameter ``connect_to_existing_target``:
+    If true and the endpoint is occupied, connect to that endpoint
+    node.
+
+Returns:
+    Signal at the segment endpoint.)doc";
+
 static const char *__doc_fiction_detail_nested_vector_hash =
 R"doc(This struct defines a hash function for a nested vector of layout
 tiles. It calculates a combined hash value for a vector of tiles based
@@ -10694,8 +11126,11 @@ Parameter ``current_pos``:
 Parameter ``old_pos``:
     Original position of the gate before relocation attempt.
 
+Parameter ``fanins``:
+    Vector of fanin signals connected to the gate.
+
 Parameter ``fanouts``:
-    Vector of fanout tiles connected to the gate.)doc";
+    Vector of fanout targets connected to the gate.)doc";
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_run = R"doc()doc";
 
@@ -11052,6 +11487,20 @@ Parameter ``cell``:
 
 static const char *__doc_fiction_detail_recursively_paint_edges = R"doc()doc";
 
+static const char *__doc_fiction_detail_return_route_pair =
+R"doc(A routed PO-PI pair description.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_return_route_pair_index = R"doc(Pair index in PI/PO order.)doc";
+
+static const char *__doc_fiction_detail_return_route_pair_lane = R"doc(Lane index assigned by routing order.)doc";
+
+static const char *__doc_fiction_detail_return_route_pair_source = R"doc(Source PO tile.)doc";
+
+static const char *__doc_fiction_detail_return_route_pair_target = R"doc(Target PI tile.)doc";
+
 static const char *__doc_fiction_detail_rng_state =
 R"doc(A lightweight container that groups together the two objects required
 for random fan-out selection and only lives when `strategy == RANDOM`.)doc";
@@ -11109,6 +11558,36 @@ Parameter ``lyt``:
 
 Parameter ``objectives``:
     Output routing objectives with output names.)doc";
+
+static const char *__doc_fiction_detail_route_return_path_impl =
+R"doc(Implementation class for return-path routing.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_route_return_path_impl_layout = R"doc(Input layout.)doc";
+
+static const char *__doc_fiction_detail_route_return_path_impl_params = R"doc(Parameters.)doc";
+
+static const char *__doc_fiction_detail_route_return_path_impl_pst = R"doc(Statistics.)doc";
+
+static const char *__doc_fiction_detail_route_return_path_impl_route_return_path_impl =
+R"doc(Standard constructor.
+
+Parameter ``lyt``:
+    Input layout.
+
+Parameter ``p``:
+    Parameters.
+
+Parameter ``st``:
+    Statistics.)doc";
+
+static const char *__doc_fiction_detail_route_return_path_impl_run =
+R"doc(Executes return-path routing.
+
+Returns:
+    Layout with routed return paths.)doc";
 
 static const char *__doc_fiction_detail_routing_objective_with_fanin_update_information =
 R"doc(Encapsulates a routing objective with fanin update information.
@@ -12233,6 +12712,28 @@ Parameter ``fabrication_error_rate``:
 
 Returns:
     The probability of fabricating an operational SiDB layout.)doc";
+
+static const char *__doc_fiction_determine_return_path_overlay =
+R"doc(Computes return-path overlay tiles and edges by comparing reference
+and routed layouts.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``reference_layout``:
+    Non-routed reference layout in routed footprint.
+
+Parameter ``routed_layout``:
+    Routed layout.
+
+Parameter ``respect_clocking``:
+    If `true`, compare clock-valid edges only.
+
+Returns:
+    Overlay information.
+
+Throws:
+    std::invalid_argument If layout dimensions differ.)doc";
 
 static const char *__doc_fiction_determine_vertex_coloring =
 R"doc(This function provides an interface to call various vertex coloring
@@ -15248,6 +15749,13 @@ networks.
 
 Default value: `false`)doc";
 
+static const char *__doc_fiction_graph_oriented_layout_design_params_input_pin_order =
+R"doc(Optional explicit primary input (PI) order by PI name.
+
+If non-empty and `prefer_input_pin_order` is enabled, this list
+overrides declaration order and defines the left-to-right PI placement
+order. The list must contain each PI name exactly once.)doc";
+
 static const char *__doc_fiction_graph_oriented_layout_design_params_mode = R"doc(The effort mode used. Defaults to HIGH_EFFORT.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_params_num_vertex_expansions =
@@ -15259,10 +15767,31 @@ solution being found. A higher value might lead to better solutions,
 but also requires more runtime. Defaults to 4 expansions for each
 vertex.)doc";
 
+static const char *__doc_fiction_graph_oriented_layout_design_params_output_pin_order =
+R"doc(Optional explicit primary output (PO) order by PO name.
+
+If non-empty and `prefer_output_pin_order` is enabled, this list
+overrides declaration order and defines the left-to-right PO placement
+order. The list must contain each PO name exactly once.)doc";
+
 static const char *__doc_fiction_graph_oriented_layout_design_params_planar =
 R"doc(Disable the creation of crossings during layout generation. If set to
 true, gates will only be placed if a crossing-free wiring is found.
 Defaults to false.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_params_prefer_input_pin_order =
+R"doc(Prefer that primary inputs (PIs) are placed from left to right in
+network PI order.
+
+This is a soft preference that biases the search but does not enforce
+a hard feasibility constraint. Defaults to `false`.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_params_prefer_output_pin_order =
+R"doc(Prefer that primary outputs (POs) are placed from left to right in
+network PO order.
+
+This is a soft preference that biases the search but does not enforce
+a hard feasibility constraint. Defaults to `false`.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_params_randomize_tiles_to_skip_between_pis =
 R"doc(When enabled, randomizes the tiles_to_skip_between_pis value for each
@@ -21463,6 +21992,50 @@ Parameter ``old2new``:
     Mapping of signals from `ntk_src` to `ntk_dest` using a
     branching_signal_container.)doc";
 
+static const char *__doc_fiction_return_path_overlay =
+R"doc(Overlay information describing which tiles and edges were added by
+return-path routing.)doc";
+
+static const char *__doc_fiction_return_path_overlay_drawer_params = R"doc(Visualization parameters for return-path overlay DOT output.)doc";
+
+static const char *__doc_fiction_return_path_overlay_drawer_params_overlay_edge_color = R"doc(Edge color used for newly added return-path edges.)doc";
+
+static const char *__doc_fiction_return_path_overlay_drawer_params_overlay_edge_penwidth = R"doc(Pen width used for newly added return-path edges.)doc";
+
+static const char *__doc_fiction_return_path_overlay_drawer_params_overlay_tile_fillcolor = R"doc(Fill color used for newly added return-path tiles.)doc";
+
+static const char *__doc_fiction_return_path_overlay_drawer_params_respect_clocking = R"doc(If `true`, consider only clock-valid fanins when drawing edges.)doc";
+
+static const char *__doc_fiction_return_path_overlay_edge = R"doc(Directed edge key for DOT overlay highlighting.)doc";
+
+static const char *__doc_fiction_return_path_overlay_edge_hash = R"doc(Hash function for return_path_overlay_edge.)doc";
+
+static const char *__doc_fiction_return_path_overlay_edge_hash_operator_call =
+R"doc(Hashes an edge key.
+
+Parameter ``edge``:
+    Edge key.
+
+Returns:
+    Hash value.)doc";
+
+static const char *__doc_fiction_return_path_overlay_edge_operator_eq =
+R"doc(Equality operator.
+
+Parameter ``other``:
+    Other edge.
+
+Returns:
+    `true` iff both source and target match.)doc";
+
+static const char *__doc_fiction_return_path_overlay_edge_source = R"doc(Source tile key.)doc";
+
+static const char *__doc_fiction_return_path_overlay_edge_target = R"doc(Target tile key.)doc";
+
+static const char *__doc_fiction_return_path_overlay_overlay_edges = R"doc(Added edge keys.)doc";
+
+static const char *__doc_fiction_return_path_overlay_overlay_tiles = R"doc(Added tile keys.)doc";
+
 static const char *__doc_fiction_ripple_clocking =
 R"doc(Returns the Ripple clocking as defined in \"Ripple Clock Schemes for
 Quantum-dot Cellular Automata Circuits\" by Prafull Purohit, Master
@@ -21512,6 +22085,96 @@ Parameter ``path``:
     Path to route wires along.)doc";
 
 static const char *__doc_fiction_route_path_2 = R"doc()doc";
+
+static const char *__doc_fiction_route_return_path =
+R"doc(Routes return paths from primary outputs back to primary inputs.
+
+This algorithm assumes a pointy-top hexagonal row-clocked layout and
+performs deterministic inner-to-outer routing through explicitly
+allocated top, bottom, and right return corridors. Pair routing order
+can be explicitly specified via
+route_return_path_params::pin_routing_order or defaults to inner-to-
+outer ordering.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Input layout.
+
+Parameter ``ps``:
+    Parameters.
+
+Parameter ``pst``:
+    Optional statistics pointer.
+
+Returns:
+    Layout with routed return paths.)doc";
+
+static const char *__doc_fiction_route_return_path_coordinate = R"doc(Coordinate used to describe routing whitelist entries.)doc";
+
+static const char *__doc_fiction_route_return_path_coordinate_x = R"doc(x-coordinate.)doc";
+
+static const char *__doc_fiction_route_return_path_coordinate_y = R"doc(y-coordinate.)doc";
+
+static const char *__doc_fiction_route_return_path_coordinate_z = R"doc(z-coordinate.)doc";
+
+static const char *__doc_fiction_route_return_path_params = R"doc(Parameters for return-path routing.)doc";
+
+static const char *__doc_fiction_route_return_path_params_allow_invalid_final_segment_clocking =
+R"doc(Allows the final segment into the PI target to violate clock-validity.
+
+If set to `true`, only the final segment may be clock-invalid while
+all preceding segments are routed as usual. If set to `false`, the
+final segment is routed clock-aware and must be clock-valid at the PI
+target.)doc";
+
+static const char *__doc_fiction_route_return_path_params_bottom_margin =
+R"doc(Requested number of rows below the shifted original layout.
+
+The effective bottom margin is at least what is required by the lane
+spacing and number of routed pairs.)doc";
+
+static const char *__doc_fiction_route_return_path_params_lane_spacing = R"doc(Spacing between neighboring return-path lanes.)doc";
+
+static const char *__doc_fiction_route_return_path_params_pin_routing_order =
+R"doc(Optional explicit order in which PO-PI pairs are routed.
+
+Entries are pair indices `i` for the fixed pair mapping `PO[i] ->
+PI[i]`. If empty, the default inner-to-outer ordering is used.)doc";
+
+static const char *__doc_fiction_route_return_path_params_right_margin =
+R"doc(Requested number of columns to the right of the original layout.
+
+The effective right margin is at least what is required by the lane
+spacing and number of routed pairs.)doc";
+
+static const char *__doc_fiction_route_return_path_params_routing_whitelist =
+R"doc(Optional whitelist of coordinates that routing is allowed to use.
+
+If empty, routing can use any unobstructed coordinate (current default
+behavior). If non-empty, all non-whitelisted coordinates are blocked.
+Occupied coordinates (e.g., gates, wires, PIs, POs) remain blocked
+even when listed here.)doc";
+
+static const char *__doc_fiction_route_return_path_params_top_margin =
+R"doc(Requested number of rows above the shifted original layout.
+
+The effective top margin is at least the number of routed PO-PI pairs.)doc";
+
+static const char *__doc_fiction_route_return_path_stats = R"doc(Statistics for return-path routing.)doc";
+
+static const char *__doc_fiction_route_return_path_stats_duration = R"doc(Total runtime of the algorithm.)doc";
+
+static const char *__doc_fiction_route_return_path_stats_num_routed_pairs = R"doc(Number of routed PO-PI return pairs.)doc";
+
+static const char *__doc_fiction_route_return_path_stats_num_routed_segments = R"doc(Number of routed path segments across all pairs.)doc";
+
+static const char *__doc_fiction_route_return_path_stats_report =
+R"doc(Reports collected runtime statistics.
+
+Parameter ``out``:
+    Output stream.)doc";
 
 static const char *__doc_fiction_routing_objective =
 R"doc(Routing objectives are source-target pairs.
@@ -24684,6 +25347,59 @@ Parameter ``lyt``:
 
 Parameter ``filename``:
     Filename)doc";
+
+static const char *__doc_fiction_write_dot_return_path_overlay_layout =
+R"doc(Writes routed layout DOT output with highlighted return-path
+additions.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``ClockColors``:
+    Draw clock colors if `true`.
+
+Template parameter ``DrawIndexes``:
+    Draw node indexes if `true`.
+
+Parameter ``reference_layout``:
+    Non-routed reference layout in routed footprint.
+
+Parameter ``routed_layout``:
+    Routed layout.
+
+Parameter ``os``:
+    Output stream.
+
+Parameter ``params``:
+    Overlay visualization parameters.)doc";
+
+static const char *__doc_fiction_write_dot_return_path_overlay_layout_2 =
+R"doc(Writes routed layout DOT output with highlighted return-path additions
+into a file.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``ClockColors``:
+    Draw clock colors if `true`.
+
+Template parameter ``DrawIndexes``:
+    Draw node indexes if `true`.
+
+Parameter ``reference_layout``:
+    Non-routed reference layout in routed footprint.
+
+Parameter ``routed_layout``:
+    Routed layout.
+
+Parameter ``filename``:
+    Output filename.
+
+Parameter ``params``:
+    Overlay visualization parameters.
+
+Throws:
+    std::ofstream::failure If file cannot be opened.)doc";
 
 static const char *__doc_fiction_write_fgl_layout =
 R"doc(Writes an FGL layout to a file.
