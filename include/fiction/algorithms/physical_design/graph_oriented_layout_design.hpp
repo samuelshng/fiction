@@ -197,6 +197,20 @@ struct graph_oriented_layout_design_params
      */
     std::vector<std::string> input_pin_order{};
     /**
+     * Prefer that primary outputs (POs) are placed from left to right in network PO order.
+     *
+     * This is a soft preference that biases the search but does not enforce a hard feasibility constraint.
+     * Defaults to `false`.
+     */
+    bool prefer_output_pin_order = false;
+    /**
+     * Optional explicit primary output (PO) order by PO name.
+     *
+     * If non-empty and `prefer_output_pin_order` is enabled, this list overrides declaration order and defines the
+     * left-to-right PO placement order. The list must contain each PO name exactly once.
+     */
+    std::vector<std::string> output_pin_order{};
+    /**
      * For each primary input (PI) considered during placement, reserve this many
      * empty tiles *after* the current frontier:
      *  - Top edge (row 0): leave `tiles_to_skip_between_pis` empty tiles to the right

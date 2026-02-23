@@ -30,6 +30,9 @@ Options:
   --gold-prefer-input-pin-order                    Maps to gold --prefer_input_pin_order
   --gold-enforce-input-pin-order                   Deprecated alias for --gold-prefer-input-pin-order
   --gold-input-pin-order <comma-separated-list>    Maps to gold --input_pin_order (also enables preferred PI order)
+  --gold-prefer-output-pin-order                   Maps to gold --prefer_output_pin_order
+  --gold-enforce-output-pin-order                  Deprecated alias for --gold-prefer-output-pin-order
+  --gold-output-pin-order <comma-separated-list>   Maps to gold --output_pin_order (also enables preferred PO order)
   --gold-tiles-to-skip-between-pis <n>             Maps to gold --tiles_to_skip_between_pis
   --gold-randomize-tiles-to-skip-between-pis       Maps to gold --randomize_tiles_to_skip_between_pis
   --gold-grid <cartesian|hex>                      Maps to gold --grid
@@ -76,6 +79,7 @@ GOLD_EFFORT_MODE=""
 GOLD_COST_OBJECTIVE=""
 GOLD_SEED=""
 GOLD_INPUT_PIN_ORDER=""
+GOLD_OUTPUT_PIN_ORDER=""
 GOLD_TILES_TO_SKIP=""
 GOLD_GRID="cartesian"
 GOLD_GRID_SET=0
@@ -86,6 +90,7 @@ GOLD_MULTITHREADING=0
 GOLD_VERBOSE=0
 GOLD_STRAIGHT_INVERTERS=0
 GOLD_PREFER_INPUT_PIN_ORDER=0
+GOLD_PREFER_OUTPUT_PIN_ORDER=0
 GOLD_RANDOMIZE_TILES_TO_SKIP=0
 
 OPTIMIZE_ENABLED=0
@@ -146,6 +151,11 @@ while [[ $# -gt 0 ]]; do
             GOLD_INPUT_PIN_ORDER="$2"
             shift 2
             ;;
+        --gold-output-pin-order)
+            require_value "$1" "${2:-}"
+            GOLD_OUTPUT_PIN_ORDER="$2"
+            shift 2
+            ;;
         --gold-tiles-to-skip-between-pis)
             require_value "$1" "${2:-}"
             GOLD_TILES_TO_SKIP="$2"
@@ -179,6 +189,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --gold-prefer-input-pin-order|--gold-enforce-input-pin-order)
             GOLD_PREFER_INPUT_PIN_ORDER=1
+            shift
+            ;;
+        --gold-prefer-output-pin-order|--gold-enforce-output-pin-order)
+            GOLD_PREFER_OUTPUT_PIN_ORDER=1
             shift
             ;;
         --gold-randomize-tiles-to-skip-between-pis)
@@ -307,6 +321,8 @@ GOLD_ARGS=()
 [[ $GOLD_STRAIGHT_INVERTERS -eq 1 ]] && GOLD_ARGS+=("--straight_inverters")
 [[ $GOLD_PREFER_INPUT_PIN_ORDER -eq 1 ]] && GOLD_ARGS+=("--prefer_input_pin_order")
 [[ -n "$GOLD_INPUT_PIN_ORDER" ]] && GOLD_ARGS+=("--input_pin_order ${GOLD_INPUT_PIN_ORDER}")
+[[ $GOLD_PREFER_OUTPUT_PIN_ORDER -eq 1 ]] && GOLD_ARGS+=("--prefer_output_pin_order")
+[[ -n "$GOLD_OUTPUT_PIN_ORDER" ]] && GOLD_ARGS+=("--output_pin_order ${GOLD_OUTPUT_PIN_ORDER}")
 [[ -n "$GOLD_TILES_TO_SKIP" ]] && GOLD_ARGS+=("--tiles_to_skip_between_pis ${GOLD_TILES_TO_SKIP}")
 [[ $GOLD_RANDOMIZE_TILES_TO_SKIP -eq 1 ]] && GOLD_ARGS+=("--randomize_tiles_to_skip_between_pis")
 [[ $GOLD_GRID_SET -eq 1 ]] && GOLD_ARGS+=("--grid ${GOLD_GRID}")

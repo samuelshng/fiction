@@ -80,6 +80,9 @@ inline void graph_oriented_layout_design(pybind11::module& m)
                        DOC(fiction_graph_oriented_layout_design_params_straight_inverters))
         .def_readwrite("prefer_input_pin_order", &fiction::graph_oriented_layout_design_params::prefer_input_pin_order)
         .def_readwrite("input_pin_order", &fiction::graph_oriented_layout_design_params::input_pin_order)
+        .def_readwrite("prefer_output_pin_order",
+                       &fiction::graph_oriented_layout_design_params::prefer_output_pin_order)
+        .def_readwrite("output_pin_order", &fiction::graph_oriented_layout_design_params::output_pin_order)
         .def_readwrite("tiles_to_skip_between_pis",
                        &fiction::graph_oriented_layout_design_params::tiles_to_skip_between_pis,
                        DOC(fiction_graph_oriented_layout_design_params_tiles_to_skip_between_pis))

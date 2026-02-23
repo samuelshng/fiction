@@ -215,6 +215,78 @@ TEST_CASE("Hex GOLD explicit PI order is validated", "[graph-oriented-layout-des
     }
 }
 
+TEST_CASE("Hex GOLD explicit output pin ordering can be preferred",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    mockturtle::names_view<technology_network> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+    const auto f = ntk.create_and(a, b);
+
+    ntk.create_po(f, "f");
+    ntk.create_po(f, "g");
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                    = graph_oriented_layout_design_params::effort_mode::HIGH_EFFICIENCY;
+    params.return_first            = true;
+    params.seed                    = 0u;
+    params.timeout                 = 100000u;
+    params.prefer_output_pin_order = true;
+    params.output_pin_order        = {"g", "f"};
+
+    const auto layout = run_gold_hex_native(ntk, params, &stats);
+    REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
+
+    std::unordered_map<std::string, uint64_t> po_x{};
+    layout->foreach_po(
+        [&layout, &po_x](const auto& po, const auto index)
+        {
+            REQUIRE(layout->has_output_name(index));
+            po_x.emplace(layout->get_output_name(index), layout->get_tile(layout->get_node(po)).x);
+        });
+
+    REQUIRE(po_x.count("f") == 1u);
+    REQUIRE(po_x.count("g") == 1u);
+    CHECK(po_x.at("g") < po_x.at("f"));
+}
+
+TEST_CASE("Hex GOLD explicit PO order is validated", "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    mockturtle::names_view<technology_network> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+    const auto f = ntk.create_and(a, b);
+
+    ntk.create_po(f, "f");
+    ntk.create_po(f, "g");
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                    = graph_oriented_layout_design_params::effort_mode::HIGH_EFFICIENCY;
+    params.return_first            = true;
+    params.seed                    = 0u;
+    params.timeout                 = 100000u;
+    params.prefer_output_pin_order = true;
+
+    SECTION("Unknown PO name")
+    {
+        params.output_pin_order = {"f", "missing"};
+
+        CHECK_THROWS_AS(run_gold_hex_native(ntk, params, &stats), std::invalid_argument);
+    }
+
+    SECTION("Duplicate PO name")
+    {
+        params.output_pin_order = {"f", "f"};
+
+        CHECK_THROWS_AS(run_gold_hex_native(ntk, params, &stats), std::invalid_argument);
+    }
+}
+
 TEST_CASE("Exceptions in hex flow wrapper", "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
 {
     SECTION("No custom cost objective provided exception")

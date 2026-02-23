@@ -42,6 +42,7 @@ class graph_oriented_layout_design_hex_impl
     {
         ntk.substitute_po_signals();
         initialize_input_pin_order_ranks();
+        initialize_output_pin_order_ranks();
     }
     /**
      * Executes the graph-oriented layout design algorithm and returns the best found layout.
@@ -380,6 +381,18 @@ class graph_oriented_layout_design_hex_impl
      */
     std::vector<uint64_t> input_pin_order_ranks{};
     /**
+     * Primary output ranks by declaration index used for deterministic PO reordering.
+     *
+     * The value at index `i` stores the preferred rank of the `i`-th PO in declaration order.
+     */
+    std::vector<uint64_t> output_pin_order_ranks{};
+    /**
+     * Explicit primary output ranks by PO name.
+     *
+     * This map is populated only if an explicit `output_pin_order` list is provided.
+     */
+    std::unordered_map<std::string, uint64_t> output_pin_order_ranks_by_name{};
+    /**
      * Thread pool for multithreaded execution to avoid thread creation overhead.
      */
     mutable std::vector<std::future<std::optional<Lyt>>> futures_pool{};
@@ -468,6 +481,93 @@ class graph_oriented_layout_design_hex_impl
             }
 
             rank_slot = preferred_rank++;
+        }
+    }
+    /**
+     * Initializes PO order ranks from user parameters.
+     *
+     * If `prefer_output_pin_order` is enabled without an explicit PO order list, declaration order is used.
+     * If an explicit order list is provided, it is validated against network PO names and converted into ranks.
+     *
+     * @throws std::invalid_argument If the provided PO order list is invalid.
+     */
+    void initialize_output_pin_order_ranks()
+    {
+        output_pin_order_ranks_by_name.clear();
+
+        if (!ps.prefer_output_pin_order)
+        {
+            return;
+        }
+
+        const auto num_pos = ntk.num_pos();
+
+        output_pin_order_ranks.resize(num_pos);
+        for (uint64_t i = 0u; i < num_pos; ++i)
+        {
+            output_pin_order_ranks[i] = i;
+        }
+
+        if (ps.output_pin_order.empty())
+        {
+            return;
+        }
+
+        if (ps.output_pin_order.size() != num_pos)
+        {
+            throw std::invalid_argument(fmt::format("PO order list size ({}) does not match the number of POs ({}).",
+                                                    ps.output_pin_order.size(), num_pos));
+        }
+
+        std::unordered_map<std::string, uint64_t> declaration_index_by_name{};
+        declaration_index_by_name.reserve(num_pos);
+
+        ntk.foreach_po(
+            [this, &declaration_index_by_name](const auto&, const auto i)
+            {
+                if (!ntk.has_output_name(i))
+                {
+                    throw std::invalid_argument(
+                        "Explicit PO ordering requires named POs, but at least one PO has no name.");
+                }
+
+                const auto po_name = ntk.get_output_name(i);
+
+                if (const auto [_, inserted] = declaration_index_by_name.emplace(po_name, i); !inserted)
+                {
+                    throw std::invalid_argument(
+                        fmt::format("PO names must be unique for explicit ordering. Duplicate name: '{}'.", po_name));
+                }
+            });
+
+        std::fill(output_pin_order_ranks.begin(), output_pin_order_ranks.end(), num_pos);
+        output_pin_order_ranks_by_name.reserve(num_pos);
+
+        uint64_t preferred_rank = 0u;
+        for (const auto& requested_name : ps.output_pin_order)
+        {
+            if (requested_name.empty())
+            {
+                throw std::invalid_argument("PO order list contains an empty PO name.");
+            }
+
+            const auto it = declaration_index_by_name.find(requested_name);
+            if (it == declaration_index_by_name.cend())
+            {
+                throw std::invalid_argument(
+                    fmt::format("PO order list contains unknown PO name '{}'.", requested_name));
+            }
+
+            auto& rank_slot = output_pin_order_ranks[it->second];
+            if (rank_slot != num_pos)
+            {
+                throw std::invalid_argument(
+                    fmt::format("PO order list contains duplicate PO name '{}'.", requested_name));
+            }
+
+            rank_slot = preferred_rank;
+            output_pin_order_ranks_by_name.emplace(requested_name, preferred_rank);
+            ++preferred_rank;
         }
     }
     /**
@@ -1394,6 +1494,7 @@ class graph_oriented_layout_design_hex_impl
         const auto current_rank = current_rank_it->second;
 
         double penalty = 0.0;
+
         for (uint64_t node_idx = 0u; node_idx < current_node_idx; ++node_idx)
         {
             const auto prev_node = ssg.nodes_to_place[node_idx];
@@ -1425,6 +1526,109 @@ class graph_oriented_layout_design_hex_impl
         return penalty / normalizer;
     }
     /**
+     * Computes a soft penalty for violating preferred PO order for a candidate PO placement.
+     *
+     * The penalty grows with left/right order violations against already placed POs according to the configured
+     * preferred order.
+     *
+     * @param ssg Current search-space graph.
+     * @param candidate Candidate position for the next node.
+     * @return Normalized penalty contribution to the expansion priority.
+     */
+    [[nodiscard]] double calculate_preferred_po_order_penalty(const search_space_graph<ObstrLyt>& ssg,
+                                                              const tile<ObstrLyt>&               candidate,
+                                                              const ObstrLyt&                     layout) const
+    {
+        if (!ps.prefer_output_pin_order)
+        {
+            return 0.0;
+        }
+
+        const auto current_node_idx = static_cast<uint64_t>(ssg.current_vertex.size());
+        if (current_node_idx >= ssg.nodes_to_place.size())
+        {
+            return 0.0;
+        }
+
+        const auto current_node = ssg.nodes_to_place[current_node_idx];
+        if (!ssg.network.is_po(current_node))
+        {
+            return 0.0;
+        }
+
+        std::unordered_map<mockturtle::node<tec_nt>, uint64_t> po_ranks{};
+        po_ranks.reserve(ssg.network.num_pos());
+
+        uint64_t declaration_index = 0u;
+        ssg.network.foreach_po(
+            [this, &po_ranks, &declaration_index, &ssg](const auto& po, const auto po_index)
+            {
+                const auto po_node = ssg.network.get_node(po);
+                uint64_t   rank    = declaration_index < output_pin_order_ranks.size() ?
+                                         output_pin_order_ranks[declaration_index] :
+                                         declaration_index;
+
+                if (!output_pin_order_ranks_by_name.empty() && ssg.network.has_output_name(po_index))
+                {
+                    const auto po_name = ssg.network.get_output_name(po_index);
+                    if (const auto it = output_pin_order_ranks_by_name.find(po_name);
+                        it != output_pin_order_ranks_by_name.cend())
+                    {
+                        rank = it->second;
+                    }
+                }
+
+                po_ranks[po_node] = rank;
+                ++declaration_index;
+            });
+
+        const auto current_rank_it = po_ranks.find(current_node);
+        if (current_rank_it == po_ranks.cend())
+        {
+            return 0.0;
+        }
+
+        const auto current_rank = current_rank_it->second;
+        const auto num_pos      = std::max<uint64_t>(1u, ssg.network.num_pos());
+
+        double penalty = 0.0;
+        if (num_pos > 1u)
+        {
+            const auto target_x = (current_rank * layout.x()) / (num_pos - 1u);
+            penalty += static_cast<double>(candidate.x > target_x ? candidate.x - target_x : target_x - candidate.x);
+        }
+
+        for (uint64_t node_idx = 0u; node_idx < current_node_idx; ++node_idx)
+        {
+            const auto prev_node = ssg.nodes_to_place[node_idx];
+            if (!ssg.network.is_po(prev_node))
+            {
+                continue;
+            }
+
+            const auto prev_rank_it = po_ranks.find(prev_node);
+            if (prev_rank_it == po_ranks.cend())
+            {
+                continue;
+            }
+
+            const auto prev_rank = prev_rank_it->second;
+            const auto prev_x    = ssg.current_vertex[node_idx].x;
+
+            if (prev_rank < current_rank && prev_x >= candidate.x)
+            {
+                penalty += static_cast<double>(prev_x - candidate.x + 1u);
+            }
+            else if (prev_rank > current_rank && prev_x <= candidate.x)
+            {
+                penalty += static_cast<double>(candidate.x - prev_x + 1u);
+            }
+        }
+
+        const auto normalizer = static_cast<double>(num_pos);
+        return penalty / normalizer;
+    }
+    /**
      * Generates the next possible positions with their priorities based on the layout and search space graph.
      *
      * @param possible_positions A vector of possible positions to be considered.
@@ -1440,6 +1644,7 @@ class graph_oriented_layout_design_hex_impl
         next_positions.reserve(2 * ps.num_vertex_expansions);
 
         static constexpr double preferred_pi_order_penalty_weight = 0.5;
+        static constexpr double preferred_po_order_penalty_weight = 0.5;
 
         for (const auto& position : possible_positions)
         {
@@ -1463,6 +1668,8 @@ class graph_oriented_layout_design_hex_impl
 
                 double priority = remaining_nodes_to_place + layout_size + last_position;
                 priority += preferred_pi_order_penalty_weight * calculate_preferred_pi_order_penalty(ssg, position);
+                priority +=
+                    preferred_po_order_penalty_weight * calculate_preferred_po_order_penalty(ssg, position, layout);
                 next_positions.push_back({new_sequence, priority});
             }
             else
@@ -1472,6 +1679,8 @@ class graph_oriented_layout_design_hex_impl
 
                 double priority = remaining_nodes_to_place + cost;
                 priority += preferred_pi_order_penalty_weight * calculate_preferred_pi_order_penalty(ssg, position);
+                priority +=
+                    preferred_po_order_penalty_weight * calculate_preferred_po_order_penalty(ssg, position, layout);
 
                 next_positions.push_back({new_sequence, priority});
             }
@@ -1813,7 +2022,6 @@ class graph_oriented_layout_design_hex_impl
                                  return false;
                              });
         };
-
         // set cost objectives based on effort mode and cost objective
         const auto set_costs = [&](const uint64_t start_idx, const uint64_t end_idx, const auto cost_objective)
         {

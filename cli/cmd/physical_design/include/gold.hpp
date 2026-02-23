@@ -54,6 +54,10 @@ class gold_command final : public command
      */
     std::string input_pin_order{};
     /**
+     * Optional comma-separated primary output order.
+     */
+    std::string output_pin_order{};
+    /**
      * Target grid used by GOLD.
      */
     std::string grid{"cartesian"};

@@ -94,6 +94,52 @@ namespace
     return order;
 }
 
+/**
+ * Parses a comma-separated PO name list.
+ *
+ * @param csv Comma-separated PO names.
+ * @return Parsed PO names in the given order.
+ * @throws std::invalid_argument If the list is malformed.
+ */
+[[nodiscard]] std::vector<std::string> parse_output_pin_order_csv(const std::string& csv)
+{
+    if (csv.empty())
+    {
+        throw std::invalid_argument("`--output_pin_order` requires a non-empty comma-separated PO name list.");
+    }
+
+    std::vector<std::string> order{};
+    std::string              current{};
+
+    const auto flush_token = [&order, &current]()
+    {
+        const auto token = trim_whitespace(current);
+        if (token.empty())
+        {
+            throw std::invalid_argument(
+                "`--output_pin_order` contains an empty token; expected comma-separated PO names.");
+        }
+        order.push_back(token);
+        current.clear();
+    };
+
+    for (const auto c : csv)
+    {
+        if (c == ',')
+        {
+            flush_token();
+        }
+        else
+        {
+            current.push_back(c);
+        }
+    }
+
+    flush_token();
+
+    return order;
+}
+
 }  // namespace
 
 namespace alice
@@ -145,6 +191,13 @@ gold_command::gold_command(const environment::ptr& e) :
     add_option("--input_pin_order", input_pin_order,
                "Comma-separated PI names defining preferred left-to-right PI order. Implies "
                "`--prefer_input_pin_order`.");
+    add_flag("--prefer_output_pin_order", ps.prefer_output_pin_order,
+             "Prefer primary outputs to be placed from left to right in network PO order");
+    add_flag("--enforce_output_pin_order", ps.prefer_output_pin_order,
+             "Deprecated alias for --prefer_output_pin_order");
+    add_option("--output_pin_order", output_pin_order,
+               "Comma-separated PO names defining preferred left-to-right PO order. Implies "
+               "`--prefer_output_pin_order`.");
     add_option(
         "--tiles_to_skip_between_pis,-g", ps.tiles_to_skip_between_pis,
         "For each primary input (PI) considered during placement, reserve this many empty tiles after the current "
@@ -169,6 +222,7 @@ void gold_command::execute()
         ps   = {};
         grid = "cartesian";
         input_pin_order.clear();
+        output_pin_order.clear();
     };
 
     // error case: empty logic network store
@@ -203,6 +257,21 @@ void gold_command::execute()
         {
             ps.input_pin_order        = parse_input_pin_order_csv(input_pin_order);
             ps.prefer_input_pin_order = true;
+        }
+        catch (const std::invalid_argument& e)
+        {
+            env->out() << fmt::format("[w] {}\n", e.what());
+            reset_command_state();
+            return;
+        }
+    }
+
+    if (is_set("output_pin_order"))
+    {
+        try
+        {
+            ps.output_pin_order        = parse_output_pin_order_csv(output_pin_order);
+            ps.prefer_output_pin_order = true;
         }
         catch (const std::invalid_argument& e)
         {
