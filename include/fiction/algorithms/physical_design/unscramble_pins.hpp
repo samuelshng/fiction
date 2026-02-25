@@ -8,8 +8,10 @@
 #include "fiction/algorithms/path_finding/a_star.hpp"
 #include "fiction/layouts/obstruction_layout.hpp"
 #include "fiction/traits.hpp"
+#include "fiction/utils/debug/network_writer.hpp"
 #include "fiction/utils/routing_utils.hpp"
 
+#include <fmt/format.h>
 #include <mockturtle/traits.hpp>
 #include <mockturtle/utils/node_map.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
@@ -172,6 +174,12 @@ uint32_t calculate_rows_needed(const Lyt& lyt, const std::vector<mockturtle::nod
         max_rows = std::max(rows, max_rows);
     }
 
+    // Ensure that vertical offsets preserve hex row-shift parity.
+    if (max_rows % 2 != 0)
+    {
+        ++max_rows;
+    }
+
     return max_rows;
 }
 /**
@@ -215,22 +223,30 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
     static_assert(has_pointy_top_hex_orientation_v<DstLyt>, "DstLyt does not have pointy-top hexagonal orientation");
 
     // Map from original nodes to copied signals in the target layout
-    mockturtle::node_map<mockturtle::signal<DstLyt>, SrcLyt> node2signal{original_lyt};
+    mockturtle::node_map<mockturtle::signal<DstLyt>, SrcLyt> old2new{original_lyt};
 
-    // Step 1: Map PI nodes to shifted coordinate signals without creating PI nodes.
-    original_lyt.foreach_pi(
-        [&](const auto& pi)
-        {
-            const auto         original_coord = original_lyt.get_tile(pi);
-            const tile<DstLyt> shifted_coord{original_coord.x, original_coord.y + y_offset, original_coord.z};
-            node2signal[pi] = static_cast<mockturtle::signal<DstLyt>>(shifted_coord);
-        });
-
-    // Step 2: Copy all non-PI/non-PO nodes with shifted coordinates.
+    // Step 1: Instantiate all non-PI/non-PO nodes at shifted coordinates with temporary children.
     original_lyt.foreach_gate(
         [&](const auto& node)
         {
-            // POs are recreated in Step 3 and must therefore be skipped here.
+            if (original_lyt.is_po(node))
+            {
+                return;
+            }
+
+            const auto         original_coord = original_lyt.get_tile(node);
+            const tile<DstLyt> shifted_coord{original_coord.x, original_coord.y + y_offset, original_coord.z};
+
+            std::vector<mockturtle::signal<DstLyt>> temporary_children(original_lyt.fanin_size(node),
+                                                                       mockturtle::signal<DstLyt>{});
+
+            old2new[node] = target_lyt.create_node(temporary_children, original_lyt.node_function(node), shifted_coord);
+        });
+
+    // Step 2: Rebind all copied nodes to their actual fanins while preserving edge polarity/output pins.
+    original_lyt.foreach_gate(
+        [&](const auto& node)
+        {
             if (original_lyt.is_po(node))
             {
                 return;
@@ -239,25 +255,27 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
             // Collect copied fanins and preserve complemented edges.
             std::vector<mockturtle::signal<DstLyt>> new_children{};
             new_children.reserve(original_lyt.fanin_size(node));
-            original_lyt.foreach_fanin(node,
-                                       [&](const auto& fanin_signal)
-                                       {
-                                           const auto fanin_node = original_lyt.get_node(fanin_signal);
-                                           auto       new_signal = node2signal[fanin_node];
-                                           if (original_lyt.is_complemented(fanin_signal))
-                                           {
-                                               new_signal = !new_signal;
-                                           }
-                                           new_children.push_back(new_signal);
-                                       });
+            auto fanin_collector = [&](const auto& fanin_signal)
+            {
+                const auto fanin_node = original_lyt.get_node(fanin_signal);
+                auto       new_signal = old2new[fanin_node];
+                const auto output_pin = fanin_signal.output;
+
+                if (original_lyt.is_complemented(fanin_signal))
+                {
+                    new_signal = !new_signal;
+                }
+
+                new_signal.output = output_pin;
+                new_children.push_back(new_signal);
+            };
+            original_lyt.template foreach_fanin<decltype(fanin_collector), false>(node, std::move(fanin_collector));
+
+            assert(new_children.size() == original_lyt.fanin_size(node) && "Not all fanins were copied for a node");
 
             const auto         original_coord = original_lyt.get_tile(node);
             const tile<DstLyt> shifted_coord{original_coord.x, original_coord.y + y_offset, original_coord.z};
-
-            const auto new_signal =
-                target_lyt.create_node(new_children, original_lyt.node_function(node), shifted_coord);
-
-            node2signal[node] = new_signal;
+            target_lyt.move_node(target_lyt.get_node(old2new[node]), shifted_coord, new_children);
         });
 
     // Step 3: Original POs are intentionally not copied and will be recreated later.
@@ -278,6 +296,10 @@ struct pi_routing_objective
      * Geometric source/target routing objective.
      */
     routing_objective<Lyt> objective{};
+    /**
+     * Shifted tile of the copied fanout node that must be connected to the routed PI path.
+     */
+    tile<Lyt> fanout_target{};
 };
 /**
  * Places new PIs in the top row and creates routing objectives to their original locations (shifted by pi_rows). The
@@ -337,13 +359,17 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
         const auto          original_coord = lyt.get_tile(desired_node);
         const tile<WorkLyt> target{original_coord.x, original_coord.y + pi_rows, original_coord.z};
 
-        // If source and target are identical, PI placement is already complete and no routing objective is needed.
-        if (source == target)
-        {
-            continue;
-        }
+        tile<WorkLyt> fanout_target{};
 
-        pi_objectives.push_back({pi_distances[i], {source, target}});
+        lyt.foreach_fanout(desired_node,
+                           [&](const auto& fanout)
+                           {
+                               const auto fanout_coord = lyt.get_tile(fanout);
+                               fanout_target = tile<WorkLyt>{fanout_coord.x, fanout_coord.y + pi_rows, fanout_coord.z};
+                               return;
+                           });
+
+        pi_objectives.push_back({pi_distances[i], {source, target}, fanout_target});
     }
 
     // Sort objectives by distance (descending) to prioritize longer routes first.
@@ -351,34 +377,6 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
               [](const auto& lhs, const auto& rhs) { return lhs.distance > rhs.distance; });
 
     return pi_objectives;
-}
-/**
- * Routes all objectives sequentially using A* with crossings enabled.
- *
- * @tparam Lyt Gate-level layout type.
- * @param lyt Layout to route on.
- * @param objectives Routing objectives in priority order.
- */
-template <typename Lyt>
-void route_objectives_with_a_star(Lyt& lyt, const std::vector<routing_objective<Lyt>>& objectives)
-{
-    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
-    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
-    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
-
-    a_star_params params{};
-    params.crossings = true;
-
-    for (const auto& objective : objectives)
-    {
-        const auto path =
-            a_star<layout_coordinate_path<Lyt>>(lyt, {objective.source, objective.target},
-                                                euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(), params);
-
-        assert(!path.empty() && "A* failed to find a route for a mandatory objective");
-
-        route_path(lyt, path);
-    }
 }
 /**
  * Routes PI unscrambling objectives sequentially using A* with crossings enabled.
@@ -399,13 +397,22 @@ void route_pi_objectives_with_a_star(Lyt& lyt, const std::vector<pi_routing_obje
 
     for (const auto& item : objectives)
     {
-        const auto path =
-            a_star<layout_coordinate_path<Lyt>>(lyt, {item.objective.source, item.objective.target},
-                                                euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(), params);
+        auto incoming_signal = lyt.make_signal(lyt.get_node(item.objective.source));
 
-        assert(!path.empty() && "A* failed to route a PI unscrambling objective");
+        if (item.objective.source != item.objective.target)
+        {
+            const auto path = a_star<layout_coordinate_path<Lyt>>(lyt, {item.objective.source, item.objective.target},
+                                                                  euclidean_distance_functor<Lyt>(),
+                                                                  unit_cost_functor<Lyt>(), params);
 
-        route_path(lyt, path);
+            assert(!path.empty() && "A* failed to route a PI unscrambling objective");
+
+            // Materialize the entire PI route including the target tile to create a concrete anchor node at target.
+            std::for_each(path.cbegin() + 1, path.cend(),
+                          [&](const auto& coord) { incoming_signal = lyt.create_buf(incoming_signal, coord); });
+        }
+
+        lyt.connect(incoming_signal, lyt.get_node(item.fanout_target));
     }
 }
 /**
@@ -501,11 +508,14 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
 
             source_driver = static_cast<mockturtle::signal<WorkLyt>>(
                 tile<WorkLyt>{fanin_tile.x, fanin_tile.y + pi_rows, fanin_tile.z});
+            const auto output_pin = fanin_signal.output;
 
             if (lyt.is_complemented(fanin_signal))
             {
                 source_driver = !source_driver;
             }
+
+            source_driver.output = output_pin;
 
             has_fanin = true;
         };
@@ -519,7 +529,7 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
 
         const auto output_name = lyt.get_output_name(static_cast<uint32_t>(current_idx));
 
-        // Identity case: no routing required; recreate PO directly.
+        // Identity case: no routing required; directly create PO at target.
         if (source_tile == target_tile)
         {
             new_layout.create_po(source_driver, output_name, target_tile);
@@ -602,6 +612,9 @@ class unscramble_pins_impl
     {
         mockturtle::stopwatch stop{pst.time_total};
 
+        debug::write_dot_layout<Lyt, gate_layout_hexagonal_drawer<Lyt>>(static_cast<Lyt>(layout),
+                                                                        "layout_before_pin_unscrambling");
+
         // 1. Identify current pin orderings
         const auto current_pis = get_current_pis();
         const auto current_pos = get_current_pos();
@@ -611,40 +624,37 @@ class unscramble_pins_impl
         const auto& target_pos = output_ordering.empty() ? current_pos : output_ordering;
 
         // 2. Calculate unscrambling space requirements
-        const uint32_t pi_rows_base = calculate_rows_needed(layout, current_pis, target_pis);
-        const uint32_t po_rows_base = calculate_rows_needed(layout, current_pos, target_pos);
-
-        // Add a small guard band for non-trivial permutations to improve routability under clocking constraints.
-        const uint32_t pi_rows = pi_rows_base == 0 ? 0 : pi_rows_base + 1;
-        const uint32_t po_rows = po_rows_base == 0 ? 0 : po_rows_base + 1;
+        const uint32_t pi_rows = calculate_rows_needed(layout, current_pis, target_pis);
+        const uint32_t po_rows = calculate_rows_needed(layout, current_pos, target_pos);
 
         // 3. Instantiate new obstruction-aware layout with extended height
         obstruction_layout<Lyt> new_layout{create_extended_layout(layout, pi_rows, po_rows)};
 
-        // 4. Copy the original layout content to the new layout with vertical offset
-        copy_layout_with_offset(layout, new_layout, pi_rows);
-
-        // 5. Place new PIs and create routing objectives to the original PI locations (shifted by pi_rows)
+        // 4. Place new PIs and create routing objectives to the original PI locations (shifted by pi_rows)
         const auto pi_routing_objectives =
             create_pi_routing_objectives(layout, new_layout, current_pis, target_pis, pi_rows);
 
+        // 5. Copy the original layout content to the new layout with vertical offset
+        copy_layout_with_offset(layout, new_layout, pi_rows);
+
+        debug::write_dot_layout<Lyt, gate_layout_hexagonal_drawer<Lyt>>(static_cast<Lyt>(new_layout),
+                                                                        "unscramble_pins_after_copy");
+
         // 6. Route PI objectives in priority order
-        if (!pi_routing_objectives.empty())
-        {
-            route_pi_objectives_with_a_star(new_layout, pi_routing_objectives);
-        }
+        route_pi_objectives_with_a_star(new_layout, pi_routing_objectives);
 
         // 7. Place output source anchors, route to new output slots, and create new POs.
         const auto po_routing_objectives =
             create_po_routing_objectives(layout, new_layout, current_pos, target_pos, pi_rows, po_rows);
 
-        if (!po_routing_objectives.empty())
-        {
-            route_po_objectives_with_a_star_and_create_pos(new_layout, po_routing_objectives);
-        }
+        // 8. Route PO objectives and create POs at target locations.
+        route_po_objectives_with_a_star_and_create_pos(new_layout, po_routing_objectives);
 
-        // return static_cast<Lyt>(new_layout);
-        return layout;
+        // Temporary debug artifact for inspecting the fully unscrambled layout.
+        debug::write_dot_layout<Lyt, gate_layout_hexagonal_drawer<Lyt>>(static_cast<Lyt>(new_layout),
+                                                                        "unscramble_pins_full_after_routing");
+
+        return static_cast<Lyt>(new_layout);
     }
 
   private:

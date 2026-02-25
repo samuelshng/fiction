@@ -577,30 +577,6 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         CHECK(new_layout.is_po_tile(objectives[1].objective.target));
         CHECK(new_layout.is_po_tile(objectives[2].objective.target));
     }
-
-    SECTION("route_objectives_with_a_star")
-    {
-        gate_layout routing_layout{{6, 6}, row_clocking<gate_layout>()};
-
-        const auto a = routing_layout.create_pi("a", {0, 0});
-        const auto b = routing_layout.create_pi("b", {2, 0});
-
-        const auto route_po1 = routing_layout.create_po(a, "po1", {0, 4});
-        const auto route_po2 = routing_layout.create_po(b, "po2", {2, 4});
-
-        const auto before_wires = routing_layout.num_wires();
-
-        const std::vector objectives{
-            routing_objective<gate_layout>{{0, 0}, {0, 4}},
-            routing_objective<gate_layout>{{2, 0}, {2, 4}},
-        };
-
-        detail::route_objectives_with_a_star(routing_layout, objectives);
-
-        CHECK(routing_layout.num_wires() > before_wires);
-        CHECK(routing_layout.get_node(tile<gate_layout>{0, 4}) == routing_layout.get_node(route_po1));
-        CHECK(routing_layout.get_node(tile<gate_layout>{2, 4}) == routing_layout.get_node(route_po2));
-    }
 }
 
 TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
