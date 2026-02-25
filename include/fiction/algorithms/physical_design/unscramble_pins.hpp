@@ -494,15 +494,9 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
         tile<WorkLyt> target_tile{target_x, current_po_coords[i].y + pi_rows + po_rows, current_po_coords[i].z};
 
         mockturtle::signal<WorkLyt> source_driver{};
-        bool                        has_fanin = false;
 
         auto fanin_collector = [&](const auto& fanin_signal)
         {
-            if (has_fanin)
-            {
-                return;
-            }
-
             const auto fanin_node = lyt.get_node(fanin_signal);
             const auto fanin_tile = lyt.get_tile(fanin_node);
 
@@ -517,15 +511,10 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
 
             source_driver.output = output_pin;
 
-            has_fanin = true;
+            return;
         };
 
         lyt.template foreach_fanin<decltype(fanin_collector), false>(desired_po_node, std::move(fanin_collector));
-
-        if (!has_fanin)
-        {
-            source_driver = new_layout.get_constant(false);
-        }
 
         const auto output_name = lyt.get_output_name(static_cast<uint32_t>(current_idx));
 
