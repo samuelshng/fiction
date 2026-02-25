@@ -50,6 +50,14 @@ class gold_command final : public command
      */
     uint32_t seed{0u};
     /**
+     * Optional comma-separated primary input order.
+     */
+    std::string input_pin_order{};
+    /**
+     * Optional comma-separated primary output order.
+     */
+    std::string output_pin_order{};
+    /**
      * Target grid used by GOLD.
      */
     std::string grid{"cartesian"};

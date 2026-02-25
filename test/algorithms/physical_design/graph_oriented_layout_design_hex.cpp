@@ -18,10 +18,14 @@
 
 #include <mockturtle/networks/aig.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <optional>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 using namespace fiction;
 
@@ -139,6 +143,148 @@ TEST_CASE("Custom cost objective wiring for hex flow",
     const auto layout = run_gold_hex_native(mapped_ha, params, &stats, custom_cost_objective);
     REQUIRE(layout.has_value());
     CHECK(layout->num_gates() >= mapped_ha.num_gates());
+}
+
+TEST_CASE("Hex GOLD explicit input pin ordering can be preferred",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    mockturtle::names_view<technology_network> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+    const auto f = ntk.create_and(a, b);
+
+    ntk.create_po(f, "f");
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                   = graph_oriented_layout_design_params::effort_mode::HIGH_EFFICIENCY;
+    params.return_first           = true;
+    params.seed                   = 0u;
+    params.timeout                = 100000u;
+    params.prefer_input_pin_order = true;
+    params.input_pin_order        = {"b", "a"};
+
+    const auto layout = run_gold_hex_native(ntk, params, &stats);
+    REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
+
+    std::unordered_map<std::string, uint64_t> pi_x{};
+    layout->foreach_pi(
+        [&layout, &pi_x](const auto& pi)
+        {
+            REQUIRE(layout->has_name(pi));
+            pi_x.emplace(layout->get_name(pi), layout->get_tile(pi).x);
+        });
+
+    REQUIRE(pi_x.count("a") == 1u);
+    REQUIRE(pi_x.count("b") == 1u);
+    CHECK(pi_x.at("b") < pi_x.at("a"));
+}
+
+TEST_CASE("Hex GOLD explicit PI order is validated", "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    mockturtle::names_view<technology_network> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+    const auto f = ntk.create_and(a, b);
+
+    ntk.create_po(f, "f");
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                   = graph_oriented_layout_design_params::effort_mode::HIGH_EFFICIENCY;
+    params.return_first           = true;
+    params.seed                   = 0u;
+    params.timeout                = 100000u;
+    params.prefer_input_pin_order = true;
+
+    SECTION("Unknown PI name")
+    {
+        params.input_pin_order = {"a", "missing"};
+
+        CHECK_THROWS_AS(run_gold_hex_native(ntk, params, &stats), std::invalid_argument);
+    }
+
+    SECTION("Duplicate PI name")
+    {
+        params.input_pin_order = {"a", "a"};
+
+        CHECK_THROWS_AS(run_gold_hex_native(ntk, params, &stats), std::invalid_argument);
+    }
+}
+
+TEST_CASE("Hex GOLD explicit output pin ordering can be preferred",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    mockturtle::names_view<technology_network> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+    const auto f = ntk.create_and(a, b);
+
+    ntk.create_po(f, "f");
+    ntk.create_po(f, "g");
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                    = graph_oriented_layout_design_params::effort_mode::HIGH_EFFICIENCY;
+    params.return_first            = true;
+    params.seed                    = 0u;
+    params.timeout                 = 100000u;
+    params.prefer_output_pin_order = true;
+    params.output_pin_order        = {"g", "f"};
+
+    const auto layout = run_gold_hex_native(ntk, params, &stats);
+    REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
+
+    std::unordered_map<std::string, uint64_t> po_x{};
+    layout->foreach_po(
+        [&layout, &po_x](const auto& po, const auto index)
+        {
+            REQUIRE(layout->has_output_name(index));
+            po_x.emplace(layout->get_output_name(index), layout->get_tile(layout->get_node(po)).x);
+        });
+
+    REQUIRE(po_x.count("f") == 1u);
+    REQUIRE(po_x.count("g") == 1u);
+    CHECK(po_x.at("g") < po_x.at("f"));
+}
+
+TEST_CASE("Hex GOLD explicit PO order is validated", "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    mockturtle::names_view<technology_network> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+    const auto f = ntk.create_and(a, b);
+
+    ntk.create_po(f, "f");
+    ntk.create_po(f, "g");
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                    = graph_oriented_layout_design_params::effort_mode::HIGH_EFFICIENCY;
+    params.return_first            = true;
+    params.seed                    = 0u;
+    params.timeout                 = 100000u;
+    params.prefer_output_pin_order = true;
+
+    SECTION("Unknown PO name")
+    {
+        params.output_pin_order = {"f", "missing"};
+
+        CHECK_THROWS_AS(run_gold_hex_native(ntk, params, &stats), std::invalid_argument);
+    }
+
+    SECTION("Duplicate PO name")
+    {
+        params.output_pin_order = {"f", "f"};
+
+        CHECK_THROWS_AS(run_gold_hex_native(ntk, params, &stats), std::invalid_argument);
+    }
 }
 
 TEST_CASE("Exceptions in hex flow wrapper", "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")

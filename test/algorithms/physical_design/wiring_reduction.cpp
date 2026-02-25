@@ -8,6 +8,8 @@
 #include "utils/blueprints/network_blueprints.hpp"
 #include "utils/equivalence_checking_utils.hpp"
 
+#include <fiction/algorithms/network_transformation/technology_mapping.hpp>
+#include <fiction/algorithms/physical_design/graph_oriented_layout_design.hpp>
 #include <fiction/algorithms/physical_design/orthogonal.hpp>
 #include <fiction/algorithms/physical_design/wiring_reduction.hpp>
 #include <fiction/layouts/cartesian_layout.hpp>
@@ -23,6 +25,40 @@
 
 using namespace fiction;
 
+static tec_nt mapped_half_adder_network_with_sum_fanout()
+{
+    const auto aig = blueprints::half_adder_network<mockturtle::aig_network>();
+
+    technology_mapping_stats mapping_stats{};
+    auto                     mapped_ntk = technology_mapping(aig, all_standard_2_input_functions(), &mapping_stats);
+    REQUIRE(!mapping_stats.mapper_stats.mapping_error);
+
+    uint64_t                   num_ha = 0;
+    mockturtle::signal<tec_nt> ha_signal{};
+
+    mapped_ntk.foreach_gate(
+        [&mapped_ntk, &num_ha, &ha_signal](const auto& g)
+        {
+            if (mapped_ntk.is_ha(g))
+            {
+                ha_signal = mapped_ntk.make_signal(g);
+                ++num_ha;
+            }
+        });
+
+    REQUIRE(num_ha == 1);
+
+    auto sum_output   = ha_signal;
+    sum_output.output = 1u;
+
+    const auto c         = mapped_ntk.create_pi("c");
+    const auto sum_and_c = mapped_ntk.create_and(sum_output, c);
+
+    mapped_ntk.create_po(sum_and_c, "sum_and_c");
+
+    return mapped_ntk;
+}
+
 template <typename Lyt, typename Ntk>
 static void check_layout_equiv(const Ntk& ntk)
 {
@@ -34,6 +70,44 @@ static void check_layout_equiv(const Ntk& ntk)
     check_eq(ntk, layout);
 
     CHECK(mockturtle::to_seconds(stats.time_total) > 0);
+}
+
+template <typename Lyt>
+static void check_2i2o_pin_preservation_after_wiring_reduction()
+{
+    const auto ntk = mapped_half_adder_network_with_sum_fanout();
+
+    graph_oriented_layout_design_params gold_ps{};
+    gold_ps.mode                      = graph_oriented_layout_design_params::effort_mode::HIGH_EFFICIENCY;
+    gold_ps.cost                      = graph_oriented_layout_design_params::cost_objective::AREA;
+    gold_ps.seed                      = 0;
+    gold_ps.tiles_to_skip_between_pis = 3;
+    gold_ps.timeout                   = 10000;
+
+    auto layout = graph_oriented_layout_design<Lyt>(ntk, gold_ps);
+    REQUIRE(layout.has_value());
+
+    uint64_t num_ha = 0;
+    layout->foreach_gate(
+        [&num_ha, &layout](const auto& g)
+        {
+            if (layout->is_ha(g))
+            {
+                ++num_ha;
+            }
+        });
+
+    REQUIRE(num_ha > 0);
+
+    const auto reference_layout = *layout;
+
+    wiring_reduction_stats  stats{};
+    wiring_reduction_params params{};
+    params.timeout = 10000;
+
+    wiring_reduction<Lyt>(*layout, params, &stats);
+
+    check_eq(reference_layout, *layout);
 }
 
 template <typename Lyt>
@@ -164,6 +238,13 @@ TEST_CASE("Layout equivalence", "[wiring_reduction]")
 
         check_eq(blueprints::mux21_network<technology_network>(), layout);
         CHECK(stats.area_improvement == 0);
+    }
+
+    SECTION("2I2O output-pin preservation after GOLD compaction")
+    {
+        using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<>>>>;
+
+        check_2i2o_pin_preservation_after_wiring_reduction<gate_layout>();
     }
 }
 

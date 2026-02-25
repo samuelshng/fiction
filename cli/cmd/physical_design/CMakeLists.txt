@@ -1,5 +1,6 @@
-target_sources(fiction PRIVATE src/exact.cpp src/gold.cpp src/hex.cpp
-                               src/onepass.cpp src/optimize.cpp src/ortho.cpp)
+target_sources(
+  fiction PRIVATE src/exact.cpp src/gold.cpp src/hex.cpp src/onepass.cpp
+                  src/optimize.cpp src/ortho.cpp src/returnpath_viz.cpp)
 
 target_sources(
   fiction
@@ -14,4 +15,5 @@ target_sources(
           include/hex.hpp
           include/onepass.hpp
           include/optimize.hpp
-          include/ortho.hpp)
+          include/ortho.hpp
+          include/returnpath_viz.hpp)

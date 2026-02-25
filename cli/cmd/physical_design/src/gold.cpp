@@ -16,8 +16,131 @@
 #include <mockturtle/utils/stopwatch.hpp>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <memory>
+#include <stdexcept>
 #include <variant>
+#include <vector>
+
+namespace
+{
+
+/**
+ * Trims leading and trailing whitespace from a string.
+ *
+ * @param value String to trim.
+ * @return Trimmed string.
+ */
+[[nodiscard]] std::string trim_whitespace(std::string value)
+{
+    const auto first =
+        std::find_if_not(value.cbegin(), value.cend(), [](const unsigned char c) { return std::isspace(c) != 0; });
+    if (first == value.cend())
+    {
+        return "";
+    }
+
+    const auto last =
+        std::find_if_not(value.crbegin(), value.crend(), [](const unsigned char c) { return std::isspace(c) != 0; })
+            .base();
+
+    return {first, last};
+}
+
+/**
+ * Parses a comma-separated PI name list.
+ *
+ * @param csv Comma-separated PI names.
+ * @return Parsed PI names in the given order.
+ * @throws std::invalid_argument If the list is malformed.
+ */
+[[nodiscard]] std::vector<std::string> parse_input_pin_order_csv(const std::string& csv)
+{
+    if (csv.empty())
+    {
+        throw std::invalid_argument("`--input_pin_order` requires a non-empty comma-separated PI name list.");
+    }
+
+    std::vector<std::string> order{};
+    std::string              current{};
+
+    const auto flush_token = [&order, &current]()
+    {
+        const auto token = trim_whitespace(current);
+        if (token.empty())
+        {
+            throw std::invalid_argument(
+                "`--input_pin_order` contains an empty token; expected comma-separated PI names.");
+        }
+        order.push_back(token);
+        current.clear();
+    };
+
+    for (const auto c : csv)
+    {
+        if (c == ',')
+        {
+            flush_token();
+        }
+        else
+        {
+            current.push_back(c);
+        }
+    }
+
+    flush_token();
+
+    return order;
+}
+
+/**
+ * Parses a comma-separated PO name list.
+ *
+ * @param csv Comma-separated PO names.
+ * @return Parsed PO names in the given order.
+ * @throws std::invalid_argument If the list is malformed.
+ */
+[[nodiscard]] std::vector<std::string> parse_output_pin_order_csv(const std::string& csv)
+{
+    if (csv.empty())
+    {
+        throw std::invalid_argument("`--output_pin_order` requires a non-empty comma-separated PO name list.");
+    }
+
+    std::vector<std::string> order{};
+    std::string              current{};
+
+    const auto flush_token = [&order, &current]()
+    {
+        const auto token = trim_whitespace(current);
+        if (token.empty())
+        {
+            throw std::invalid_argument(
+                "`--output_pin_order` contains an empty token; expected comma-separated PO names.");
+        }
+        order.push_back(token);
+        current.clear();
+    };
+
+    for (const auto c : csv)
+    {
+        if (c == ',')
+        {
+            flush_token();
+        }
+        else
+        {
+            current.push_back(c);
+        }
+    }
+
+    flush_token();
+
+    return order;
+}
+
+}  // namespace
 
 namespace alice
 {
@@ -62,6 +185,19 @@ gold_command::gold_command(const environment::ptr& e) :
                "Random seed used for random fanout substitution and random topological ordering in "
                "maximum-effort mode");
     add_flag("--straight_inverters,-i", ps.straight_inverters, "Enforce NOT gates to be routed non-bending only");
+    add_flag("--prefer_input_pin_order", ps.prefer_input_pin_order,
+             "Prefer primary inputs to be placed from left to right in network PI order");
+    add_flag("--enforce_input_pin_order", ps.prefer_input_pin_order, "Deprecated alias for --prefer_input_pin_order");
+    add_option("--input_pin_order", input_pin_order,
+               "Comma-separated PI names defining preferred left-to-right PI order. Implies "
+               "`--prefer_input_pin_order`.");
+    add_flag("--prefer_output_pin_order", ps.prefer_output_pin_order,
+             "Prefer primary outputs to be placed from left to right in network PO order");
+    add_flag("--enforce_output_pin_order", ps.prefer_output_pin_order,
+             "Deprecated alias for --prefer_output_pin_order");
+    add_option("--output_pin_order", output_pin_order,
+               "Comma-separated PO names defining preferred left-to-right PO order. Implies "
+               "`--prefer_output_pin_order`.");
     add_option(
         "--tiles_to_skip_between_pis,-g", ps.tiles_to_skip_between_pis,
         "For each primary input (PI) considered during placement, reserve this many empty tiles after the current "
@@ -81,18 +217,26 @@ gold_command::gold_command(const environment::ptr& e) :
 
 void gold_command::execute()
 {
+    const auto reset_command_state = [this]() noexcept
+    {
+        ps   = {};
+        grid = "cartesian";
+        input_pin_order.clear();
+        output_pin_order.clear();
+    };
+
     // error case: empty logic network store
     if (store<fiction::logic_network_t>().empty())
     {
         env->out() << "[w] no logic network in store\n";
-        ps = {};
+        reset_command_state();
         return;
     }
 
     if (ps.num_vertex_expansions == 0)
     {
         env->out() << "[w] the number of vertex expansions has to be at least 1\n";
-        ps = {};
+        reset_command_state();
         return;
     }
 
@@ -107,6 +251,36 @@ void gold_command::execute()
         ps.seed = seed;
     }
 
+    if (is_set("input_pin_order"))
+    {
+        try
+        {
+            ps.input_pin_order        = parse_input_pin_order_csv(input_pin_order);
+            ps.prefer_input_pin_order = true;
+        }
+        catch (const std::invalid_argument& e)
+        {
+            env->out() << fmt::format("[w] {}\n", e.what());
+            reset_command_state();
+            return;
+        }
+    }
+
+    if (is_set("output_pin_order"))
+    {
+        try
+        {
+            ps.output_pin_order        = parse_output_pin_order_csv(output_pin_order);
+            ps.prefer_output_pin_order = true;
+        }
+        catch (const std::invalid_argument& e)
+        {
+            env->out() << fmt::format("[w] {}\n", e.what());
+            reset_command_state();
+            return;
+        }
+    }
+
     if (grid == "hex")
     {
         graph_oriented_layout_design_hex();
@@ -118,13 +292,11 @@ void gold_command::execute()
     else
     {
         env->out() << "[w] unsupported grid; use 'cartesian' or 'hex'\n";
-        ps   = {};
-        grid = "cartesian";
+        reset_command_state();
         return;
     }
 
-    ps   = {};
-    grid = "cartesian";
+    reset_command_state();
 }
 
 nlohmann::json gold_command::log() const
@@ -164,6 +336,10 @@ void gold_command::graph_oriented_layout_design()
     {
         env->out() << fmt::format("[e] {}\n", e.what());
     }
+    catch (const std::invalid_argument& e)
+    {
+        env->out() << fmt::format("[e] {}\n", e.what());
+    }
     catch (...)
     {
         env->out() << fmt::format("[e] an error occurred while placing and routing '{}' with the given parameters\n",
@@ -194,6 +370,10 @@ void gold_command::graph_oriented_layout_design_hex()
         store<fiction::gate_layout_t>().extend() = std::make_shared<fiction::hex_even_row_gate_clk_lyt>(*hex_lyt);
     }
     catch (const fiction::high_degree_fanin_exception& e)
+    {
+        env->out() << fmt::format("[e] {}\n", e.what());
+    }
+    catch (const std::invalid_argument& e)
     {
         env->out() << fmt::format("[e] {}\n", e.what());
     }

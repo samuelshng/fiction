@@ -18,6 +18,7 @@
 #endif
 #include "include/optimize.hpp"
 #include "include/ortho.hpp"
+#include "include/returnpath_viz.hpp"
 // NOLINTEND(misc-include-cleaner)
 
 namespace alice
@@ -36,6 +37,7 @@ ALICE_ADD_COMMAND(onepass, FICTION_CLI_CATEGORY_PHYSICAL_DESIGN)
 #endif
 ALICE_ADD_COMMAND(optimize, FICTION_CLI_CATEGORY_PHYSICAL_DESIGN)
 ALICE_ADD_COMMAND(ortho, FICTION_CLI_CATEGORY_PHYSICAL_DESIGN)
+ALICE_ADD_COMMAND(returnpath_viz, FICTION_CLI_CATEGORY_PHYSICAL_DESIGN)
 
 }  // namespace alice
 
