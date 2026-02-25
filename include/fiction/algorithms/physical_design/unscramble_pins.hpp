@@ -225,6 +225,15 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
     // Map from original nodes to copied signals in the target layout
     mockturtle::node_map<mockturtle::signal<DstLyt>, SrcLyt> old2new{original_lyt};
 
+    // Pre-map original PIs to their routed anchors that already exist in the target layout.
+    original_lyt.foreach_pi(
+        [&](const auto& pi)
+        {
+            const auto         pi_coord = original_lyt.get_tile(pi);
+            const tile<DstLyt> shifted_pi_coord{pi_coord.x, pi_coord.y + y_offset, pi_coord.z};
+            old2new[pi] = target_lyt.make_signal(target_lyt.get_node(shifted_pi_coord));
+        });
+
     // Step 1: Instantiate all non-PI/non-PO nodes at shifted coordinates with temporary children.
     original_lyt.foreach_gate(
         [&](const auto& node)
@@ -296,10 +305,6 @@ struct pi_routing_objective
      * Geometric source/target routing objective.
      */
     routing_objective<Lyt> objective{};
-    /**
-     * Shifted tile of the copied fanout node that must be connected to the routed PI path.
-     */
-    tile<Lyt> fanout_target{};
 };
 /**
  * Places new PIs in the top row and creates routing objectives to their original locations (shifted by pi_rows). The
@@ -359,17 +364,7 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
         const auto          original_coord = lyt.get_tile(desired_node);
         const tile<WorkLyt> target{original_coord.x, original_coord.y + pi_rows, original_coord.z};
 
-        tile<WorkLyt> fanout_target{};
-
-        lyt.foreach_fanout(desired_node,
-                           [&](const auto& fanout)
-                           {
-                               const auto fanout_coord = lyt.get_tile(fanout);
-                               fanout_target = tile<WorkLyt>{fanout_coord.x, fanout_coord.y + pi_rows, fanout_coord.z};
-                               return;
-                           });
-
-        pi_objectives.push_back({pi_distances[i], {source, target}, fanout_target});
+        pi_objectives.push_back({pi_distances[i], {source, target}});
     }
 
     // Sort objectives by distance (descending) to prioritize longer routes first.
@@ -397,22 +392,21 @@ void route_pi_objectives_with_a_star(Lyt& lyt, const std::vector<pi_routing_obje
 
     for (const auto& item : objectives)
     {
-        auto incoming_signal = lyt.make_signal(lyt.get_node(item.objective.source));
+        const auto path =
+            a_star<layout_coordinate_path<Lyt>>(lyt, {item.objective.source, item.objective.target},
+                                                euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(), params);
 
-        if (item.objective.source != item.objective.target)
-        {
-            const auto path = a_star<layout_coordinate_path<Lyt>>(lyt, {item.objective.source, item.objective.target},
-                                                                  euclidean_distance_functor<Lyt>(),
-                                                                  unit_cost_functor<Lyt>(), params);
+        assert(!path.empty() && "A* failed to route a PI unscrambling objective");
 
-            assert(!path.empty() && "A* failed to route a PI unscrambling objective");
+        auto incoming_signal = lyt.make_signal(lyt.get_node(path.source()));
 
-            // Materialize the entire PI route including the target tile to create a concrete anchor node at target.
-            std::for_each(path.cbegin() + 1, path.cend(),
-                          [&](const auto& coord) { incoming_signal = lyt.create_buf(incoming_signal, coord); });
-        }
-
-        lyt.connect(incoming_signal, lyt.get_node(item.fanout_target));
+        // Materialize the entire PI route including the target tile to create a concrete anchor node at target.
+        std::for_each(path.cbegin() + 1, path.cend(),
+                      [&](const auto& coord)
+                      {
+                          incoming_signal =
+                              lyt.create_buf(incoming_signal, lyt.is_empty_tile(coord) ? coord : lyt.above(coord));
+                      });
     }
 }
 /**
@@ -623,14 +617,14 @@ class unscramble_pins_impl
         const auto pi_routing_objectives =
             create_pi_routing_objectives(layout, new_layout, current_pis, target_pis, pi_rows);
 
-        // 5. Copy the original layout content to the new layout with vertical offset
+        // 5. Route PI objectives in priority order
+        route_pi_objectives_with_a_star(new_layout, pi_routing_objectives);
+
+        // 6. Copy the original layout content to the new layout with vertical offset
         copy_layout_with_offset(layout, new_layout, pi_rows);
 
         debug::write_dot_layout<Lyt, gate_layout_hexagonal_drawer<Lyt>>(static_cast<Lyt>(new_layout),
                                                                         "unscramble_pins_after_copy");
-
-        // 6. Route PI objectives in priority order
-        route_pi_objectives_with_a_star(new_layout, pi_routing_objectives);
 
         // 7. Place output source anchors, route to new output slots, and create new POs.
         const auto po_routing_objectives =
