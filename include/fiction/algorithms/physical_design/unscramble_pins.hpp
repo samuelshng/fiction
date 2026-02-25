@@ -234,7 +234,7 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
             old2new[pi] = target_lyt.make_signal(target_lyt.get_node(shifted_pi_coord));
         });
 
-    // Step 1: Instantiate all non-PI/non-PO nodes at shifted coordinates with temporary children.
+    // Instantiate all non-PI/non-PO nodes at shifted coordinates with their actual copied fanins.
     original_lyt.foreach_gate(
         [&](const auto& node)
         {
@@ -246,22 +246,6 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
             const auto         original_coord = original_lyt.get_tile(node);
             const tile<DstLyt> shifted_coord{original_coord.x, original_coord.y + y_offset, original_coord.z};
 
-            std::vector<mockturtle::signal<DstLyt>> temporary_children(original_lyt.fanin_size(node),
-                                                                       mockturtle::signal<DstLyt>{});
-
-            old2new[node] = target_lyt.create_node(temporary_children, original_lyt.node_function(node), shifted_coord);
-        });
-
-    // Step 2: Rebind all copied nodes to their actual fanins while preserving edge polarity/output pins.
-    original_lyt.foreach_gate(
-        [&](const auto& node)
-        {
-            if (original_lyt.is_po(node))
-            {
-                return;
-            }
-
-            // Collect copied fanins and preserve complemented edges.
             std::vector<mockturtle::signal<DstLyt>> new_children{};
             new_children.reserve(original_lyt.fanin_size(node));
             auto fanin_collector = [&](const auto& fanin_signal)
@@ -282,12 +266,10 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
 
             assert(new_children.size() == original_lyt.fanin_size(node) && "Not all fanins were copied for a node");
 
-            const auto         original_coord = original_lyt.get_tile(node);
-            const tile<DstLyt> shifted_coord{original_coord.x, original_coord.y + y_offset, original_coord.z};
-            target_lyt.move_node(target_lyt.get_node(old2new[node]), shifted_coord, new_children);
+            old2new[node] = target_lyt.create_node(new_children, original_lyt.node_function(node), shifted_coord);
         });
 
-    // Step 3: Original POs are intentionally not copied and will be recreated later.
+    // Original POs are intentionally not copied and will be recreated later.
 }
 /**
  * Routing objective bundle for input unscrambling.
