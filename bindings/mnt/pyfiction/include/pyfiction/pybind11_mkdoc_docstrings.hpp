@@ -10884,6 +10884,10 @@ Template parameter ``Lyt``:
 
 static const char *__doc_fiction_detail_pi_routing_objective_distance = R"doc(Horizontal routing distance used for objective prioritization.)doc";
 
+static const char *__doc_fiction_detail_pi_routing_objective_fanout_target =
+R"doc(Shifted tile of the copied fanout node that must be connected to the
+routed PI path.)doc";
+
 static const char *__doc_fiction_detail_pi_routing_objective_objective = R"doc(Geometric source/target routing objective.)doc";
 
 static const char *__doc_fiction_detail_place_outputs =
@@ -11520,18 +11524,6 @@ R"doc(Default constructor.
 
 Parameter ``seed``:
     The seed for the random number generator.)doc";
-
-static const char *__doc_fiction_detail_route_objectives_with_a_star =
-R"doc(Routes all objectives sequentially using A* with crossings enabled.
-
-Template parameter ``Lyt``:
-    Gate-level layout type.
-
-Parameter ``lyt``:
-    Layout to route on.
-
-Parameter ``objectives``:
-    Routing objectives in priority order.)doc";
 
 static const char *__doc_fiction_detail_route_pi_objectives_with_a_star =
 R"doc(Routes PI unscrambling objectives sequentially using A* with crossings
