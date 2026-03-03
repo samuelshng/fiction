@@ -10866,6 +10866,20 @@ Returns:
     the type of charge state transition, and the minimum electrostatic
     potential required for the charge transition.)doc";
 
+static const char *__doc_fiction_detail_pi_anchor_signal =
+R"doc(Maps a primary input in the original layout to its routed anchor
+signal in the working layout.
+
+Template parameter ``OrigLyt``:
+    Original gate-level layout type.
+
+Template parameter ``WorkLyt``:
+    Working gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_pi_anchor_signal_original_pi = R"doc(PI node in the original layout.)doc";
+
+static const char *__doc_fiction_detail_pi_anchor_signal_routed_anchor = R"doc(Routed anchor signal in the working layout.)doc";
+
 static const char *__doc_fiction_detail_pi_locations = R"doc(This enum class indicates the allowed positions for PIs.)doc";
 
 static const char *__doc_fiction_detail_pi_locations_LEFT = R"doc(Flag indicating if primary inputs (PIs) can be placed at the left.)doc";
@@ -10879,16 +10893,17 @@ at the left.)doc";
 static const char *__doc_fiction_detail_pi_routing_objective =
 R"doc(Routing objective bundle for input unscrambling.
 
-Template parameter ``Lyt``:
-    Gate-level layout type.)doc";
+Template parameter ``OrigLyt``:
+    Original gate-level layout type.
+
+Template parameter ``WorkLyt``:
+    Working gate-level layout type.)doc";
 
 static const char *__doc_fiction_detail_pi_routing_objective_distance = R"doc(Horizontal routing distance used for objective prioritization.)doc";
 
-static const char *__doc_fiction_detail_pi_routing_objective_fanout_target =
-R"doc(Shifted tile of the copied fanout node that must be connected to the
-routed PI path.)doc";
-
 static const char *__doc_fiction_detail_pi_routing_objective_objective = R"doc(Geometric source/target routing objective.)doc";
+
+static const char *__doc_fiction_detail_pi_routing_objective_original_pi = R"doc(PI node in the original layout represented by this objective.)doc";
 
 static const char *__doc_fiction_detail_place_outputs =
 R"doc(Places the primary outputs (POs) in the layout.
@@ -11529,14 +11544,20 @@ static const char *__doc_fiction_detail_route_pi_objectives_with_a_star =
 R"doc(Routes PI unscrambling objectives sequentially using A* with crossings
 enabled.
 
-Template parameter ``Lyt``:
-    Gate-level layout type.
+Template parameter ``OrigLyt``:
+    Original gate-level layout type.
+
+Template parameter ``WorkLyt``:
+    Working gate-level layout type.
 
 Parameter ``lyt``:
     Layout to route on.
 
 Parameter ``objectives``:
-    PI routing objectives in priority order.)doc";
+    PI routing objectives in priority order.
+
+Returns:
+    Routed anchor signals for original PIs.)doc";
 
 static const char *__doc_fiction_detail_route_po_objectives_with_a_star_and_create_pos =
 R"doc(Routes output objectives sequentially and creates new POs at target
