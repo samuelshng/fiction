@@ -203,6 +203,24 @@ Lyt create_extended_layout(const Lyt& lyt, const uint32_t pi_rows, const uint32_
     return Lyt{new_ar, lyt.get_clocking_scheme(), lyt.get_layout_name()};
 }
 /**
+ * Maps a primary input in the original layout to its routed anchor signal in the working layout.
+ *
+ * @tparam OrigLyt Original gate-level layout type.
+ * @tparam WorkLyt Working gate-level layout type.
+ */
+template <typename OrigLyt, typename WorkLyt>
+struct pi_anchor_signal
+{
+    /**
+     * PI node in the original layout.
+     */
+    mockturtle::node<OrigLyt> original_pi{};
+    /**
+     * Routed anchor signal in the working layout.
+     */
+    mockturtle::signal<WorkLyt> routed_anchor{};
+};
+/**
  * Copies all internal nodes (gates and wires) from the original layout to the new layout with a vertical offset.
  * Primary inputs and outputs are intentionally omitted.
  *
@@ -213,7 +231,8 @@ Lyt create_extended_layout(const Lyt& lyt, const uint32_t pi_rows, const uint32_
  * @param y_offset The vertical offset (in rows) to shift all coordinates by.
  */
 template <typename SrcLyt, typename DstLyt>
-void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, const uint32_t y_offset)
+void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, const uint32_t y_offset,
+                             const std::vector<pi_anchor_signal<SrcLyt, DstLyt>>& pi_anchors = {})
 {
     static_assert(is_gate_level_layout_v<SrcLyt>, "SrcLyt is not a gate-level layout");
     static_assert(is_hexagonal_layout_v<SrcLyt>, "SrcLyt is not a hexagonal layout");
@@ -229,6 +248,15 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
     original_lyt.foreach_pi(
         [&](const auto& pi)
         {
+            const auto pi_anchor_it = std::find_if(pi_anchors.cbegin(), pi_anchors.cend(),
+                                                   [&pi](const auto& anchor) { return anchor.original_pi == pi; });
+
+            if (pi_anchor_it != pi_anchors.cend())
+            {
+                old2new[pi] = pi_anchor_it->routed_anchor;
+                return;
+            }
+
             const auto         pi_coord = original_lyt.get_tile(pi);
             const tile<DstLyt> shifted_pi_coord{pi_coord.x, pi_coord.y + y_offset, pi_coord.z};
             old2new[pi] = target_lyt.make_signal(target_lyt.get_node(shifted_pi_coord));
@@ -269,14 +297,49 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
             old2new[node] = target_lyt.create_node(new_children, original_lyt.node_function(node), shifted_coord);
         });
 
+    // Normalize copied fanins to eliminate temporary placeholders introduced during incremental mapping.
+    original_lyt.foreach_gate(
+        [&](const auto& node)
+        {
+            if (original_lyt.is_po(node))
+            {
+                return;
+            }
+
+            const auto         original_coord = original_lyt.get_tile(node);
+            const tile<DstLyt> shifted_coord{original_coord.x, original_coord.y + y_offset, original_coord.z};
+
+            std::vector<mockturtle::signal<DstLyt>> normalized_children{};
+            normalized_children.reserve(original_lyt.fanin_size(node));
+            auto normalized_fanin_collector = [&](const auto& fanin_signal)
+            {
+                const auto fanin_node = original_lyt.get_node(fanin_signal);
+                auto       new_signal = old2new[fanin_node];
+                const auto output_pin = fanin_signal.output;
+
+                if (original_lyt.is_complemented(fanin_signal))
+                {
+                    new_signal = !new_signal;
+                }
+
+                new_signal.output = output_pin;
+                normalized_children.push_back(new_signal);
+            };
+            original_lyt.template foreach_fanin<decltype(normalized_fanin_collector), false>(
+                node, std::move(normalized_fanin_collector));
+
+            target_lyt.move_node(target_lyt.get_node(old2new[node]), shifted_coord, normalized_children);
+        });
+
     // Original POs are intentionally not copied and will be recreated later.
 }
 /**
  * Routing objective bundle for input unscrambling.
  *
- * @tparam Lyt Gate-level layout type.
+ * @tparam OrigLyt Original gate-level layout type.
+ * @tparam WorkLyt Working gate-level layout type.
  */
-template <typename Lyt>
+template <typename OrigLyt, typename WorkLyt>
 struct pi_routing_objective
 {
     /**
@@ -286,7 +349,11 @@ struct pi_routing_objective
     /**
      * Geometric source/target routing objective.
      */
-    routing_objective<Lyt> objective{};
+    routing_objective<WorkLyt> objective{};
+    /**
+     * PI node in the original layout represented by this objective.
+     */
+    mockturtle::node<OrigLyt> original_pi{};
 };
 /**
  * Places new PIs in the top row and creates routing objectives to their original locations (shifted by pi_rows). The
@@ -302,7 +369,7 @@ struct pi_routing_objective
  * @return Routing objectives sorted by permutation distance.
  */
 template <typename OrigLyt, typename WorkLyt>
-std::vector<pi_routing_objective<WorkLyt>>
+std::vector<pi_routing_objective<OrigLyt, WorkLyt>>
 create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
                              const std::vector<mockturtle::node<OrigLyt>>& current_pis,
                              const std::vector<mockturtle::node<OrigLyt>>& desired_pis, const uint32_t pi_rows)
@@ -324,7 +391,7 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
     // Precompute horizontal distances to sort objectives by route length.
     const auto pi_distances = calculate_permutation_distances(lyt, current_pis, desired_pis);
 
-    std::vector<pi_routing_objective<WorkLyt>> pi_objectives{};
+    std::vector<pi_routing_objective<OrigLyt, WorkLyt>> pi_objectives{};
     pi_objectives.reserve(desired_pis.size());
 
     for (size_t i = 0; i < desired_pis.size(); ++i)
@@ -346,7 +413,7 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
         const auto          original_coord = lyt.get_tile(desired_node);
         const tile<WorkLyt> target{original_coord.x, original_coord.y + pi_rows, original_coord.z};
 
-        pi_objectives.push_back({pi_distances[i], {source, target}});
+        pi_objectives.push_back({pi_distances[i], {source, target}, desired_node});
     }
 
     // Sort objectives by distance (descending) to prioritize longer routes first.
@@ -358,25 +425,34 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
 /**
  * Routes PI unscrambling objectives sequentially using A* with crossings enabled.
  *
- * @tparam Lyt Gate-level layout type.
+ * @tparam OrigLyt Original gate-level layout type.
+ * @tparam WorkLyt Working gate-level layout type.
  * @param lyt Layout to route on.
  * @param objectives PI routing objectives in priority order.
+ * @return Routed anchor signals for original PIs.
  */
-template <typename Lyt>
-void route_pi_objectives_with_a_star(Lyt& lyt, const std::vector<pi_routing_objective<Lyt>>& objectives)
+template <typename OrigLyt, typename WorkLyt>
+std::vector<pi_anchor_signal<OrigLyt, WorkLyt>>
+route_pi_objectives_with_a_star(WorkLyt& lyt, const std::vector<pi_routing_objective<OrigLyt, WorkLyt>>& objectives)
 {
-    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
-    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
-    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+    static_assert(is_gate_level_layout_v<OrigLyt>, "OrigLyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<OrigLyt>, "OrigLyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<OrigLyt>, "OrigLyt does not have pointy-top hexagonal orientation");
+    static_assert(is_gate_level_layout_v<WorkLyt>, "WorkLyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<WorkLyt>, "WorkLyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<WorkLyt>, "WorkLyt does not have pointy-top hexagonal orientation");
 
     a_star_params params{};
     params.crossings = true;
 
+    std::vector<pi_anchor_signal<OrigLyt, WorkLyt>> routed_anchors{};
+    routed_anchors.reserve(objectives.size());
+
     for (const auto& item : objectives)
     {
-        const auto path =
-            a_star<layout_coordinate_path<Lyt>>(lyt, {item.objective.source, item.objective.target},
-                                                euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(), params);
+        const auto path = a_star<layout_coordinate_path<WorkLyt>>(lyt, {item.objective.source, item.objective.target},
+                                                                  euclidean_distance_functor<WorkLyt>(),
+                                                                  unit_cost_functor<WorkLyt>(), params);
 
         assert(!path.empty() && "A* failed to route a PI unscrambling objective");
 
@@ -389,7 +465,11 @@ void route_pi_objectives_with_a_star(Lyt& lyt, const std::vector<pi_routing_obje
                           incoming_signal =
                               lyt.create_buf(incoming_signal, lyt.is_empty_tile(coord) ? coord : lyt.above(coord));
                       });
+
+        routed_anchors.push_back({item.original_pi, incoming_signal});
     }
+
+    return routed_anchors;
 }
 /**
  * Routing objective bundle for output unscrambling.
@@ -600,10 +680,10 @@ class unscramble_pins_impl
             create_pi_routing_objectives(layout, new_layout, current_pis, target_pis, pi_rows);
 
         // 5. Route PI objectives in priority order
-        route_pi_objectives_with_a_star(new_layout, pi_routing_objectives);
+        const auto pi_anchor_signals = route_pi_objectives_with_a_star(new_layout, pi_routing_objectives);
 
         // 6. Copy the original layout content to the new layout with vertical offset
-        copy_layout_with_offset(layout, new_layout, pi_rows);
+        copy_layout_with_offset(layout, new_layout, pi_rows, pi_anchor_signals);
 
         debug::write_dot_layout<Lyt, gate_layout_hexagonal_drawer<Lyt>>(static_cast<Lyt>(new_layout),
                                                                         "unscramble_pins_after_copy");
