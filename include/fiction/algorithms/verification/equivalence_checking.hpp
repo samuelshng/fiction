@@ -18,6 +18,7 @@
 #include <mockturtle/views/topo_view.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -27,7 +28,7 @@ namespace fiction
 /**
  * The different equivalence types possible.
  */
-enum class eq_type
+enum class eq_type : uint8_t
 {
     /**
      * `Spec` and `Impl` are logically not equivalent OR `Impl` has DRVs.

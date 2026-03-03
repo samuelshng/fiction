@@ -252,12 +252,16 @@ class gate_level_drvs_impl
             se = lyt.get_synchronization_element(t);
         }
 
-        const std::array<const char*, 4> inp{
-            {lyt.has_northern_incoming_signal(t) ? "N" : "", lyt.has_eastern_incoming_signal(t) ? "E" : "",
-             lyt.has_southern_incoming_signal(t) ? "S" : "", lyt.has_western_incoming_signal(t) ? "W" : ""}};
-        const std::array<const char*, 4> out{
-            {lyt.has_northern_outgoing_signal(t) ? "N" : "", lyt.has_eastern_outgoing_signal(t) ? "E" : "",
-             lyt.has_southern_outgoing_signal(t) ? "S" : "", lyt.has_western_outgoing_signal(t) ? "W" : ""}};
+        const std::array<const char*, 8> inp{
+            {lyt.has_northern_incoming_signal(t) ? "N" : "", lyt.has_north_eastern_incoming_signal(t) ? "NE" : "",
+             lyt.has_eastern_incoming_signal(t) ? "E" : "", lyt.has_south_eastern_incoming_signal(t) ? "SE" : "",
+             lyt.has_southern_incoming_signal(t) ? "S" : "", lyt.has_south_western_incoming_signal(t) ? "SW" : "",
+             lyt.has_western_incoming_signal(t) ? "W" : "", lyt.has_north_western_incoming_signal(t) ? "NW" : ""}};
+        const std::array<const char*, 8> out{
+            {lyt.has_northern_outgoing_signal(t) ? "N" : "", lyt.has_north_eastern_outgoing_signal(t) ? "NE" : "",
+             lyt.has_eastern_outgoing_signal(t) ? "E" : "", lyt.has_south_eastern_outgoing_signal(t) ? "SE" : "",
+             lyt.has_southern_outgoing_signal(t) ? "S" : "", lyt.has_south_western_outgoing_signal(t) ? "SW" : "",
+             lyt.has_western_outgoing_signal(t) ? "W" : "", lyt.has_north_western_outgoing_signal(t) ? "NW" : ""}};
 
         s << fmt::format(", clk: {}, se: {}, inp: {}, out: {}{}{}", clk, se, fmt::join(inp, ""), fmt::join(out, ""),
                          (lyt.is_pi_tile(t) ? ", PI" : ""), (lyt.is_po_tile(t) ? ", PO" : ""));
@@ -337,6 +341,12 @@ class gate_level_drvs_impl
                     {
                         const auto n = lyt.get_node(t);
 
+                        // skip constants
+                        if (lyt.is_constant(n))
+                        {
+                            return;
+                        }
+
                         // if the node is dead but placed
                         if (lyt.is_dead(n))
                         {
@@ -376,9 +386,23 @@ class gate_level_drvs_impl
 
                     const auto n = lyt.get_node(t);
 
+                    // skip constants and dead nodes
+                    if (lyt.is_constant(n) || lyt.is_dead(n))
+                    {
+                        return;
+                    }
+
                     for (const auto& child : lyt.strg->nodes[n].children)
                     {
-                        const auto ct = lyt.get_tile(lyt.get_node(child.index));
+                        const auto child_node = lyt.get_node(child.index);
+
+                        // skip constants and dead nodes
+                        if (lyt.is_constant(child_node) || lyt.is_dead(child_node))
+                        {
+                            continue;
+                        }
+
+                        const auto ct = lyt.get_tile(child_node);
                         if (!lyt.is_adjacent_elevation_of(t, ct))
                         {
                             adjacencies_respected = false;
@@ -390,7 +414,7 @@ class gate_level_drvs_impl
                 });
         }
 
-        pst.report["Non adjacent connections"] = non_adjacency_report;
+        pst.report["Non-adjacent connections"] = non_adjacency_report;
 
         return summary("all tiles are adjacently connected", adjacencies_respected, true);
     }
@@ -410,12 +434,19 @@ class gate_level_drvs_impl
             lyt.foreach_tile(
                 [this, &connections_report, &all_connected](const auto& t)
                 {
+                    // skip empty tiles
                     if (lyt.is_empty_tile(t))
                     {
                         return;
                     }
 
                     const auto n = lyt.get_node(t);
+
+                    // skip constants and dead nodes
+                    if (lyt.is_constant(n) || lyt.is_dead(n))
+                    {
+                        return;
+                    }
 
                     const bool dangling_inp_connection = lyt.fanin_size(n) == 0 && !lyt.is_pi_tile(t);
                     const bool dangling_out_connection = lyt.fanout_size(n) == 0 && !lyt.is_po_tile(t);
@@ -481,6 +512,7 @@ class gate_level_drvs_impl
             lyt.foreach_tile(
                 [this, &data_flow_report, &data_flow_respected](const auto& t)
                 {
+                    // skip empty tiles
                     if (lyt.is_empty_tile(t))
                     {
                         return;
@@ -488,9 +520,24 @@ class gate_level_drvs_impl
 
                     const auto n = lyt.get_node(t);
 
+                    // skip constants and dead nodes
+                    if (lyt.is_constant(n) || lyt.is_dead(n))
+                    {
+                        return;
+                    }
+
                     for (const auto& child : lyt.strg->nodes[n].children)
                     {
-                        const auto ct = lyt.get_tile(lyt.get_node(child.index));
+                        const auto child_node = lyt.get_node(child.index);
+
+                        // skip constants and dead nodes
+                        if (lyt.is_constant(child_node) || lyt.is_dead(child_node))
+                        {
+                            continue;
+                        }
+
+                        const auto ct = lyt.get_tile(child_node);
+
                         if (!lyt.is_incoming_clocked(t, ct))
                         {
                             data_flow_respected = false;
