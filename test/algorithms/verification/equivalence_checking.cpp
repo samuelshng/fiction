@@ -106,6 +106,37 @@ TEST_CASE("Network-network equivalence with multi-output nodes", "[equiv]")
     check_for_strong_equiv(mo_half_adder, aig_half_adder);
 }
 
+TEST_CASE("Network-network equivalence with reordered named interfaces", "[equiv]")
+{
+    aig_nt spec{};
+
+    const auto spec_a   = spec.create_pi();
+    const auto spec_b   = spec.create_pi();
+    const auto spec_and = spec.create_and(spec_a, spec_b);
+
+    spec.set_name(spec_a, "a");
+    spec.set_name(spec_b, "b");
+    spec.create_po(spec_and);
+    spec.set_output_name(0u, "f");
+    spec.create_po(spec_a);
+    spec.set_output_name(1u, "g");
+
+    aig_nt impl{};
+
+    const auto impl_b   = impl.create_pi();
+    const auto impl_a   = impl.create_pi();
+    const auto impl_and = impl.create_and(impl_a, impl_b);
+
+    impl.set_name(impl_b, "b");
+    impl.set_name(impl_a, "a");
+    impl.create_po(impl_a);
+    impl.set_output_name(0u, "g");
+    impl.create_po(impl_and);
+    impl.set_output_name(1u, "f");
+
+    check_for_strong_equiv(spec, impl);
+}
+
 TEST_CASE("Network-layout equivalence", "[equiv]")
 {
     SECTION("Cartesian layout")

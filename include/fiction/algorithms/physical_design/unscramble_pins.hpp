@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <iostream>
 #include <ostream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -488,9 +489,21 @@ struct po_routing_objective
      */
     routing_objective<Lyt> objective{};
     /**
+     * Driver signal of the desired PO in the copied logic.
+     */
+    mockturtle::signal<Lyt> source_driver{};
+    /**
      * Output name associated with the routing objective.
      */
     std::string output_name{};
+    /**
+     * Target PO position in the requested output ordering.
+     */
+    uint32_t order_index{};
+    /**
+     * Indicates whether geometric routing is required before PO creation.
+     */
+    bool requires_routing{true};
 };
 /**
  * Places output source anchors at shifted original PO locations and creates routing objectives towards new PO slots in
@@ -574,14 +587,9 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
 
         const auto output_name = lyt.get_output_name(static_cast<uint32_t>(current_idx));
 
-        // Identity case: no routing required; directly create PO at target.
-        if (source_tile == target_tile)
-        {
-            new_layout.create_po(source_driver, output_name, target_tile);
-            continue;
-        }
+        const auto requires_routing = source_tile != target_tile;
 
-        if (new_layout.is_empty_tile(source_tile))
+        if (requires_routing && new_layout.is_empty_tile(source_tile))
         {
             new_layout.create_buf(source_driver, source_tile);
         }
@@ -589,11 +597,29 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
         const auto distance =
             static_cast<uint32_t>(std::abs(static_cast<int32_t>(source_tile.x) - static_cast<int32_t>(target_tile.x)));
 
-        po_objectives.push_back({distance, {source_tile, target_tile}, output_name});
+        po_objectives.push_back({distance,
+                                 {source_tile, target_tile},
+                                 source_driver,
+                                 output_name,
+                                 static_cast<uint32_t>(i),
+                                 requires_routing});
     }
 
     std::sort(po_objectives.begin(), po_objectives.end(),
-              [](const auto& lhs, const auto& rhs) { return lhs.distance > rhs.distance; });
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.distance != rhs.distance)
+                  {
+                      return lhs.distance > rhs.distance;
+                  }
+
+                  if (lhs.objective.source.x != rhs.objective.source.x)
+                  {
+                      return lhs.objective.source.x < rhs.objective.source.x;
+                  }
+
+                  return lhs.order_index < rhs.order_index;
+              });
 
     return po_objectives;
 }
@@ -614,24 +640,68 @@ void route_po_objectives_with_a_star_and_create_pos(Lyt& lyt, const std::vector<
     a_star_params params{};
     params.crossings = true;
 
+    struct routed_po
+    {
+        mockturtle::signal<Lyt> driver{};
+        tile<Lyt>               target{};
+        std::string             output_name{};
+        uint32_t                order_index{};
+    };
+
+    std::vector<routed_po> routed_pos{};
+    routed_pos.reserve(objectives.size());
+
     for (const auto& item : objectives)
     {
-        const auto path =
-            a_star<layout_coordinate_path<Lyt>>(lyt, {item.objective.source, item.objective.target},
-                                                euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(), params);
+        auto final_driver = item.source_driver;
 
-        assert(!path.empty() && "A* failed to route a PO unscrambling objective");
+        if (item.requires_routing)
+        {
+            const auto path = a_star<layout_coordinate_path<Lyt>>(lyt, {item.objective.source, item.objective.target},
+                                                                  euclidean_distance_functor<Lyt>(),
+                                                                  unit_cost_functor<Lyt>(), params);
 
-        auto incoming_signal = lyt.make_signal(lyt.get_node(path.source()));
+            if (path.empty())
+            {
+                throw std::runtime_error(fmt::format(
+                    "A* failed to route PO unscrambling objective from ({}, {}, {}) to ({}, {}, {}).",
+                    static_cast<uint64_t>(item.objective.source.x), static_cast<uint64_t>(item.objective.source.y),
+                    static_cast<uint64_t>(item.objective.source.z), static_cast<uint64_t>(item.objective.target.x),
+                    static_cast<uint64_t>(item.objective.target.y), static_cast<uint64_t>(item.objective.target.z)));
+            }
 
-        std::for_each(path.cbegin() + 1, path.cend() - 1,
-                      [&](const auto& coord)
-                      {
-                          incoming_signal =
-                              lyt.create_buf(incoming_signal, lyt.is_empty_tile(coord) ? coord : lyt.above(coord));
-                      });
+            auto incoming_signal = lyt.make_signal(lyt.get_node(path.source()));
 
-        lyt.create_po(incoming_signal, item.output_name, path.target());
+            std::for_each(path.cbegin() + 1, path.cend() - 1,
+                          [&](const auto& coord)
+                          {
+                              incoming_signal =
+                                  lyt.create_buf(incoming_signal, lyt.is_empty_tile(coord) ? coord : lyt.above(coord));
+                          });
+
+            final_driver = incoming_signal;
+        }
+
+        lyt.create_po(final_driver, item.output_name, item.objective.target);
+        routed_pos.push_back({final_driver, item.objective.target, item.output_name, item.order_index});
+    }
+
+    std::vector<tile<Lyt>> current_po_tiles{};
+    current_po_tiles.reserve(lyt.num_pos());
+
+    lyt.foreach_po([&current_po_tiles](const auto& po) { current_po_tiles.push_back(static_cast<tile<Lyt>>(po)); });
+
+    for (const auto& po_tile : current_po_tiles)
+    {
+        lyt.clear_tile(po_tile);
+    }
+
+    std::sort(routed_pos.begin(), routed_pos.end(),
+              [](const auto& lhs, const auto& rhs) { return lhs.order_index < rhs.order_index; });
+
+    for (const auto& po : routed_pos)
+    {
+        lyt.create_po(po.driver, po.output_name, po.target);
     }
 }
 

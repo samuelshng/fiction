@@ -636,7 +636,28 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
 
             do
             {
-                check_eq(layout, unscramble_pins(layout, {}, target_pos));
+                const auto unscrambled = unscramble_pins(layout, {}, target_pos);
+                check_eq(layout, unscrambled);
+
+                std::vector<std::string> expected_output_names{};
+                expected_output_names.reserve(target_pos.size());
+
+                for (const auto& target_po : target_pos)
+                {
+                    const auto current_it = std::find(pos.cbegin(), pos.cend(), target_po);
+                    REQUIRE(current_it != pos.cend());
+                    expected_output_names.push_back(
+                        layout.get_output_name(static_cast<uint32_t>(std::distance(pos.cbegin(), current_it))));
+                }
+
+                std::vector<std::string> actual_output_names{};
+                actual_output_names.reserve(unscrambled.num_pos());
+
+                uint32_t po_index = 0u;
+                unscrambled.foreach_po([&unscrambled, &actual_output_names, &po_index](const auto&)
+                                       { actual_output_names.push_back(unscrambled.get_output_name(po_index++)); });
+
+                CHECK(actual_output_names == expected_output_names);
             } while (std::next_permutation(target_pos.begin(), target_pos.end()));
         }
     }

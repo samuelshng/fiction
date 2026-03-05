@@ -20,7 +20,12 @@
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <sstream>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace fiction
@@ -360,6 +365,278 @@ mockturtle::klut_network prepare_for_equivalence_checking(const NtkOrLyt& ntk_or
     return mockturtle::cleanup_dangling<NtkOrLyt, mockturtle::klut_network>(ntk_or_lyt, true, false);
 }
 
+/**
+ * @brief Collects the complete ordered set of unique PI names for interface alignment.
+ *
+ * @tparam NtkOrLyt Network or layout type.
+ * @param ntk_or_lyt Network or layout instance.
+ * @return Ordered PI names if all names are present and unique.
+ */
+template <typename NtkOrLyt>
+[[nodiscard]] std::optional<std::vector<std::string>> collect_ordered_pi_names(const NtkOrLyt& ntk_or_lyt)
+{
+    if constexpr (mockturtle::has_foreach_pi_v<NtkOrLyt> && mockturtle::has_make_signal_v<NtkOrLyt> &&
+                  mockturtle::has_has_name_v<NtkOrLyt> && mockturtle::has_get_name_v<NtkOrLyt>)
+    {
+        std::vector<std::string>        names{};
+        std::unordered_set<std::string> seen{};
+
+        names.reserve(ntk_or_lyt.num_pis());
+        seen.reserve(ntk_or_lyt.num_pis());
+
+        bool valid = true;
+
+        ntk_or_lyt.foreach_pi(
+            [&ntk_or_lyt, &names, &seen, &valid](const auto& pi)
+            {
+                if (!valid)
+                {
+                    return;
+                }
+
+                const auto pi_signal = ntk_or_lyt.make_signal(pi);
+                if (!ntk_or_lyt.has_name(pi_signal))
+                {
+                    valid = false;
+                    return;
+                }
+
+                const auto name = ntk_or_lyt.get_name(pi_signal);
+                if (name.empty() || !seen.insert(name).second)
+                {
+                    valid = false;
+                    return;
+                }
+
+                names.push_back(name);
+            });
+
+        if (valid)
+        {
+            return names;
+        }
+    }
+
+    return std::nullopt;
+}
+
+/**
+ * @brief Collects the complete ordered set of unique PO names for interface alignment.
+ *
+ * @tparam NtkOrLyt Network or layout type.
+ * @param ntk_or_lyt Network or layout instance.
+ * @return Ordered PO names if all names are present and unique.
+ */
+template <typename NtkOrLyt>
+[[nodiscard]] std::optional<std::vector<std::string>> collect_ordered_po_names(const NtkOrLyt& ntk_or_lyt)
+{
+    if constexpr (mockturtle::has_foreach_po_v<NtkOrLyt> && mockturtle::has_has_output_name_v<NtkOrLyt> &&
+                  mockturtle::has_get_output_name_v<NtkOrLyt>)
+    {
+        std::vector<std::string>        names{};
+        std::unordered_set<std::string> seen{};
+
+        names.reserve(ntk_or_lyt.num_pos());
+        seen.reserve(ntk_or_lyt.num_pos());
+
+        bool valid = true;
+
+        ntk_or_lyt.foreach_po(
+            [&ntk_or_lyt, &names, &seen, &valid](const auto&, const auto index)
+            {
+                if (!valid)
+                {
+                    return;
+                }
+
+                if (!ntk_or_lyt.has_output_name(index))
+                {
+                    valid = false;
+                    return;
+                }
+
+                const auto name = ntk_or_lyt.get_output_name(index);
+                if (name.empty() || !seen.insert(name).second)
+                {
+                    valid = false;
+                    return;
+                }
+
+                names.push_back(name);
+            });
+
+        if (valid)
+        {
+            return names;
+        }
+    }
+
+    return std::nullopt;
+}
+
+/**
+ * @brief Resolves the permutation that maps a candidate interface onto a reference naming order.
+ *
+ * @param reference_names Ordered reference names.
+ * @param candidate_names Ordered candidate names.
+ * @return Candidate indices in reference order if both interfaces share the same named pins.
+ */
+[[nodiscard]] inline std::optional<std::vector<uint32_t>>
+resolve_interface_permutation(const std::optional<std::vector<std::string>>& reference_names,
+                              const std::optional<std::vector<std::string>>& candidate_names)
+{
+    if (!reference_names.has_value() || !candidate_names.has_value() ||
+        reference_names->size() != candidate_names->size())
+    {
+        return std::nullopt;
+    }
+
+    std::unordered_map<std::string, uint32_t> candidate_name_to_index{};
+    candidate_name_to_index.reserve(candidate_names->size());
+
+    for (uint32_t index = 0u; index < candidate_names->size(); ++index)
+    {
+        candidate_name_to_index.emplace(candidate_names->at(index), index);
+    }
+
+    std::vector<uint32_t> permutation{};
+    permutation.reserve(reference_names->size());
+
+    for (const auto& name : *reference_names)
+    {
+        if (const auto it = candidate_name_to_index.find(name); it != candidate_name_to_index.cend())
+        {
+            permutation.push_back(it->second);
+        }
+        else
+        {
+            return std::nullopt;
+        }
+    }
+
+    return permutation;
+}
+
+/**
+ * @brief Creates a semantically equivalent `klut_network` with reordered PI and PO interfaces.
+ *
+ * @param src Source `klut_network`.
+ * @param pi_permutation Source PI indices in desired order.
+ * @param po_permutation Source PO indices in desired order.
+ * @return Equivalent `klut_network` with reordered interface enumeration.
+ */
+[[nodiscard]] inline mockturtle::klut_network
+reorder_klut_network_interface(const mockturtle::klut_network& src, const std::vector<uint32_t>& pi_permutation,
+                               const std::vector<uint32_t>& po_permutation)
+{
+    using klut_signal = mockturtle::signal<mockturtle::klut_network>;
+
+    mockturtle::topo_view<mockturtle::klut_network>                                    topo_src{src};
+    mockturtle::klut_network                                                           reordered{};
+    mockturtle::node_map<klut_signal, mockturtle::topo_view<mockturtle::klut_network>> old2new{topo_src};
+
+    old2new[topo_src.get_node(topo_src.get_constant(false))] = reordered.get_constant(false);
+    old2new[topo_src.get_node(topo_src.get_constant(true))]  = reordered.get_constant(true);
+
+    for (const auto pi_index : pi_permutation)
+    {
+        old2new[topo_src.pi_at(pi_index)] = reordered.create_pi();
+    }
+
+    topo_src.foreach_gate(
+        [&topo_src, &src, &reordered, &old2new](const auto& gate)
+        {
+            std::vector<klut_signal> children{};
+            children.reserve(topo_src.fanin_size(gate));
+
+            topo_src.foreach_fanin(gate,
+                                   [&topo_src, &reordered, &old2new, &children](const auto& fanin)
+                                   {
+                                       const auto fanin_node = topo_src.get_node(fanin);
+                                       auto       child      = topo_src.is_constant(fanin_node) ?
+                                                                   reordered.get_constant(topo_src.constant_value(fanin_node)) :
+                                                                   old2new[fanin_node];
+
+                                       if (topo_src.is_complemented(fanin))
+                                       {
+                                           child = !child;
+                                       }
+
+                                       children.push_back(child);
+                                   });
+
+            old2new[gate] = reordered.clone_node(src, gate, children);
+        });
+
+    for (const auto po_index : po_permutation)
+    {
+        const auto po      = topo_src.po_at(po_index);
+        const auto po_node = topo_src.get_node(po);
+
+        auto po_signal =
+            topo_src.is_constant(po_node) ? reordered.get_constant(topo_src.constant_value(po_node)) : old2new[po_node];
+
+        if (topo_src.is_complemented(po))
+        {
+            po_signal = !po_signal;
+        }
+
+        reordered.create_po(po_signal);
+    }
+
+    return reordered;
+}
+
+/**
+ * @brief Prepares two networks for equivalence checking and aligns named interfaces if possible.
+ *
+ * @tparam Spec Specification type.
+ * @tparam Impl Implementation type.
+ * @param spec Specification instance.
+ * @param impl Implementation instance.
+ * @return Pair of prepared `klut_network`s with compatible interface ordering.
+ */
+template <typename Spec, typename Impl>
+[[nodiscard]] std::pair<mockturtle::klut_network, mockturtle::klut_network>
+prepare_aligned_networks_for_equivalence_checking(const Spec& spec, const Impl& impl)
+{
+    auto spec_ntk = prepare_for_equivalence_checking(spec);
+    auto impl_ntk = prepare_for_equivalence_checking(impl);
+
+    const auto spec_pi_names = collect_ordered_pi_names(spec);
+    const auto impl_pi_names = collect_ordered_pi_names(impl);
+    const auto spec_po_names = collect_ordered_po_names(spec);
+    const auto impl_po_names = collect_ordered_po_names(impl);
+
+    std::vector<uint32_t> pi_permutation(impl_ntk.num_pis());
+    for (uint32_t i = 0u; i < pi_permutation.size(); ++i)
+    {
+        pi_permutation[i] = i;
+    }
+
+    std::vector<uint32_t> po_permutation(impl_ntk.num_pos());
+    for (uint32_t i = 0u; i < po_permutation.size(); ++i)
+    {
+        po_permutation[i] = i;
+    }
+
+    if (const auto resolved_pi_permutation = resolve_interface_permutation(spec_pi_names, impl_pi_names);
+        resolved_pi_permutation.has_value())
+    {
+        pi_permutation = *resolved_pi_permutation;
+    }
+
+    if (const auto resolved_po_permutation = resolve_interface_permutation(spec_po_names, impl_po_names);
+        resolved_po_permutation.has_value())
+    {
+        po_permutation = *resolved_po_permutation;
+    }
+
+    impl_ntk = reorder_klut_network_interface(impl_ntk, pi_permutation, po_permutation);
+
+    return {std::move(spec_ntk), std::move(impl_ntk)};
+}
+
 template <typename Spec, typename Impl>
 class equivalence_checking_impl
 {
@@ -397,9 +674,8 @@ class equivalence_checking_impl
             }
         }
 
-        const auto spec_ntk = prepare_for_equivalence_checking(spec);
-        const auto impl_ntk = prepare_for_equivalence_checking(impl);
-        const auto miter    = mockturtle::miter<mockturtle::klut_network>(spec_ntk, impl_ntk);
+        auto [spec_ntk, impl_ntk] = prepare_aligned_networks_for_equivalence_checking(spec, impl);
+        const auto miter          = mockturtle::miter<mockturtle::klut_network>(spec_ntk, impl_ntk);
 
         if (miter)
         {
