@@ -13,6 +13,7 @@
 #include <mockturtle/io/write_aiger.hpp>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -131,6 +132,101 @@ fiction::hex_even_row_gate_clk_lyt make_two_output_test_layout()
     return layout;
 }
 
+/**
+ * @brief Collects PI aliases sorted by physical x-coordinate.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt Layout to inspect.
+ * @return PI aliases ordered from left to right.
+ */
+template <typename Lyt>
+std::vector<std::string> collect_pi_aliases_sorted_by_x(const Lyt& lyt)
+{
+    std::vector<std::pair<fiction::tile<Lyt>, std::string>> pins{};
+    pins.reserve(lyt.num_pis());
+
+    lyt.foreach_pi(
+        [&lyt, &pins](const auto& pi)
+        {
+            pins.emplace_back(lyt.get_tile(pi), lyt.get_name(pi));
+        });
+
+    std::sort(pins.begin(), pins.end(),
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.first.x != rhs.first.x)
+                  {
+                      return lhs.first.x < rhs.first.x;
+                  }
+
+                  if (lhs.first.y != rhs.first.y)
+                  {
+                      return lhs.first.y < rhs.first.y;
+                  }
+
+                  return lhs.first.z < rhs.first.z;
+              });
+
+    std::vector<std::string> ordered_aliases{};
+    ordered_aliases.reserve(pins.size());
+
+    for (const auto& [coord, alias] : pins)
+    {
+        static_cast<void>(coord);
+        ordered_aliases.push_back(alias);
+    }
+
+    return ordered_aliases;
+}
+
+/**
+ * @brief Collects PO aliases sorted by physical x-coordinate.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt Layout to inspect.
+ * @return PO aliases ordered from left to right.
+ */
+template <typename Lyt>
+std::vector<std::string> collect_po_aliases_sorted_by_x(const Lyt& lyt)
+{
+    std::vector<std::pair<fiction::tile<Lyt>, std::string>> outputs{};
+    outputs.reserve(lyt.num_pos());
+
+    uint32_t po_index = 0u;
+    lyt.foreach_po(
+        [&lyt, &outputs, &po_index](const auto& po)
+        {
+            outputs.emplace_back(static_cast<fiction::tile<Lyt>>(po), lyt.get_output_name(po_index++));
+        });
+
+    std::sort(outputs.begin(), outputs.end(),
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.first.x != rhs.first.x)
+                  {
+                      return lhs.first.x < rhs.first.x;
+                  }
+
+                  if (lhs.first.y != rhs.first.y)
+                  {
+                      return lhs.first.y < rhs.first.y;
+                  }
+
+                  return lhs.first.z < rhs.first.z;
+              });
+
+    std::vector<std::string> ordered_aliases{};
+    ordered_aliases.reserve(outputs.size());
+
+    for (const auto& [coord, alias] : outputs)
+    {
+        static_cast<void>(coord);
+        ordered_aliases.push_back(alias);
+    }
+
+    return ordered_aliases;
+}
+
 }  // namespace
 
 TEST_CASE("Pin unscrambling spec parsing", "[pin-unscrambling]")
@@ -209,6 +305,7 @@ TEST_CASE("Pin unscrambling resolves semantic AIG names to generic layout aliase
     REQUIRE(unscrambled_pi_aliases.size() == 2u);
     CHECK(unscrambled_pi_aliases[0] == "pi01");
     CHECK(unscrambled_pi_aliases[1] == "pi00");
+    CHECK(collect_pi_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"pi01", "pi00"});
 
     CHECK(std::filesystem::exists(report_file));
     std::filesystem::remove_all(test_dir);
@@ -245,6 +342,7 @@ TEST_CASE("Pin unscrambling supports alias mappings without AIG", "[pin-unscramb
     REQUIRE(unscrambled_pi_aliases.size() == 2u);
     CHECK(unscrambled_pi_aliases[0] == "pi01");
     CHECK(unscrambled_pi_aliases[1] == "pi00");
+    CHECK(collect_pi_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"pi01", "pi00"});
 
     std::ifstream report_stream{report_file};
     REQUIRE(report_stream.is_open());
@@ -418,6 +516,7 @@ TEST_CASE("Pin unscrambling reorders multiple outputs in semantic order mode", "
     REQUIRE(unscrambled_po_aliases.size() == 2u);
     CHECK(unscrambled_po_aliases[0] == "po01");
     CHECK(unscrambled_po_aliases[1] == "po00");
+    CHECK(collect_po_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"po01", "po00"});
 
     std::filesystem::remove_all(test_dir);
 }

@@ -51,6 +51,87 @@ hex_even_row_gate_clk_lyt generate_extended_hex_layout_from_network(const Ntk& n
     return hexagonalization<hex_even_row_gate_clk_lyt, cart_layout>(*cart_layout_opt, hex_params);
 }
 
+template <typename Lyt>
+std::vector<std::string> collect_pi_names_sorted_by_x(const Lyt& lyt)
+{
+    std::vector<std::pair<tile<Lyt>, std::string>> pins{};
+    pins.reserve(lyt.num_pis());
+
+    lyt.foreach_pi(
+        [&lyt, &pins](const auto& pi)
+        {
+            pins.emplace_back(lyt.get_tile(pi), lyt.get_name(pi));
+        });
+
+    std::sort(pins.begin(), pins.end(),
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.first.x != rhs.first.x)
+                  {
+                      return lhs.first.x < rhs.first.x;
+                  }
+
+                  if (lhs.first.y != rhs.first.y)
+                  {
+                      return lhs.first.y < rhs.first.y;
+                  }
+
+                  return lhs.first.z < rhs.first.z;
+              });
+
+    std::vector<std::string> ordered_names{};
+    ordered_names.reserve(pins.size());
+
+    for (const auto& [coord, name] : pins)
+    {
+        static_cast<void>(coord);
+        ordered_names.push_back(name);
+    }
+
+    return ordered_names;
+}
+
+template <typename Lyt>
+std::vector<std::string> collect_po_names_sorted_by_x(const Lyt& lyt)
+{
+    std::vector<std::pair<tile<Lyt>, std::string>> outputs{};
+    outputs.reserve(lyt.num_pos());
+
+    uint32_t po_index = 0u;
+    lyt.foreach_po(
+        [&lyt, &outputs, &po_index](const auto& po)
+        {
+            outputs.emplace_back(static_cast<tile<Lyt>>(po), lyt.get_output_name(po_index++));
+        });
+
+    std::sort(outputs.begin(), outputs.end(),
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.first.x != rhs.first.x)
+                  {
+                      return lhs.first.x < rhs.first.x;
+                  }
+
+                  if (lhs.first.y != rhs.first.y)
+                  {
+                      return lhs.first.y < rhs.first.y;
+                  }
+
+                  return lhs.first.z < rhs.first.z;
+              });
+
+    std::vector<std::string> ordered_names{};
+    ordered_names.reserve(outputs.size());
+
+    for (const auto& [coord, name] : outputs)
+    {
+        static_cast<void>(coord);
+        ordered_names.push_back(name);
+    }
+
+    return ordered_names;
+}
+
 }  // namespace
 
 TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
@@ -93,6 +174,25 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
             CHECK(coords[1] == tile<gate_layout>{2, 10});
             CHECK(coords[2] == tile<gate_layout>{4, 10});
         }
+    }
+
+    SECTION("determine_pin_slot_coordinates")
+    {
+        gate_layout slot_layout{{20, 20}, row_clocking<gate_layout>()};
+
+        const auto right  = slot_layout.create_pi("right", {4, 0});
+        const auto left   = slot_layout.create_pi("left", {0, 0});
+        const auto middle = slot_layout.create_pi("middle", {2, 0});
+
+        const std::vector scrambled_current{slot_layout.get_node(right), slot_layout.get_node(left),
+                                            slot_layout.get_node(middle)};
+
+        const auto coords = detail::determine_pin_slot_coordinates(slot_layout, scrambled_current);
+
+        REQUIRE(coords.size() == 3);
+        CHECK(coords[0] == tile<gate_layout>{0, 0});
+        CHECK(coords[1] == tile<gate_layout>{2, 0});
+        CHECK(coords[2] == tile<gate_layout>{4, 0});
     }
 
     SECTION("calculate_rows_needed")
@@ -507,6 +607,27 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         CHECK(objectives[0].objective.target.y >= 3);
     }
 
+    SECTION("create_pi_routing_objectives uses physical slot order")
+    {
+        gate_layout scrambled_layout{{20, 20}, row_clocking<gate_layout>()};
+
+        const auto right  = scrambled_layout.create_pi("right", {4, 0});
+        const auto left   = scrambled_layout.create_pi("left", {0, 0});
+        const auto middle = scrambled_layout.create_pi("middle", {2, 0});
+
+        const std::vector scrambled_current{scrambled_layout.get_node(right), scrambled_layout.get_node(left),
+                                            scrambled_layout.get_node(middle)};
+        const std::vector desired{scrambled_layout.get_node(right), scrambled_layout.get_node(middle),
+                                  scrambled_layout.get_node(left)};
+        auto              new_layout = detail::create_extended_layout(scrambled_layout, 4, 0);
+
+        const auto objectives =
+            detail::create_pi_routing_objectives(scrambled_layout, new_layout, scrambled_current, desired, 4);
+
+        REQUIRE(objectives.size() == 3);
+        CHECK(collect_pi_names_sorted_by_x(new_layout) == std::vector<std::string>{"right", "middle", "left"});
+    }
+
     SECTION("create_po_routing_objectives")
     {
         const std::vector desired{layout.get_node(po2), layout.get_node(po1), layout.get_node(po3)};
@@ -576,6 +697,40 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         CHECK(new_layout.is_po_tile(objectives[0].objective.target));
         CHECK(new_layout.is_po_tile(objectives[1].objective.target));
         CHECK(new_layout.is_po_tile(objectives[2].objective.target));
+    }
+
+    SECTION("route_po_objectives_with_a_star_and_create_pos preserves physical output order")
+    {
+        gate_layout scrambled_layout{{20, 20}, row_clocking<gate_layout>()};
+
+        const auto pi_left   = scrambled_layout.create_pi("left_in", {0, 0});
+        const auto pi_middle = scrambled_layout.create_pi("middle_in", {2, 0});
+        const auto pi_right  = scrambled_layout.create_pi("right_in", {4, 0});
+
+        const auto right_buf  = scrambled_layout.create_buf(pi_right, {4, 1});
+        const auto left_buf   = scrambled_layout.create_buf(pi_left, {0, 1});
+        const auto middle_buf = scrambled_layout.create_buf(pi_middle, {2, 1});
+
+        const auto po_right  = scrambled_layout.create_po(right_buf, "right_out", {4, 2});
+        const auto po_left   = scrambled_layout.create_po(left_buf, "left_out", {0, 2});
+        const auto po_middle = scrambled_layout.create_po(middle_buf, "middle_out", {2, 2});
+
+        const std::vector current_pos{scrambled_layout.get_node(po_right), scrambled_layout.get_node(po_left),
+                                      scrambled_layout.get_node(po_middle)};
+        const std::vector desired{scrambled_layout.get_node(po_right), scrambled_layout.get_node(po_middle),
+                                  scrambled_layout.get_node(po_left)};
+
+        auto new_layout = detail::create_extended_layout(scrambled_layout, 2, 8);
+        detail::copy_layout_with_offset(scrambled_layout, new_layout, 2);
+
+        const auto objectives =
+            detail::create_po_routing_objectives(scrambled_layout, new_layout, current_pos, desired, 2, 8);
+        REQUIRE(objectives.size() == 3);
+
+        detail::route_po_objectives_with_a_star_and_create_pos(new_layout, objectives);
+
+        CHECK(collect_po_names_sorted_by_x(new_layout) ==
+              std::vector<std::string>{"right_out", "middle_out", "left_out"});
     }
 }
 
@@ -746,4 +901,5 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
             }
         }
     }
+
 }

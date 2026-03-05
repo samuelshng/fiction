@@ -84,6 +84,41 @@ std::vector<tile<Lyt>> determine_pin_coordinates(const Lyt& lyt, const std::vect
     return coords;
 }
 /**
+ * Extracts the layout coordinates for a given list of pin nodes and sorts them from left to right.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt The layout.
+ * @param pins Vector of pin nodes.
+ * @return Vector of coordinates sorted by physical slot order.
+ */
+template <typename Lyt>
+std::vector<tile<Lyt>> determine_pin_slot_coordinates(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& pins)
+{
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
+    auto coords = determine_pin_coordinates(lyt, pins);
+
+    std::sort(coords.begin(), coords.end(),
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.x != rhs.x)
+                  {
+                      return lhs.x < rhs.x;
+                  }
+
+                  if (lhs.y != rhs.y)
+                  {
+                      return lhs.y < rhs.y;
+                  }
+
+                  return lhs.z < rhs.z;
+              });
+
+    return coords;
+}
+/**
  * Calculates the horizontal permutation distances for each desired slot.
  *
  * @tparam Lyt Gate-level layout type.
@@ -109,6 +144,7 @@ std::vector<uint32_t> calculate_permutation_distances(const Lyt&                
     }
 
     const auto current_coords = determine_pin_coordinates(lyt, current_permutation);
+    const auto target_slots   = determine_pin_slot_coordinates(lyt, current_permutation);
 
     for (size_t i = 0; i < desired_permutation.size(); ++i)
     {
@@ -130,8 +166,8 @@ std::vector<uint32_t> calculate_permutation_distances(const Lyt&                
         const auto current_idx  = static_cast<size_t>(std::distance(current_permutation.cbegin(), it));
         const auto source_coord = current_coords[current_idx];
 
-        // Target x-coordinate is the x-coordinate of the i-th slot (from current_coords[i])
-        const auto target_x = current_coords[i].x;
+        // Target x-coordinate is the x-coordinate of the i-th physical slot.
+        const auto target_x = target_slots[i].x;
 
         distances[i] =
             static_cast<uint32_t>(std::abs(static_cast<int32_t>(source_coord.x) - static_cast<int32_t>(target_x)));
@@ -387,8 +423,8 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
         return {};
     }
 
-    // Current PI coordinates define the slot x-positions for the desired ordering.
-    const auto current_pi_coords = determine_pin_coordinates(lyt, current_pis);
+    // Current PI coordinates define the available physical interface slots.
+    const auto current_pi_coords = determine_pin_slot_coordinates(lyt, current_pis);
     // Precompute horizontal distances to sort objectives by route length.
     const auto pi_distances = calculate_permutation_distances(lyt, current_pis, desired_pis);
 
@@ -538,7 +574,7 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
         return {};
     }
 
-    const auto current_po_coords = determine_pin_coordinates(lyt, current_pos);
+    const auto current_po_coords = determine_pin_slot_coordinates(lyt, current_pos);
 
     po_objectives.reserve(desired_pos.size());
 
