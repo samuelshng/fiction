@@ -6988,6 +6988,22 @@ Parameter ``pins``:
 Returns:
     Vector of coordinates corresponding to the pins.)doc";
 
+static const char *__doc_fiction_detail_determine_pin_slot_coordinates =
+R"doc(Extracts the layout coordinates for a given list of pin nodes and
+sorts them from left to right.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The layout.
+
+Parameter ``pins``:
+    Vector of pin nodes.
+
+Returns:
+    Vector of coordinates sorted by physical slot order.)doc";
+
 static const char *__doc_fiction_detail_determine_required_lane_margin =
 R"doc(Computes an effective lane-based margin for the return corridor.
 
