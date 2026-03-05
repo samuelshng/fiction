@@ -40,15 +40,11 @@ struct pin_alias_semantic_mapping
 struct pin_unscrambling_spec
 {
     /**
-     * @brief Optional AIG file path used as canonical semantic I/O naming source.
-     */
-    std::optional<std::string> aig_file{};
-    /**
      * @brief Desired semantic PI order.
      */
     std::vector<std::string> input_order{};
     /**
-     * @brief Optional alias-to-semantic PI mapping list.
+     * @brief Optional alias-to-semantic PI renaming list.
      */
     std::vector<pin_alias_semantic_mapping> input_mappings{};
     /**
@@ -56,7 +52,7 @@ struct pin_unscrambling_spec
      */
     std::vector<std::string> output_order{};
     /**
-     * @brief Optional alias-to-semantic PO mapping list.
+     * @brief Optional alias-to-semantic PO renaming list.
      */
     std::vector<pin_alias_semantic_mapping> output_mappings{};
     /**
@@ -223,9 +219,14 @@ inline pin_unscrambling_spec read_pin_unscrambling_spec(std::istream& is)
     nlohmann::json json_payload{};
     is >> json_payload;
 
+    if (json_payload.contains("aig_file"))
+    {
+        throw std::invalid_argument("Field 'aig_file' is no longer supported. Use input/output mappings together "
+                                    "with input/output order.");
+    }
+
     pin_unscrambling_spec spec{};
 
-    spec.aig_file          = detail::get_optional_string_field(json_payload, "aig_file");
     spec.input_order       = detail::get_optional_string_array_field(json_payload, "input_order");
     spec.input_mappings    = detail::get_optional_mapping_array_field(json_payload, "input_mappings");
     spec.output_order      = detail::get_optional_string_array_field(json_payload, "output_order");

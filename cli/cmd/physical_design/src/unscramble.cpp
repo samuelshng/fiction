@@ -154,19 +154,17 @@ unscramble_command::unscramble_command(const environment::ptr& e) :
 {
     add_option("--spec-file", spec_file,
                "Optional pin unscrambling JSON specification file. CLI flags take precedence over this file.");
-    add_option("--aig-file", aig_file,
-               "AIG file used as canonical semantic I/O naming source. Overrides `aig_file` from spec file.");
     add_option("--input_order,--input-order", input_order,
-               "Comma-separated semantic PI order. Ignored when `--input-mapping` is provided. Overrides `input_order`"
-               " from spec file.");
+               "Comma-separated semantic PI order. Interpreted against FGL aliases or resolved PI mappings. "
+               "Overrides `input_order` from spec file.");
     add_option("--input-mapping", input_mapping_args,
-               "Alias-to-semantic PI mapping override entry in format '<fgl_alias>=<semantic_name>'. Repeat this "
+               "Alias-to-semantic PI renaming override entry in format '<fgl_alias>=<semantic_name>'. Repeat this "
                "option to provide multiple mappings. If any are provided, `input_mappings` from spec is ignored.");
     add_option("--output-order,--output_order", output_order,
-               "Comma-separated semantic PO order. Ignored when `--output-mapping` is provided. Overrides "
-               "`output_order` from spec file.");
+               "Comma-separated semantic PO order. Interpreted against FGL aliases or resolved PO mappings. "
+               "Overrides `output_order` from spec file.");
     add_option("--output-mapping", output_mapping_args,
-               "Alias-to-semantic PO mapping override entry in format '<fgl_alias>=<semantic_name>'. Repeat this "
+               "Alias-to-semantic PO renaming override entry in format '<fgl_alias>=<semantic_name>'. Repeat this "
                "option to provide multiple mappings. If any are provided, `output_mappings` from spec is ignored.");
     add_flag("--no-strict-full-order", no_strict_full_order,
              "Disable strict full-order checking and append missing pins in current layout order");
@@ -194,15 +192,6 @@ void unscramble_command::execute()
 
         cfg = {};
 
-        if (is_set("aig-file"))
-        {
-            cfg.aig_file = aig_file;
-        }
-        else
-        {
-            cfg.aig_file = spec.aig_file;
-        }
-
         const auto cli_input_mappings_override  = !input_mapping_args.empty();
         const auto cli_output_mappings_override = !output_mapping_args.empty();
 
@@ -226,40 +215,32 @@ void unscramble_command::execute()
             cfg.output_mappings = spec.output_mappings;
         }
 
-        if (cfg.input_mappings.empty())
+        if (is_set("input_order") || is_set("input-order"))
         {
-            if (is_set("input_order") || is_set("input-order"))
-            {
-                cfg.input_order = parse_pin_order_csv(input_order, "--input_order");
-            }
-            else
-            {
-                cfg.input_order = spec.input_order;
-            }
+            cfg.input_order = parse_pin_order_csv(input_order, "--input_order");
+        }
+        else
+        {
+            cfg.input_order = spec.input_order;
         }
 
-        if (cfg.output_mappings.empty())
+        if (is_set("output-order") || is_set("output_order"))
         {
-            if (is_set("output-order") || is_set("output_order"))
-            {
-                cfg.output_order = parse_pin_order_csv(output_order, "--output-order");
-            }
-            else
-            {
-                cfg.output_order = spec.output_order;
-            }
+            cfg.output_order = parse_pin_order_csv(output_order, "--output-order");
+        }
+        else
+        {
+            cfg.output_order = spec.output_order;
         }
 
-        if (cfg.input_mappings.empty() && cfg.input_order.empty())
+        if (cfg.input_order.empty())
         {
-            throw std::invalid_argument(
-                "Missing required PI specification: provide input mappings or input order via CLI and/or spec.");
+            throw std::invalid_argument("Missing required PI order: provide `input_order` via CLI and/or spec.");
         }
 
-        if (cfg.output_mappings.empty() && cfg.output_order.empty())
+        if (cfg.output_order.empty())
         {
-            throw std::invalid_argument(
-                "Missing required PO specification: provide output mappings or output order via CLI and/or spec.");
+            throw std::invalid_argument("Missing required PO order: provide `output_order` via CLI and/or spec.");
         }
 
         cfg.strict_full_order = true;
@@ -320,14 +301,12 @@ void unscramble_command::execute()
             {
                 for (const auto& mapping : report.input_mappings)
                 {
-                    env->out() << fmt::format("[i] PI {} -> canonical {} (alias {})\n", mapping.semantic_name,
-                                              mapping.canonical_index, mapping.fgl_alias);
+                    env->out() << fmt::format("[i] PI {} (alias {})\n", mapping.semantic_name, mapping.fgl_alias);
                 }
 
                 for (const auto& mapping : report.output_mappings)
                 {
-                    env->out() << fmt::format("[i] PO {} -> canonical {} (alias {})\n", mapping.semantic_name,
-                                              mapping.canonical_index, mapping.fgl_alias);
+                    env->out() << fmt::format("[i] PO {} (alias {})\n", mapping.semantic_name, mapping.fgl_alias);
                 }
             }
         }
@@ -344,7 +323,6 @@ void unscramble_command::execute()
 nlohmann::json unscramble_command::log() const
 {
     return nlohmann::json{{"spec file", spec_file},
-                          {"aig file", cfg.aig_file.value_or("")},
                           {"input mapping count", cfg.input_mappings.size()},
                           {"output mapping count", cfg.output_mappings.size()},
                           {"strict full order", cfg.strict_full_order},

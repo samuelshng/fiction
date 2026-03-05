@@ -10,7 +10,6 @@
 #include <fiction/layouts/clocked_layout.hpp>
 #include <fiction/types.hpp>
 
-#include <mockturtle/io/write_aiger.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -18,7 +17,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <limits>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -43,53 +41,6 @@ std::filesystem::path make_temp_test_dir()
     std::filesystem::create_directories(test_dir);
 
     return test_dir;
-}
-
-/**
- * @brief Writes a simple named two-input AIG to disk.
- *
- * @param filename Output filename.
- */
-void write_named_test_aig(const std::filesystem::path& filename)
-{
-    fiction::aig_nt aig{};
-
-    const auto a = aig.create_pi();
-    const auto b = aig.create_pi();
-
-    aig.set_name(a, "a");
-    aig.set_name(b, "b");
-
-    const auto f = aig.create_and(a, b);
-    aig.create_po(f);
-    aig.set_output_name(0u, "f");
-
-    mockturtle::write_aiger(aig, filename.string());
-}
-
-/**
- * @brief Writes a simple named two-input, two-output AIG to disk.
- *
- * @param filename Output filename.
- */
-void write_named_two_output_test_aig(const std::filesystem::path& filename)
-{
-    fiction::aig_nt aig{};
-
-    const auto a = aig.create_pi();
-    const auto b = aig.create_pi();
-
-    aig.set_name(a, "a");
-    aig.set_name(b, "b");
-
-    const auto f = aig.create_and(a, b);
-    aig.create_po(f);
-    aig.set_output_name(0u, "f");
-
-    aig.create_po(a);
-    aig.set_output_name(1u, "g");
-
-    mockturtle::write_aiger(aig, filename.string());
 }
 
 /**
@@ -145,11 +96,7 @@ std::vector<std::string> collect_pi_aliases_sorted_by_x(const Lyt& lyt)
     std::vector<std::pair<fiction::tile<Lyt>, std::string>> pins{};
     pins.reserve(lyt.num_pis());
 
-    lyt.foreach_pi(
-        [&lyt, &pins](const auto& pi)
-        {
-            pins.emplace_back(lyt.get_tile(pi), lyt.get_name(pi));
-        });
+    lyt.foreach_pi([&lyt, &pins](const auto& pi) { pins.emplace_back(lyt.get_tile(pi), lyt.get_name(pi)); });
 
     std::sort(pins.begin(), pins.end(),
               [](const auto& lhs, const auto& rhs)
@@ -193,11 +140,8 @@ std::vector<std::string> collect_po_aliases_sorted_by_x(const Lyt& lyt)
     outputs.reserve(lyt.num_pos());
 
     uint32_t po_index = 0u;
-    lyt.foreach_po(
-        [&lyt, &outputs, &po_index](const auto& po)
-        {
-            outputs.emplace_back(static_cast<fiction::tile<Lyt>>(po), lyt.get_output_name(po_index++));
-        });
+    lyt.foreach_po([&lyt, &outputs, &po_index](const auto& po)
+                   { outputs.emplace_back(static_cast<fiction::tile<Lyt>>(po), lyt.get_output_name(po_index++)); });
 
     std::sort(outputs.begin(), outputs.end(),
               [](const auto& lhs, const auto& rhs)
@@ -233,7 +177,6 @@ TEST_CASE("Pin unscrambling spec parsing", "[pin-unscrambling]")
 {
     std::stringstream spec_stream{};
     spec_stream << R"({
-  "aig_file": "/tmp/source.aig",
   "input_order": ["a", "b"],
   "input_mappings": [
     {"fgl_alias": "pi00", "semantic_name": "a"}
@@ -248,8 +191,6 @@ TEST_CASE("Pin unscrambling spec parsing", "[pin-unscrambling]")
 
     const auto spec = fiction::read_pin_unscrambling_spec(spec_stream);
 
-    REQUIRE(spec.aig_file.has_value());
-    CHECK(*spec.aig_file == "/tmp/source.aig");
     CHECK(spec.input_order == std::vector<std::string>{"a", "b"});
     REQUIRE(spec.input_mappings.size() == 1u);
     CHECK(spec.input_mappings[0].fgl_alias == "pi00");
@@ -264,36 +205,24 @@ TEST_CASE("Pin unscrambling spec parsing", "[pin-unscrambling]")
     CHECK(*spec.report_file == "/tmp/report.json");
 }
 
-TEST_CASE("Pin unscrambling resolves semantic AIG names to generic layout aliases", "[pin-unscrambling]")
+TEST_CASE("Pin unscrambling uses FGL aliases directly when no mappings are provided", "[pin-unscrambling]")
 {
-    const auto test_dir = make_temp_test_dir();
-
-    const auto aig_file    = test_dir / "named.aig";
-    const auto report_file = test_dir / "report.json";
-
-    write_named_test_aig(aig_file);
-
     fiction::pin_unscrambling_configuration cfg{};
-    cfg.aig_file          = aig_file.string();
-    cfg.input_order       = {"b", "a"};
-    cfg.output_order      = {"f"};
+    cfg.input_order       = {"pi01", "pi00"};
+    cfg.output_order      = {"po00"};
     cfg.strict_full_order = true;
-    cfg.report_file       = report_file.string();
 
     const auto result = fiction::run_pin_unscrambling(make_test_layout(), cfg);
 
     REQUIRE(result.report.input_mappings.size() == 2u);
-    CHECK(result.report.input_mappings[0].semantic_name == "b");
-    CHECK(result.report.input_mappings[0].canonical_index == 1u);
+    CHECK(result.report.input_mappings[0].semantic_name == "pi01");
     CHECK(result.report.input_mappings[0].fgl_alias == "pi01");
 
-    CHECK(result.report.input_mappings[1].semantic_name == "a");
-    CHECK(result.report.input_mappings[1].canonical_index == 0u);
+    CHECK(result.report.input_mappings[1].semantic_name == "pi00");
     CHECK(result.report.input_mappings[1].fgl_alias == "pi00");
 
     CHECK(result.report.output_mappings.size() == 1u);
-    CHECK(result.report.output_mappings[0].semantic_name == "f");
-    CHECK(result.report.output_mappings[0].canonical_index == 0u);
+    CHECK(result.report.output_mappings[0].semantic_name == "po00");
     CHECK(result.report.output_mappings[0].fgl_alias == "po00");
 
     std::vector<std::string> unscrambled_pi_aliases{};
@@ -306,19 +235,18 @@ TEST_CASE("Pin unscrambling resolves semantic AIG names to generic layout aliase
     CHECK(unscrambled_pi_aliases[0] == "pi01");
     CHECK(unscrambled_pi_aliases[1] == "pi00");
     CHECK(collect_pi_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"pi01", "pi00"});
-
-    CHECK(std::filesystem::exists(report_file));
-    std::filesystem::remove_all(test_dir);
 }
 
-TEST_CASE("Pin unscrambling supports alias mappings without AIG", "[pin-unscrambling]")
+TEST_CASE("Pin unscrambling supports alias mappings as rename-only metadata", "[pin-unscrambling]")
 {
     const auto test_dir    = make_temp_test_dir();
     const auto report_file = test_dir / "mapping_only_report.json";
 
     fiction::pin_unscrambling_configuration cfg{};
     cfg.input_mappings    = {{"pi01", "activation[1]"}, {"pi00", "activation[0]"}};
+    cfg.input_order       = {"activation[1]", "activation[0]"};
     cfg.output_mappings   = {{"po00", "result[0]"}};
+    cfg.output_order      = {"result[0]"};
     cfg.strict_full_order = true;
     cfg.report_file       = report_file.string();
 
@@ -326,11 +254,9 @@ TEST_CASE("Pin unscrambling supports alias mappings without AIG", "[pin-unscramb
 
     REQUIRE(result.report.input_mappings.size() == 2u);
     CHECK(result.report.input_mappings[0].semantic_name == "activation[1]");
-    CHECK(result.report.input_mappings[0].canonical_index == std::numeric_limits<uint32_t>::max());
     CHECK(result.report.input_mappings[0].fgl_alias == "pi01");
 
     CHECK(result.report.input_mappings[1].semantic_name == "activation[0]");
-    CHECK(result.report.input_mappings[1].canonical_index == std::numeric_limits<uint32_t>::max());
     CHECK(result.report.input_mappings[1].fgl_alias == "pi00");
 
     std::vector<std::string> unscrambled_pi_aliases{};
@@ -353,45 +279,63 @@ TEST_CASE("Pin unscrambling supports alias mappings without AIG", "[pin-unscramb
     REQUIRE(report_json.contains("input_mappings"));
     REQUIRE(report_json["input_mappings"].is_array());
     REQUIRE_FALSE(report_json["input_mappings"].empty());
-    CHECK(report_json["input_mappings"][0]["canonical_index"].is_null());
+    CHECK(report_json["input_mappings"][0]["semantic_name"] == "activation[1]");
+    CHECK_FALSE(report_json["input_mappings"][0].contains("canonical_index"));
 
     REQUIRE(report_json.contains("output_mappings"));
     REQUIRE(report_json["output_mappings"].is_array());
     REQUIRE_FALSE(report_json["output_mappings"].empty());
-    CHECK(report_json["output_mappings"][0]["canonical_index"].is_null());
+    CHECK(report_json["output_mappings"][0]["semantic_name"] == "result[0]");
+    CHECK_FALSE(report_json["output_mappings"][0].contains("canonical_index"));
 
     std::filesystem::remove_all(test_dir);
 }
 
-TEST_CASE("Pin unscrambling rejects unknown semantic names in AIG order mode", "[pin-unscrambling]")
+TEST_CASE("Pin unscrambling supports alias mappings combined with semantic order without AIG", "[pin-unscrambling]")
 {
-    const auto test_dir = make_temp_test_dir();
-
-    const auto aig_file = test_dir / "named.aig";
-
-    write_named_test_aig(aig_file);
-
     fiction::pin_unscrambling_configuration cfg{};
-    cfg.aig_file          = aig_file.string();
+    cfg.input_mappings    = {{"pi00", "a"}, {"pi01", "b"}};
+    cfg.input_order       = {"b", "a"};
+    cfg.output_mappings   = {{"po00", "f"}, {"po01", "g"}};
+    cfg.output_order      = {"g", "f"};
+    cfg.strict_full_order = true;
+
+    const auto result = fiction::run_pin_unscrambling(make_two_output_test_layout(), cfg);
+
+    REQUIRE(result.report.input_mappings.size() == 2u);
+    CHECK(result.report.input_mappings[0].semantic_name == "b");
+    CHECK(result.report.input_mappings[0].fgl_alias == "pi01");
+    CHECK(result.report.input_mappings[1].semantic_name == "a");
+    CHECK(result.report.input_mappings[1].fgl_alias == "pi00");
+
+    REQUIRE(result.report.output_mappings.size() == 2u);
+    CHECK(result.report.output_mappings[0].semantic_name == "g");
+    CHECK(result.report.output_mappings[0].fgl_alias == "po01");
+    CHECK(result.report.output_mappings[1].semantic_name == "f");
+    CHECK(result.report.output_mappings[1].fgl_alias == "po00");
+
+    CHECK(collect_pi_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"pi01", "pi00"});
+    CHECK(collect_po_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"po01", "po00"});
+}
+
+TEST_CASE("Pin unscrambling rejects unknown semantic names in resolved order mode", "[pin-unscrambling]")
+{
+    fiction::pin_unscrambling_configuration cfg{};
+    cfg.input_mappings    = {{"pi00", "a"}, {"pi01", "b"}};
     cfg.input_order       = {"missing", "a"};
+    cfg.output_mappings   = {{"po00", "f"}};
     cfg.output_order      = {"f"};
     cfg.strict_full_order = true;
 
     CHECK_THROWS_AS(fiction::run_pin_unscrambling(make_test_layout(), cfg), std::invalid_argument);
-
-    std::filesystem::remove_all(test_dir);
 }
 
 TEST_CASE("Pin unscrambling appends unspecified semantic order entries in non-strict mode", "[pin-unscrambling]")
 {
-    const auto test_dir = make_temp_test_dir();
-    const auto aig_file = test_dir / "named.aig";
-
-    write_named_test_aig(aig_file);
-
     fiction::pin_unscrambling_configuration cfg{};
-    cfg.aig_file          = aig_file.string();
+    cfg.input_mappings    = {{"pi00", "a"}, {"pi01", "b"}};
     cfg.input_order       = {"b"};
+    cfg.output_mappings   = {{"po00", "f"}};
     cfg.output_order      = {"f"};
     cfg.strict_full_order = false;
 
@@ -403,30 +347,20 @@ TEST_CASE("Pin unscrambling appends unspecified semantic order entries in non-st
     CHECK(result.report.input_mappings[1].semantic_name == "a");
     CHECK(result.report.input_mappings[1].fgl_alias == "pi00");
 
-    std::vector<std::string> unscrambled_pi_aliases{};
-    unscrambled_pi_aliases.reserve(result.layout.num_pis());
-
-    result.layout.foreach_pi([&result, &unscrambled_pi_aliases](const auto& pi)
-                             { unscrambled_pi_aliases.push_back(result.layout.get_name(pi)); });
-
-    REQUIRE(unscrambled_pi_aliases.size() == 2u);
-    CHECK(unscrambled_pi_aliases[0] == "pi01");
-    CHECK(unscrambled_pi_aliases[1] == "pi00");
-
-    std::filesystem::remove_all(test_dir);
+    CHECK(collect_pi_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"pi01", "pi00"});
 }
 
-TEST_CASE("Pin unscrambling appends unspecified alias mappings in non-strict mode", "[pin-unscrambling]")
+TEST_CASE("Pin unscrambling appends unspecified aliases in non-strict mode without mappings", "[pin-unscrambling]")
 {
     fiction::pin_unscrambling_configuration cfg{};
-    cfg.input_mappings    = {{"pi01", "activation[1]"}};
-    cfg.output_mappings   = {{"po00", "result[0]"}};
+    cfg.input_order       = {"pi01"};
+    cfg.output_order      = {"po00"};
     cfg.strict_full_order = false;
 
     const auto result = fiction::run_pin_unscrambling(make_test_layout(), cfg);
 
     REQUIRE(result.report.input_mappings.size() == 2u);
-    CHECK(result.report.input_mappings[0].semantic_name == "activation[1]");
+    CHECK(result.report.input_mappings[0].semantic_name == "pi01");
     CHECK(result.report.input_mappings[0].fgl_alias == "pi01");
     CHECK(result.report.input_mappings[1].semantic_name == "pi00");
     CHECK(result.report.input_mappings[1].fgl_alias == "pi00");
@@ -438,7 +372,9 @@ TEST_CASE("Pin unscrambling rejects invalid alias mapping definitions", "[pin-un
     {
         fiction::pin_unscrambling_configuration cfg{};
         cfg.input_mappings    = {{"pi99", "activation[1]"}, {"pi00", "activation[0]"}};
+        cfg.input_order       = {"activation[1]", "activation[0]"};
         cfg.output_mappings   = {{"po00", "result[0]"}};
+        cfg.output_order      = {"result[0]"};
         cfg.strict_full_order = true;
 
         CHECK_THROWS_AS(fiction::run_pin_unscrambling(make_test_layout(), cfg), std::invalid_argument);
@@ -448,7 +384,9 @@ TEST_CASE("Pin unscrambling rejects invalid alias mapping definitions", "[pin-un
     {
         fiction::pin_unscrambling_configuration cfg{};
         cfg.input_mappings    = {{"pi01", "activation[1]"}, {"pi01", "activation[0]"}};
+        cfg.input_order       = {"activation[1]", "activation[0]"};
         cfg.output_mappings   = {{"po00", "result[0]"}};
+        cfg.output_order      = {"result[0]"};
         cfg.strict_full_order = true;
 
         CHECK_THROWS_AS(fiction::run_pin_unscrambling(make_test_layout(), cfg), std::invalid_argument);
@@ -458,43 +396,64 @@ TEST_CASE("Pin unscrambling rejects invalid alias mapping definitions", "[pin-un
     {
         fiction::pin_unscrambling_configuration cfg{};
         cfg.input_mappings    = {{"pi01", "activation[0]"}, {"pi00", "activation[0]"}};
+        cfg.input_order       = {"activation[0]", "activation[1]"};
         cfg.output_mappings   = {{"po00", "result[0]"}};
+        cfg.output_order      = {"result[0]"};
         cfg.strict_full_order = true;
 
         CHECK_THROWS_AS(fiction::run_pin_unscrambling(make_test_layout(), cfg), std::invalid_argument);
     }
 
-    SECTION("strict mapping size mismatch")
+    SECTION("strict order size mismatch")
     {
         fiction::pin_unscrambling_configuration cfg{};
         cfg.input_mappings    = {{"pi01", "activation[1]"}};
+        cfg.input_order       = {"activation[1]"};
         cfg.output_mappings   = {{"po00", "result[0]"}};
+        cfg.output_order      = {"result[0]"};
         cfg.strict_full_order = true;
 
         CHECK_THROWS_AS(fiction::run_pin_unscrambling(make_test_layout(), cfg), std::invalid_argument);
     }
 }
 
-TEST_CASE("Pin unscrambling rejects missing AIG when semantic order mode is requested", "[pin-unscrambling]")
+TEST_CASE("Pin unscrambling rejects missing required order", "[pin-unscrambling]")
 {
-    fiction::pin_unscrambling_configuration cfg{};
-    cfg.input_order       = {"b", "a"};
-    cfg.output_order      = {"f"};
-    cfg.strict_full_order = true;
+    SECTION("missing input order")
+    {
+        fiction::pin_unscrambling_configuration cfg{};
+        cfg.output_order      = {"po00"};
+        cfg.strict_full_order = true;
 
-    CHECK_THROWS_AS(fiction::run_pin_unscrambling(make_test_layout(), cfg), std::invalid_argument);
+        CHECK_THROWS_AS(fiction::run_pin_unscrambling(make_test_layout(), cfg), std::invalid_argument);
+    }
+
+    SECTION("missing output order")
+    {
+        fiction::pin_unscrambling_configuration cfg{};
+        cfg.input_order       = {"pi00", "pi01"};
+        cfg.strict_full_order = true;
+
+        CHECK_THROWS_AS(fiction::run_pin_unscrambling(make_test_layout(), cfg), std::invalid_argument);
+    }
+
+    SECTION("mappings without order")
+    {
+        fiction::pin_unscrambling_configuration cfg{};
+        cfg.input_mappings    = {{"pi01", "activation[1]"}, {"pi00", "activation[0]"}};
+        cfg.output_mappings   = {{"po00", "result[0]"}};
+        cfg.strict_full_order = true;
+
+        CHECK_THROWS_AS(fiction::run_pin_unscrambling(make_test_layout(), cfg), std::invalid_argument);
+    }
 }
 
 TEST_CASE("Pin unscrambling reorders multiple outputs in semantic order mode", "[pin-unscrambling]")
 {
-    const auto test_dir = make_temp_test_dir();
-    const auto aig_file = test_dir / "two_output_named.aig";
-
-    write_named_two_output_test_aig(aig_file);
-
     fiction::pin_unscrambling_configuration cfg{};
-    cfg.aig_file          = aig_file.string();
+    cfg.input_mappings    = {{"pi00", "a"}, {"pi01", "b"}};
     cfg.input_order       = {"a", "b"};
+    cfg.output_mappings   = {{"po00", "f"}, {"po01", "g"}};
     cfg.output_order      = {"g", "f"};
     cfg.strict_full_order = true;
 
@@ -517,8 +476,6 @@ TEST_CASE("Pin unscrambling reorders multiple outputs in semantic order mode", "
     CHECK(unscrambled_po_aliases[0] == "po01");
     CHECK(unscrambled_po_aliases[1] == "po00");
     CHECK(collect_po_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"po01", "po00"});
-
-    std::filesystem::remove_all(test_dir);
 }
 
 TEST_CASE("Pin unscrambling spec parsing rejects malformed JSON fields", "[pin-unscrambling]")
@@ -535,6 +492,14 @@ TEST_CASE("Pin unscrambling spec parsing rejects malformed JSON fields", "[pin-u
     {
         std::stringstream spec_stream{};
         spec_stream << R"({"input_mappings":[{"semantic_name":"a"}]})";
+
+        CHECK_THROWS_AS(fiction::read_pin_unscrambling_spec(spec_stream), std::invalid_argument);
+    }
+
+    SECTION("aig_file is no longer supported")
+    {
+        std::stringstream spec_stream{};
+        spec_stream << R"({"aig_file":"/tmp/source.aig","input_order":["pi00"],"output_order":["po00"]})";
 
         CHECK_THROWS_AS(fiction::read_pin_unscrambling_spec(spec_stream), std::invalid_argument);
     }

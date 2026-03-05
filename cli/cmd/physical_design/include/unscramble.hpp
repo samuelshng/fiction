@@ -63,10 +63,6 @@ class unscramble_command final : public command
      */
     fiction::pin_unscrambling_report report{};
     /**
-     * @brief CLI override for AIG file path.
-     */
-    std::string aig_file{};
-    /**
      * @brief CLI override for comma-separated input order.
      */
     std::string input_order{};
