@@ -69,11 +69,11 @@ Lyt create_five_pi_five_po_layout()
     const auto d = lyt.create_pi("d", {7, 0});
     const auto e = lyt.create_pi("e", {9, 0});
 
-    lyt.create_po(e, "e", {1, 4});
-    lyt.create_po(d, "d", {3, 4});
+    lyt.create_po(e, "a", {1, 4});
+    lyt.create_po(d, "b", {3, 4});
     lyt.create_po(c, "c", {5, 4});
-    lyt.create_po(b, "b", {7, 4});
-    lyt.create_po(a, "a", {9, 4});
+    lyt.create_po(b, "d", {7, 4});
+    lyt.create_po(a, "e", {9, 4});
 
     return lyt;
 }
