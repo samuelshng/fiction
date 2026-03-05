@@ -1,6 +1,7 @@
 target_sources(
   fiction PRIVATE src/exact.cpp src/gold.cpp src/hex.cpp src/onepass.cpp
-                  src/optimize.cpp src/ortho.cpp src/returnpath_viz.cpp)
+                  src/optimize.cpp src/ortho.cpp src/returnpath_viz.cpp
+                  src/unscramble.cpp)
 
 target_sources(
   fiction
@@ -16,4 +17,5 @@ target_sources(
           include/onepass.hpp
           include/optimize.hpp
           include/ortho.hpp
-          include/returnpath_viz.hpp)
+          include/returnpath_viz.hpp
+          include/unscramble.hpp)
