@@ -1,0 +1,7 @@
+.model ha_subckt_alias
+.inputs a b ci
+.outputs co s t
+.subckt ha a=a b=ci C=co S=s
+.names s b t
+11 1
+.end

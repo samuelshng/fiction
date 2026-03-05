@@ -1,0 +1,7 @@
+.model ha_gate_mixed
+.inputs a b ci
+.outputs co s t
+.gate ha A=a B=ci X=co Y=s
+.names s b t
+11 1
+.end

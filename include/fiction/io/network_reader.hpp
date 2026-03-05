@@ -6,6 +6,7 @@
 #define FICTION_NETWORK_READER_HPP
 
 #include "fiction/algorithms/network_transformation/network_conversion.hpp"
+#include "fiction/io/read_ha_blif.hpp"
 
 #include <lorina/aiger.hpp>
 #include <lorina/blif.hpp>
@@ -16,12 +17,14 @@
 #include <mockturtle/io/blif_reader.hpp>
 #include <mockturtle/io/verilog_reader.hpp>
 #include <mockturtle/networks/aig.hpp>
+#include <mockturtle/networks/block.hpp>
 #include <mockturtle/networks/mig.hpp>
 #include <mockturtle/networks/xag.hpp>
 
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <memory>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -133,9 +136,7 @@ class network_reader
                 }
                 else
                 {
-                    read<mockturtle::blif_reader<Ntk>,
-                         lorina::return_code(const std::string&, const lorina::blif_reader&,
-                                             lorina::diagnostic_engine*)>(p, lorina::read_blif);
+                    read_blif(p);
                 }
             }
             // parse ...
@@ -171,6 +172,68 @@ class network_reader
     std::vector<NtkPtr> networks;
 
     using Ntk = typename NtkPtr::element_type;
+
+    /**
+     * Stores a parsed network in the internal collection.
+     *
+     * @param file Source file path.
+     * @param ntk Parsed network.
+     */
+    void store_network(const std::string_view& file, Ntk& ntk)
+    {
+        const auto name = std::filesystem::path{file}.stem().string();
+
+        if constexpr (mockturtle::has_set_network_name_v<Ntk>)
+        {
+            ntk.set_network_name(name);
+        }
+
+        networks.push_back(std::make_shared<Ntk>(convert_network<Ntk>(ntk)));
+    }
+
+    /**
+     * Reads BLIF into the target network.
+     *
+     * For block-network based targets (including TEC), this first tries the standard BLIF reader and falls back to an
+     * HA-aware BLIF parser when custom-cell directives are present.
+     *
+     * @param file Source file path.
+     */
+    void read_blif(const std::string_view& file) noexcept
+    {
+        if constexpr (std::is_same_v<typename Ntk::storage, std::shared_ptr<mockturtle::block_storage>>)
+        {
+            try
+            {
+                Ntk ntk{};
+                if (lorina::read_blif(file.data(), mockturtle::blif_reader<Ntk>{ntk}) == lorina::return_code::success)
+                {
+                    store_network(file, ntk);
+                    return;
+                }
+
+                Ntk ha_ntk{};
+                if (read_ha_blif(file.data(), ha_ntk) == lorina::return_code::success)
+                {
+                    store_network(file, ha_ntk);
+                    return;
+                }
+
+                out << "[e] parsing error in " << file << std::endl;
+            }
+            catch (...)
+            {
+                out << "[e] " << file << " contains unsupported features" << std::endl;
+            }
+        }
+        else
+        {
+            read<mockturtle::blif_reader<Ntk>,
+                 lorina::return_code(const std::string&, const lorina::blif_reader&, lorina::diagnostic_engine*)>(
+                file, lorina::read_blif);
+        }
+    }
+
     /**
      * Actual read function that constructs the logic network from a file.
      *
@@ -190,14 +253,7 @@ class network_reader
             if (lorina::diagnostic_engine diag{&client};
                 rfun(file.data(), Reader{ntk}, &diag) == lorina::return_code::success)
             {
-                const auto name = std::filesystem::path{file}.stem().string();
-
-                if constexpr (mockturtle::has_set_network_name_v<Ntk>)
-                {
-                    ntk.set_network_name(name);
-                }
-
-                networks.push_back(std::make_shared<Ntk>(convert_network<Ntk>(ntk)));
+                store_network(file, ntk);
             }
             else
             {
