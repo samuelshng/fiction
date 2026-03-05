@@ -5331,6 +5331,15 @@ Parameter ``pairs``:
 Returns:
     Route pairs with assigned lane indices.)doc";
 
+static const char *__doc_fiction_detail_build_name_to_index =
+R"doc(Builds a map from pin names to indices.
+
+Parameter ``names``:
+    Ordered names.
+
+Returns:
+    Name-to-index map.)doc";
+
 static const char *__doc_fiction_detail_calculate_offset_matrix =
 R"doc(Calculate an offset matrix based on a to-delete list in a
 `wiring_reduction_layout`.
@@ -5939,6 +5948,32 @@ Parameter ``lyt``:
 
 Returns:
     Occupied tile keys.)doc";
+
+static const char *__doc_fiction_detail_collect_ordered_pi_names =
+R"doc(Collects the complete ordered set of unique PI names for interface
+alignment.
+
+Template parameter ``NtkOrLyt``:
+    Network or layout type.
+
+Parameter ``ntk_or_lyt``:
+    Network or layout instance.
+
+Returns:
+    Ordered PI names if all names are present and unique.)doc";
+
+static const char *__doc_fiction_detail_collect_ordered_po_names =
+R"doc(Collects the complete ordered set of unique PO names for interface
+alignment.
+
+Template parameter ``NtkOrLyt``:
+    Network or layout type.
+
+Parameter ``ntk_or_lyt``:
+    Network or layout instance.
+
+Returns:
+    Ordered PO names if all names are present and unique.)doc";
 
 static const char *__doc_fiction_detail_color_routing_impl = R"doc()doc";
 
@@ -7915,6 +7950,15 @@ Parameter ``handler``:
 Parameter ``time``:
     Time passed since beginning of the solving process.)doc";
 
+static const char *__doc_fiction_detail_extract_pin_assignments =
+R"doc(Parses pin assignments from `.gate`/`.subckt` tokens.
+
+Parameter ``tokens``:
+    Tokenized directive line.
+
+Returns:
+    Mapping of pin names to net names.)doc";
+
 static const char *__doc_fiction_detail_fanin_fanout_data =
 R"doc(This struct stores information about the fan-in and fan-out
 connections of a gate in a layout. These fan-in and fan-outs are the
@@ -8358,6 +8402,54 @@ Parameter ``output_mode``:
 
 Returns:
     positive and negative offset.)doc";
+
+static const char *__doc_fiction_detail_get_optional_bool_field =
+R"doc(Reads an optional bool field from JSON.
+
+Parameter ``json_payload``:
+    Parsed JSON.
+
+Parameter ``field_name``:
+    Field name.
+
+Returns:
+    Optional bool value.)doc";
+
+static const char *__doc_fiction_detail_get_optional_mapping_array_field =
+R"doc(Reads an optional alias-to-semantic mapping array field from JSON.
+
+Parameter ``json_payload``:
+    Parsed JSON.
+
+Parameter ``field_name``:
+    Field name.
+
+Returns:
+    Parsed mapping vector (empty if field is absent).)doc";
+
+static const char *__doc_fiction_detail_get_optional_string_array_field =
+R"doc(Reads an optional string array field from JSON.
+
+Parameter ``json_payload``:
+    Parsed JSON.
+
+Parameter ``field_name``:
+    Field name.
+
+Returns:
+    Parsed string vector (empty if field is absent).)doc";
+
+static const char *__doc_fiction_detail_get_optional_string_field =
+R"doc(Reads an optional string field from JSON.
+
+Parameter ``json_payload``:
+    Parsed JSON.
+
+Parameter ``field_name``:
+    Field name.
+
+Returns:
+    Optional string value.)doc";
 
 static const char *__doc_fiction_detail_get_path =
 R"doc(This helper function computes a path between two coordinates using the
@@ -9660,6 +9752,112 @@ Parameter ``parent``:
     The newly-forming parent cluster whose children's charge spaces
     become fixed upon their merging.)doc";
 
+static const char *__doc_fiction_detail_ha_blif_builder =
+R"doc(Helper that builds a logic network from parsed HA-capable BLIF
+statements.
+
+Template parameter ``Ntk``:
+    Logic network type.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_add_inputs =
+R"doc(Declares primary inputs.
+
+Parameter ``input_names``:
+    Input names.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_add_operation =
+R"doc(Adds a deferred `.names` operation.
+
+Parameter ``op``:
+    Operation to add.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_add_operation_2 =
+R"doc(Adds a deferred HA operation.
+
+Parameter ``op``:
+    Operation to add.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_add_outputs =
+R"doc(Declares primary outputs.
+
+Parameter ``output_names``:
+    Output names.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_and_tt = R"doc(2-input AND truth table.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_build =
+R"doc(Builds all deferred gates and creates primary outputs.
+
+Parameter ``diag``:
+    Optional diagnostics engine.
+
+Returns:
+    `true` iff all operations and POs could be resolved.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_ha_blif_builder =
+R"doc(Standard constructor.
+
+Parameter ``ntk``:
+    Network to be built.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_model_name = R"doc(Optional model name.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_network = R"doc(Network being constructed.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_operations = R"doc(Deferred operations to resolve in topological order.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_outputs = R"doc(Primary output names.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_resolve_operation =
+R"doc(Resolves a `.names` operation.
+
+Parameter ``op``:
+    Operation to resolve.
+
+Returns:
+    `true` iff all dependent inputs are known.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_resolve_operation_2 =
+R"doc(Resolves an HA operation.
+
+Parameter ``op``:
+    Operation to resolve.
+
+Returns:
+    `true` iff all dependent inputs are known.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_resolve_signal =
+R"doc(Resolves a signal by BLIF name.
+
+Recognized constants are: `0`, `1`, `$false`, `$true`, `false`, and
+`true`.
+
+Parameter ``name``:
+    BLIF net name.
+
+Returns:
+    Signal if known.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_set_model_name =
+R"doc(Stores model name.
+
+Parameter ``model``:
+    Model name.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_signals = R"doc(Known signals by BLIF net name.)doc";
+
+static const char *__doc_fiction_detail_ha_blif_builder_xor_tt = R"doc(2-input XOR truth table.)doc";
+
+static const char *__doc_fiction_detail_ha_operation = R"doc(Operation representing one HA cell instantiation.)doc";
+
+static const char *__doc_fiction_detail_ha_operation_a = R"doc(First input net name.)doc";
+
+static const char *__doc_fiction_detail_ha_operation_b = R"doc(Second input net name.)doc";
+
+static const char *__doc_fiction_detail_ha_operation_carry = R"doc(Carry output net name.)doc";
+
+static const char *__doc_fiction_detail_ha_operation_sum = R"doc(Sum output net name.)doc";
+
 static const char *__doc_fiction_detail_handle_virtual_pis =
 R"doc(Removes virtual primary inputs from a network if supported. Otherwise
 the input network is returned unmodified.
@@ -9699,6 +9897,15 @@ static const char *__doc_fiction_detail_is_balanced_impl_ntk_depth = R"doc()doc"
 static const char *__doc_fiction_detail_is_balanced_impl_ps = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_balanced_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_is_blif_directive =
+R"doc(Returns whether a BLIF line is a declaration/directive.
+
+Parameter ``line``:
+    BLIF line.
+
+Returns:
+    `true` iff the line starts with '.'.)doc";
 
 static const char *__doc_fiction_detail_is_east_south_colored = R"doc()doc";
 
@@ -10271,6 +10478,14 @@ Parameter ``connect_to_existing_target``:
 Returns:
     Signal at the segment endpoint.)doc";
 
+static const char *__doc_fiction_detail_names_operation = R"doc(Operation representing one `.names` declaration.)doc";
+
+static const char *__doc_fiction_detail_names_operation_cover = R"doc(N-input/1-output cover.)doc";
+
+static const char *__doc_fiction_detail_names_operation_inputs = R"doc(Input net names.)doc";
+
+static const char *__doc_fiction_detail_names_operation_output = R"doc(Output net name.)doc";
+
 static const char *__doc_fiction_detail_nested_vector_hash =
 R"doc(This struct defines a hash function for a nested vector of layout
 tiles. It calculates a combined hash value for a vector of tiles based
@@ -10745,6 +10960,18 @@ static const char *__doc_fiction_detail_orthogonal_impl_pst = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_parse_ha_operation =
+R"doc(Extracts an HA operation from `.gate`/`.subckt` assignments.
+
+Supported aliases: - Inputs: `A/B`, `a/b` - Carry output: `X` or `C`
+(case-insensitive) - Sum output: `Y` or `S` (case-insensitive)
+
+Parameter ``assignments``:
+    Mapping of pin names to net names.
+
+Returns:
+    Parsed HA operation if all required pins are present.)doc";
+
 static const char *__doc_fiction_detail_physical_population_stability_impl =
 R"doc(This class implements the simulation of the population stability for a
 given SiDB layout. It determines the minimum electrostatic potential
@@ -10961,7 +11188,13 @@ static const char *__doc_fiction_detail_po_routing_objective_distance = R"doc(Ho
 
 static const char *__doc_fiction_detail_po_routing_objective_objective = R"doc(Geometric source/target routing objective.)doc";
 
+static const char *__doc_fiction_detail_po_routing_objective_order_index = R"doc(Target PO position in the requested output ordering.)doc";
+
 static const char *__doc_fiction_detail_po_routing_objective_output_name = R"doc(Output name associated with the routing objective.)doc";
+
+static const char *__doc_fiction_detail_po_routing_objective_requires_routing = R"doc(Indicates whether geometric routing is required before PO creation.)doc";
+
+static const char *__doc_fiction_detail_po_routing_objective_source_driver = R"doc(Driver signal of the desired PO in the copied logic.)doc";
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl = R"doc()doc";
 
@@ -11169,6 +11402,26 @@ Returns:
 static const char *__doc_fiction_detail_post_layout_optimization_impl_wiring_reduction_params = R"doc(Wiring reduction parameters.)doc";
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_wiring_reduction_stats = R"doc(Wiring reduction stats.)doc";
+
+static const char *__doc_fiction_detail_prepare_aligned_networks_for_equivalence_checking =
+R"doc(Prepares two networks for equivalence checking and aligns named
+interfaces if possible.
+
+Template parameter ``Spec``:
+    Specification type.
+
+Template parameter ``Impl``:
+    Implementation type.
+
+Parameter ``spec``:
+    Specification instance.
+
+Parameter ``impl``:
+    Implementation instance.
+
+Returns:
+    Pair of prepared `klut_network`s with compatible interface
+    ordering.)doc";
 
 static const char *__doc_fiction_detail_prepare_for_equivalence_checking =
 R"doc(Prepares a network for SAT-based equivalence checking.
@@ -11397,6 +11650,25 @@ static const char *__doc_fiction_detail_read_fqca_layout_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_read_fqca_layout_impl_to_clock_number = R"doc()doc";
 
+static const char *__doc_fiction_detail_read_ha_blif =
+R"doc(Parses a BLIF file that can contain `.names` as well as explicit HA
+cells in `.gate`/`.subckt` form.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``filename``:
+    BLIF input file.
+
+Parameter ``ntk``:
+    Destination network.
+
+Parameter ``diag``:
+    Optional diagnostics engine.
+
+Returns:
+    Parsing status code.)doc";
+
 static const char *__doc_fiction_detail_read_sidb_surface_defects_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_read_sidb_surface_defects_impl_defect_matrix = R"doc()doc";
@@ -11505,6 +11777,106 @@ Parameter ``cell``:
     layout against.)doc";
 
 static const char *__doc_fiction_detail_recursively_paint_edges = R"doc()doc";
+
+static const char *__doc_fiction_detail_reorder_klut_network_interface =
+R"doc(Creates a semantically equivalent `klut_network` with reordered PI and
+PO interfaces.
+
+Parameter ``src``:
+    Source `klut_network`.
+
+Parameter ``pi_permutation``:
+    Source PI indices in desired order.
+
+Parameter ``po_permutation``:
+    Source PO indices in desired order.
+
+Returns:
+    Equivalent `klut_network` with reordered interface enumeration.)doc";
+
+static const char *__doc_fiction_detail_report_parse_error =
+R"doc(Emits a parse-line diagnostic if a diagnostic engine is available.
+
+Parameter ``diag``:
+    Diagnostic engine.
+
+Parameter ``line``:
+    Line that could not be parsed.)doc";
+
+static const char *__doc_fiction_detail_report_unresolved_dependency =
+R"doc(Emits an unresolved dependency warning if a diagnostic engine is
+available.
+
+Parameter ``diag``:
+    Diagnostic engine.
+
+Parameter ``missing_name``:
+    Missing net name.)doc";
+
+static const char *__doc_fiction_detail_resolve_alias_mapping_indices =
+R"doc(Resolves alias-based mappings to current layout indices.
+
+Parameter ``mappings``:
+    Alias-to-semantic mappings.
+
+Parameter ``current_aliases``:
+    Ordered current aliases.
+
+Parameter ``strict_full_order``:
+    Whether mapping must cover all pins.
+
+Parameter ``pin_kind``:
+    Pin kind string used in diagnostics.
+
+Returns:
+    Ordered pairs of resolved index and semantic name.)doc";
+
+static const char *__doc_fiction_detail_resolve_canonical_index =
+R"doc(Resolves canonical index for a semantic name.
+
+Parameter ``semantic_name``:
+    Semantic name.
+
+Parameter ``canonical_name_to_index``:
+    Optional canonical map.
+
+Parameter ``pin_kind``:
+    Pin kind string used in diagnostics.
+
+Returns:
+    Canonical index or unknown_canonical_index.)doc";
+
+static const char *__doc_fiction_detail_resolve_interface_permutation =
+R"doc(Resolves the permutation that maps a candidate interface onto a
+reference naming order.
+
+Parameter ``reference_names``:
+    Ordered reference names.
+
+Parameter ``candidate_names``:
+    Ordered candidate names.
+
+Returns:
+    Candidate indices in reference order if both interfaces share the
+    same named pins.)doc";
+
+static const char *__doc_fiction_detail_resolve_order_indices =
+R"doc(Resolves desired semantic ordering to canonical declaration indices.
+
+Parameter ``desired_order``:
+    Desired semantic names.
+
+Parameter ``canonical_names``:
+    Ordered canonical names.
+
+Parameter ``strict_full_order``:
+    Whether non-empty desired order must be complete.
+
+Parameter ``pin_kind``:
+    Pin kind string used in diagnostics.
+
+Returns:
+    Ordered canonical indices.)doc";
 
 static const char *__doc_fiction_detail_return_route_pair =
 R"doc(A routed PO-PI pair description.
@@ -11845,6 +12217,24 @@ Parameter ``src``:
 Returns:
     Equivalent single-output `klut_network`.)doc";
 
+static const char *__doc_fiction_detail_split_whitespace =
+R"doc(Splits a string on whitespace.
+
+Parameter ``text``:
+    Input string.
+
+Returns:
+    Tokens of `text`.)doc";
+
+static const char *__doc_fiction_detail_strip_comment =
+R"doc(Strips BLIF comments that start with '#'.
+
+Parameter ``line``:
+    Line to strip.
+
+Returns:
+    Line contents before comment marker.)doc";
+
 static const char *__doc_fiction_detail_sweep_parameter_to_string =
 R"doc(Converts a sweep parameter to a string representation. This is used to
 write the parameter name to the CSV file.
@@ -11904,6 +12294,15 @@ Parameter ``cartesian_layout_height``:
 Returns:
     corresponding tile on the hexagonal grid.)doc";
 
+static const char *__doc_fiction_detail_to_lower_copy =
+R"doc(Converts a string to lower-case.
+
+Parameter ``text``:
+    String to convert.
+
+Returns:
+    Lower-case copy.)doc";
+
 static const char *__doc_fiction_detail_topo_view =
 R"doc(Custom view class derived from mockturtle::topo_view.
 
@@ -11935,6 +12334,24 @@ static const char *__doc_fiction_detail_topo_view_topo_order = R"doc()doc";
 static const char *__doc_fiction_detail_topo_view_topo_view = R"doc()doc";
 
 static const char *__doc_fiction_detail_topo_view_update_topo = R"doc()doc";
+
+static const char *__doc_fiction_detail_topology_label =
+R"doc(Returns topology label for a supported layout type.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Returns:
+    Topology label.)doc";
+
+static const char *__doc_fiction_detail_trim_copy =
+R"doc(Removes leading and trailing whitespace from a string view.
+
+Parameter ``text``:
+    String view to trim.
+
+Returns:
+    Trimmed copy of `text`.)doc";
 
 static const char *__doc_fiction_detail_unscramble_pins_impl = R"doc()doc";
 
@@ -11973,6 +12390,15 @@ Parameter ``possible_path``:
 Parameter ``to_delete``:
     Reference to the to-delete list to be updated with new
     coordinates.)doc";
+
+static const char *__doc_fiction_detail_validate_canonical_names =
+R"doc(Validates uniqueness and non-emptiness of canonical names.
+
+Parameter ``names``:
+    Ordered name vector.
+
+Parameter ``pin_kind``:
+    Pin kind string used in diagnostics.)doc";
 
 static const char *__doc_fiction_detail_validate_sweep_parameters =
 R"doc(This function validates the given sweep parameters for the operational
@@ -12379,6 +12805,15 @@ static const char *__doc_fiction_detail_write_qll_layout_impl_write_pins = R"doc
 static const char *__doc_fiction_detail_write_qll_layout_impl_write_qll_layout_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_write_qll_layout_impl_write_technology_settings = R"doc()doc";
+
+static const char *__doc_fiction_detail_write_report_file =
+R"doc(Serializes and writes the run report JSON to disk.
+
+Parameter ``report``:
+    Report payload.
+
+Parameter ``filename``:
+    Target JSON filename.)doc";
 
 static const char *__doc_fiction_detail_write_sidb_layout_svg_impl = R"doc()doc";
 
@@ -19225,6 +19660,25 @@ Parameter ``file``:
 Parameter ``rfun``:
     The actual parsing function.)doc";
 
+static const char *__doc_fiction_network_reader_read_blif =
+R"doc(Reads BLIF into the target network.
+
+For block-network based targets (including TEC), this first tries the
+standard BLIF reader and falls back to an HA-aware BLIF parser when
+custom-cell directives are present.
+
+Parameter ``file``:
+    Source file path.)doc";
+
+static const char *__doc_fiction_network_reader_store_network =
+R"doc(Stores a parsed network in the internal collection.
+
+Parameter ``file``:
+    Source file path.
+
+Parameter ``ntk``:
+    Parsed network.)doc";
+
 static const char *__doc_fiction_normalize_layout_coordinates =
 R"doc(A new layout is constructed and returned that is equivalent to the
 given cell-level layout. However, its coordinates are normalized,
@@ -20367,6 +20821,76 @@ Returns:
     Physically valid parameters with the corresponding excited state
     number of the given charge distribution surface for each parameter
     point.)doc";
+
+static const char *__doc_fiction_pin_alias_semantic_mapping = R"doc(Alias-to-semantic pin mapping entry.)doc";
+
+static const char *__doc_fiction_pin_alias_semantic_mapping_fgl_alias = R"doc(Alias of a PI/PO in the current layout (e.g., `pi14`).)doc";
+
+static const char *__doc_fiction_pin_alias_semantic_mapping_semantic_name = R"doc(Desired semantic pin name (e.g., `activation[1]`).)doc";
+
+static const char *__doc_fiction_pin_unscrambling_configuration = R"doc(Runtime configuration for pin unscrambling.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_configuration_aig_file = R"doc(Optional AIG file path used as canonical semantic I/O naming source.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_configuration_input_mappings = R"doc(Optional alias-to-semantic PI mapping list.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_configuration_input_order = R"doc(Desired semantic PI order.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_configuration_output_mappings = R"doc(Optional alias-to-semantic PO mapping list.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_configuration_output_order = R"doc(Desired semantic PO order.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_configuration_report_file = R"doc(Optional JSON report output path.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_configuration_strict_full_order = R"doc(Enforce full order/mapping vectors to match PI/PO counts exactly.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_mapping_entry = R"doc(One resolved semantic-to-layout mapping entry.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_mapping_entry_canonical_index = R"doc(Canonical AIG declaration index, if available.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_mapping_entry_fgl_alias = R"doc(Alias name currently used by the source layout at this index.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_mapping_entry_semantic_name = R"doc(Semantic pin name.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_report = R"doc(Result summary for one pin unscrambling run.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_report_input_mappings = R"doc(Resolved PI mapping in routed target order.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_report_num_pis = R"doc(Number of primary inputs in the source layout.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_report_num_pos = R"doc(Number of primary outputs in the source layout.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_report_output_mappings = R"doc(Resolved PO mapping in routed target order.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_report_topology = R"doc(Topology string for the source layout.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_report_total_runtime_seconds = R"doc(Total runtime in seconds.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_result =
+R"doc(Typed output bundle of a pin-unscrambling run.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_result_layout = R"doc(Unscrambled layout.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_result_report = R"doc(Run report.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_spec = R"doc(Optional JSON configuration for pin unscrambling.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_spec_aig_file = R"doc(Optional AIG file path used as canonical semantic I/O naming source.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_spec_input_mappings = R"doc(Optional alias-to-semantic PI mapping list.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_spec_input_order = R"doc(Desired semantic PI order.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_spec_output_mappings = R"doc(Optional alias-to-semantic PO mapping list.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_spec_output_order = R"doc(Desired semantic PO order.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_spec_report_file = R"doc(Optional JSON report output path.)doc";
+
+static const char *__doc_fiction_pin_unscrambling_spec_strict_full_order = R"doc(Optional strictness override.)doc";
 
 static const char *__doc_fiction_place =
 R"doc(Place 0-input gates.
@@ -21676,6 +22200,43 @@ Parameter ``filename``:
 Parameter ``layout_name``:
     The name to give to the generated layout.)doc";
 
+static const char *__doc_fiction_read_ha_blif =
+R"doc(Parses a BLIF file that contains regular `.names` logic and explicit
+HA cell declarations.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``filename``:
+    BLIF input file.
+
+Parameter ``ntk``:
+    Destination network.
+
+Parameter ``diag``:
+    Optional diagnostics engine.
+
+Returns:
+    Parsing status code.)doc";
+
+static const char *__doc_fiction_read_pin_unscrambling_spec =
+R"doc(Parses pin unscrambling specification JSON from a stream.
+
+Parameter ``is``:
+    Input JSON stream.
+
+Returns:
+    Parsed specification.)doc";
+
+static const char *__doc_fiction_read_pin_unscrambling_spec_2 =
+R"doc(Parses pin unscrambling specification JSON from a file.
+
+Parameter ``filename``:
+    JSON file path.
+
+Returns:
+    Parsed specification.)doc";
+
 static const char *__doc_fiction_read_sidb_surface_defects =
 R"doc(Reads a defective SiDB surface from a text file provided as an input
 stream. The format is rudimentary and consists of a simple 2D array of
@@ -22225,6 +22786,21 @@ Parameter ``n``:
 
 Returns:
     Row-based clocking scheme.)doc";
+
+static const char *__doc_fiction_run_pin_unscrambling =
+R"doc(Executes one pin unscrambling run on a gate-level layout object.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``layout``:
+    Source layout.
+
+Parameter ``config``:
+    Runtime configuration.
+
+Returns:
+    Unscrambled layout and report.)doc";
 
 static const char *__doc_fiction_safe_localtime =
 R"doc(Thread-safe version of `std::localtime`.
