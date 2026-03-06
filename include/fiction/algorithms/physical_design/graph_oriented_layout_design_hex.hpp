@@ -221,6 +221,7 @@ class graph_oriented_layout_design_hex_impl
         {
             return best_lyt;
         }
+
         return std::nullopt;
     }
 
@@ -684,7 +685,6 @@ class graph_oriented_layout_design_hex_impl
                 return path;
             }
         }
-
         return {};
     }
     /**
@@ -770,7 +770,18 @@ class graph_oriented_layout_design_hex_impl
             const tile<ObstrLyt> tile{x, y, 0};
             if constexpr (is_hexagonal_layout_v<ObstrLyt>)
             {
-                if (layout.is_empty_tile(tile))
+                if (!layout.is_empty_tile(tile))
+                {
+                    return;
+                }
+
+                // In native hex mode, top-row PI parity matters for downstream routability. Filter out candidates that
+                // cannot still reach the bottom border under the current partial obstruction pattern.
+                layout.resize({layout.x() + 1, layout.y() + 1, layout.z()});
+                const bool path_exists = has_path_to_bottom_row(layout, tile, new_gate_location::SRC);
+                layout.resize({layout.x() - 1, layout.y() - 1, layout.z()});
+
+                if (path_exists)
                 {
                     count_expansions++;
                     possible_positions.push_back(tile);
@@ -801,8 +812,11 @@ class graph_oriented_layout_design_hex_impl
         uint64_t expansion_limit = (pi_locs == pi_locations::TOP_AND_LEFT) ? 2 * num_expansions : num_expansions;
         if constexpr (is_hexagonal_layout_v<ObstrLyt>)
         {
-            if (ps.prefer_input_pin_order && (pi_locs == pi_locations::TOP || pi_locs == pi_locations::TOP_AND_LEFT))
+            if (pi_locs == pi_locations::TOP || pi_locs == pi_locations::TOP_AND_LEFT)
             {
+                // Native hex GOLD has only one PI border. Restricting exploration to num_pis candidates is too
+                // aggressive once skipped tiles shift the frontier and row parity changes routability. Explore the full
+                // currently available top border instead.
                 expansion_limit = std::max(expansion_limit, layout.x() + 1);
             }
         }
@@ -813,13 +827,27 @@ class graph_oriented_layout_design_hex_impl
         {
             if (((pi_locs == pi_locations::TOP) || (pi_locs == pi_locations::TOP_AND_LEFT)) && min_x + k < layout.x())
             {
-                if (skip_top != 0)
+                if constexpr (is_hexagonal_layout_v<ObstrLyt>)
                 {
-                    --skip_top;
+                    if (skip_top != 0)
+                    {
+                        --skip_top;
+                    }
+                    else
+                    {
+                        check_tile(min_x + k, 0);
+                    }
                 }
                 else
                 {
-                    check_tile(min_x + k, 0);
+                    if (skip_top != 0)
+                    {
+                        --skip_top;
+                    }
+                    else
+                    {
+                        check_tile(min_x + k, 0);
+                    }
                 }
             }
             if (((pi_locs == pi_locations::LEFT) || (pi_locs == pi_locations::TOP_AND_LEFT)) && min_y + k < layout.y())
@@ -931,9 +959,16 @@ class graph_oriented_layout_design_hex_impl
         possible_positions.reserve(ps.num_vertex_expansions);
 
         uint64_t count_expansions = 0ul;
+        uint64_t resize           = 0ul;
 
         const auto& pre   = fc.fanin_nodes[0];
         const auto  pre_t = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre]);
+
+        if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+        {
+            resize = std::max<uint64_t>(1u, ps.num_vertex_expansions);
+            layout.resize({layout.x() + resize, layout.y() + resize, layout.z()});
+        }
 
         // check if path from previous tile to new tile and from new tile to bottom row exists
         const auto check_tile = [&](const tile<ObstrLyt>& new_pos) noexcept
@@ -962,11 +997,13 @@ class graph_oriented_layout_design_hex_impl
                     check_tile({x, y, 0});
                     if (count_expansions >= ps.num_vertex_expansions)
                     {
+                        layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
                         return possible_positions;
                     }
                 }
             }
 
+            layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
             return possible_positions;
         }
 
@@ -1006,6 +1043,7 @@ class graph_oriented_layout_design_hex_impl
         coord_vec_type<ObstrLyt> possible_positions{};
         possible_positions.reserve(ps.num_vertex_expansions);
         uint64_t count_expansions = 0ul;
+        uint64_t resize           = 0ul;
 
         const auto& pre1 = fc.fanin_nodes[0];
         const auto& pre2 = fc.fanin_nodes[1];
@@ -1015,6 +1053,12 @@ class graph_oriented_layout_design_hex_impl
 
         const auto min_x = std::max(pre1_t.x, pre2_t.x) + (pre1_t.x == pre2_t.x ? 1 : 0);
         const auto min_y = std::max(pre1_t.y, pre2_t.y) + (pre1_t.y == pre2_t.y ? 1 : 0);
+
+        if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+        {
+            resize = std::max<uint64_t>(1u, ps.num_vertex_expansions);
+            layout.resize({layout.x() + resize, layout.y() + resize, layout.z()});
+        }
 
         // check if path from previous tiles to new tile and from new tile to bottom row exists
         auto check_tile = [&](const tile<ObstrLyt>& new_pos)
@@ -1059,11 +1103,13 @@ class graph_oriented_layout_design_hex_impl
                     check_tile({x, y, 0});
                     if (count_expansions >= ps.num_vertex_expansions)
                     {
+                        layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
                         return possible_positions;
                     }
                 }
             }
 
+            layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
             return possible_positions;
         }
 
@@ -1291,16 +1337,17 @@ class graph_oriented_layout_design_hex_impl
         // vector to store preceding nodes
         const auto fc = fanins(ssg.network, ssg.nodes_to_place[place_info.current_node]);
 
+        if (position.x > layout.x())
+        {
+            layout.resize({position.x, layout.y(), layout.z()});
+        }
+        if (position.y > layout.y())
+        {
+            layout.resize({layout.x(), position.y, layout.z()});
+        }
+
         if (ssg.network.is_pi(ssg.nodes_to_place[place_info.current_node]))
         {
-            if (position.x > layout.x())
-            {
-                layout.resize({position.x, layout.y(), layout.z()});
-            }
-            if (position.y > layout.y())
-            {
-                layout.resize({layout.x(), position.y, layout.z()});
-            }
             // place primary input node
             place_info.node2pos[ssg.nodes_to_place[place_info.current_node]] =
                 layout.move_node(place_info.pi2node[ssg.nodes_to_place[place_info.current_node]], position);

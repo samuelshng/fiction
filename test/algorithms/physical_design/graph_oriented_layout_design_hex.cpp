@@ -10,6 +10,7 @@
 #include <fiction/algorithms/network_transformation/technology_mapping.hpp>
 #include <fiction/algorithms/physical_design/graph_oriented_layout_design.hpp>
 #include <fiction/algorithms/physical_design/graph_oriented_layout_design_hex.hpp>
+#include <fiction/io/network_reader.hpp>
 #include <fiction/layouts/cartesian_layout.hpp>
 #include <fiction/layouts/clocked_layout.hpp>
 #include <fiction/layouts/gate_level_layout.hpp>
@@ -20,8 +21,10 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -143,6 +146,43 @@ TEST_CASE("Custom cost objective wiring for hex flow",
     const auto layout = run_gold_hex_native(mapped_ha, params, &stats, custom_cost_objective);
     REQUIRE(layout.has_value());
     CHECK(layout->num_gates() >= mapped_ha.num_gates());
+}
+
+TEST_CASE("Mapped RCA2 with skipped PIs remains placeable on hex grid",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    const auto rca2_file_name =
+        std::filesystem::exists("benchmarks/TOY/RCA2.v") ? "benchmarks/TOY/RCA2.v" : "../../benchmarks/TOY/RCA2.v";
+
+    std::ostringstream         os{};
+    network_reader<aig_ptr>    reader{rca2_file_name, os};
+    REQUIRE(os.str().empty());
+
+    const auto networks = reader.get_networks();
+    REQUIRE(networks.size() == 1u);
+
+    technology_mapping_params map_params{};
+    map_params.ha   = true;
+    map_params.and2 = true;
+    map_params.or2  = true;
+    map_params.xor2 = true;
+    map_params.inv  = true;
+
+    auto mapped = technology_mapping(*networks.front(), map_params);
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                       = graph_oriented_layout_design_params::effort_mode::HIGH_EFFORT;
+    params.seed                       = 0u;
+    params.tiles_to_skip_between_pis  = 1u;
+    params.timeout                    = 100000u;
+    params.cost                       = graph_oriented_layout_design_params::cost_objective::AREA;
+
+    const auto layout = run_gold_hex_native(mapped, params, &stats);
+    REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
+    CHECK(layout->num_pis() == mapped.num_pis());
+    CHECK(layout->num_pos() == mapped.num_pos());
 }
 
 TEST_CASE("Hex GOLD explicit input pin ordering can be preferred",
