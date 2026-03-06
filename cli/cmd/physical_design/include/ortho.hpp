@@ -6,6 +6,7 @@
 #define FICTION_CMD_ORTHO_HPP
 
 #include <fiction/algorithms/physical_design/orthogonal.hpp>
+#include <fiction/algorithms/physical_design/orthogonal_hex.hpp>
 
 #include <alice/alice.hpp>
 #include <nlohmann/json.hpp>
@@ -63,6 +64,13 @@ class ortho_command final : public command
 
     template <typename Lyt>
     void orthogonal_physical_design();
+
+    /**
+     * Function to perform the native hexagonal physical design call.
+     * Generates a placed and routed FCN gate layout on a hexagonal grid.
+     */
+    template <typename Lyt>
+    void orthogonal_physical_design_hex();
 };
 
 }  // namespace alice

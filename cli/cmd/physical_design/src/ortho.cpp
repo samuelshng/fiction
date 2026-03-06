@@ -28,8 +28,8 @@ ortho_command::ortho_command(const environment::ptr& e) :
 {
     add_option("--clock_numbers,-n", num_clock_phases, "Number of clock phases to be used {3 or 4}");
     add_option("--hex", hexagonal_tile_shift,
-               "Use hexagonal tiles and specify tile shift. Possible values are 'odd_row', 'even_row', "
-               "'odd_column', or 'even_column'");
+               "Use native pointy-top hexagonal tiles and specify tile shift. Possible values are 'odd_row' or "
+               "'even_row'");
     add_flag("--verbose,-v", "Be verbose");
 }
 
@@ -58,24 +58,15 @@ void ortho_command::execute()
     {
         if (hexagonal_tile_shift == "odd_row")
         {
-            orthogonal_physical_design<fiction::hex_odd_row_gate_clk_lyt>();
+            orthogonal_physical_design_hex<fiction::hex_odd_row_gate_clk_lyt>();
         }
         else if (hexagonal_tile_shift == "even_row")
         {
-            orthogonal_physical_design<fiction::hex_even_row_gate_clk_lyt>();
-        }
-        else if (hexagonal_tile_shift == "odd_column")
-        {
-            orthogonal_physical_design<fiction::hex_odd_col_gate_clk_lyt>();
-        }
-        else if (hexagonal_tile_shift == "even_column")
-        {
-            orthogonal_physical_design<fiction::hex_even_col_gate_clk_lyt>();
+            orthogonal_physical_design_hex<fiction::hex_even_row_gate_clk_lyt>();
         }
         else
         {
-            env->out() << "[e] possible values for the hexagonal tile shift are 'odd_row', 'even_row', "
-                          "'odd_column', and 'even_column'\n";
+            env->out() << "[e] native hexagonal ortho supports the pointy-top variants 'odd_row' and 'even_row'\n";
             ps                   = {};
             hexagonal_tile_shift = "";
             return;
@@ -103,6 +94,31 @@ template <typename Lyt>
 void ortho_command::orthogonal_physical_design()
 {
     const auto perform_physical_design = [this](auto&& ntk_ptr) { return fiction::orthogonal<Lyt>(*ntk_ptr, ps, &st); };
+
+    const auto& ntk_ptr = store<fiction::logic_network_t>().current();
+
+    try
+    {
+        auto lyt = std::visit(perform_physical_design, ntk_ptr);
+
+        store<fiction::gate_layout_t>().extend() = std::make_shared<Lyt>(lyt);
+
+        if (is_set("verbose"))
+        {
+            st.report(env->out());
+        }
+    }
+    catch (const fiction::high_degree_fanin_exception& e)
+    {
+        env->out() << fmt::format("[e] {}\n", e.what());
+    }
+}
+
+template <typename Lyt>
+void ortho_command::orthogonal_physical_design_hex()
+{
+    const auto perform_physical_design = [this](auto&& ntk_ptr)
+    { return fiction::orthogonal_hex<Lyt>(*ntk_ptr, ps, &st); };
 
     const auto& ntk_ptr = store<fiction::logic_network_t>().current();
 
