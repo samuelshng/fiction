@@ -11829,39 +11829,6 @@ Parameter ``diag``:
 Parameter ``missing_name``:
     Missing net name.)doc";
 
-static const char *__doc_fiction_detail_resolve_alias_mapping_indices =
-R"doc(Resolves alias-based mappings to current layout indices.
-
-Parameter ``mappings``:
-    Alias-to-semantic mappings.
-
-Parameter ``current_aliases``:
-    Ordered current aliases.
-
-Parameter ``strict_full_order``:
-    Whether mapping must cover all pins.
-
-Parameter ``pin_kind``:
-    Pin kind string used in diagnostics.
-
-Returns:
-    Ordered pairs of resolved index and semantic name.)doc";
-
-static const char *__doc_fiction_detail_resolve_canonical_index =
-R"doc(Resolves canonical index for a semantic name.
-
-Parameter ``semantic_name``:
-    Semantic name.
-
-Parameter ``canonical_name_to_index``:
-    Optional canonical map.
-
-Parameter ``pin_kind``:
-    Pin kind string used in diagnostics.
-
-Returns:
-    Canonical index or unknown_canonical_index.)doc";
-
 static const char *__doc_fiction_detail_resolve_interface_permutation =
 R"doc(Resolves the permutation that maps a candidate interface onto a
 reference naming order.
@@ -11877,13 +11844,14 @@ Returns:
     same named pins.)doc";
 
 static const char *__doc_fiction_detail_resolve_order_indices =
-R"doc(Resolves desired semantic ordering to canonical declaration indices.
+R"doc(Resolves desired semantic ordering to indices within the resolved
+semantic namespace.
 
 Parameter ``desired_order``:
     Desired semantic names.
 
-Parameter ``canonical_names``:
-    Ordered canonical names.
+Parameter ``resolved_names``:
+    Ordered resolved semantic names.
 
 Parameter ``strict_full_order``:
     Whether non-empty desired order must be complete.
@@ -11892,7 +11860,22 @@ Parameter ``pin_kind``:
     Pin kind string used in diagnostics.
 
 Returns:
-    Ordered canonical indices.)doc";
+    Ordered semantic namespace indices.)doc";
+
+static const char *__doc_fiction_detail_resolve_semantic_names =
+R"doc(Resolves semantic names for the current layout aliases.
+
+Parameter ``mappings``:
+    Alias-to-semantic mappings.
+
+Parameter ``current_aliases``:
+    Ordered current aliases.
+
+Parameter ``pin_kind``:
+    Pin kind string used in diagnostics.
+
+Returns:
+    Resolved semantic names aligned with current layout order.)doc";
 
 static const char *__doc_fiction_detail_return_route_pair =
 R"doc(A routed PO-PI pair description.
@@ -12407,11 +12390,11 @@ Parameter ``to_delete``:
     Reference to the to-delete list to be updated with new
     coordinates.)doc";
 
-static const char *__doc_fiction_detail_validate_canonical_names =
-R"doc(Validates uniqueness and non-emptiness of canonical names.
+static const char *__doc_fiction_detail_validate_resolved_semantic_names =
+R"doc(Validates uniqueness and non-emptiness of resolved semantic names.
 
 Parameter ``names``:
-    Ordered name vector.
+    Ordered semantic name vector.
 
 Parameter ``pin_kind``:
     Pin kind string used in diagnostics.)doc";
@@ -20846,23 +20829,19 @@ static const char *__doc_fiction_pin_alias_semantic_mapping_semantic_name = R"do
 
 static const char *__doc_fiction_pin_unscrambling_configuration = R"doc(Runtime configuration for pin unscrambling.)doc";
 
-static const char *__doc_fiction_pin_unscrambling_configuration_aig_file = R"doc(Optional AIG file path used as canonical semantic I/O naming source.)doc";
-
-static const char *__doc_fiction_pin_unscrambling_configuration_input_mappings = R"doc(Optional alias-to-semantic PI mapping list.)doc";
+static const char *__doc_fiction_pin_unscrambling_configuration_input_mappings = R"doc(Optional alias-to-semantic PI renaming list.)doc";
 
 static const char *__doc_fiction_pin_unscrambling_configuration_input_order = R"doc(Desired semantic PI order.)doc";
 
-static const char *__doc_fiction_pin_unscrambling_configuration_output_mappings = R"doc(Optional alias-to-semantic PO mapping list.)doc";
+static const char *__doc_fiction_pin_unscrambling_configuration_output_mappings = R"doc(Optional alias-to-semantic PO renaming list.)doc";
 
 static const char *__doc_fiction_pin_unscrambling_configuration_output_order = R"doc(Desired semantic PO order.)doc";
 
 static const char *__doc_fiction_pin_unscrambling_configuration_report_file = R"doc(Optional JSON report output path.)doc";
 
-static const char *__doc_fiction_pin_unscrambling_configuration_strict_full_order = R"doc(Enforce full order/mapping vectors to match PI/PO counts exactly.)doc";
+static const char *__doc_fiction_pin_unscrambling_configuration_strict_full_order = R"doc(Enforce full order vectors to match PI/PO counts exactly.)doc";
 
 static const char *__doc_fiction_pin_unscrambling_mapping_entry = R"doc(One resolved semantic-to-layout mapping entry.)doc";
-
-static const char *__doc_fiction_pin_unscrambling_mapping_entry_canonical_index = R"doc(Canonical AIG declaration index, if available.)doc";
 
 static const char *__doc_fiction_pin_unscrambling_mapping_entry_fgl_alias = R"doc(Alias name currently used by the source layout at this index.)doc";
 
@@ -20894,13 +20873,11 @@ static const char *__doc_fiction_pin_unscrambling_result_report = R"doc(Run repo
 
 static const char *__doc_fiction_pin_unscrambling_spec = R"doc(Optional JSON configuration for pin unscrambling.)doc";
 
-static const char *__doc_fiction_pin_unscrambling_spec_aig_file = R"doc(Optional AIG file path used as canonical semantic I/O naming source.)doc";
-
-static const char *__doc_fiction_pin_unscrambling_spec_input_mappings = R"doc(Optional alias-to-semantic PI mapping list.)doc";
+static const char *__doc_fiction_pin_unscrambling_spec_input_mappings = R"doc(Optional alias-to-semantic PI renaming list.)doc";
 
 static const char *__doc_fiction_pin_unscrambling_spec_input_order = R"doc(Desired semantic PI order.)doc";
 
-static const char *__doc_fiction_pin_unscrambling_spec_output_mappings = R"doc(Optional alias-to-semantic PO mapping list.)doc";
+static const char *__doc_fiction_pin_unscrambling_spec_output_mappings = R"doc(Optional alias-to-semantic PO renaming list.)doc";
 
 static const char *__doc_fiction_pin_unscrambling_spec_output_order = R"doc(Desired semantic PO order.)doc";
 
