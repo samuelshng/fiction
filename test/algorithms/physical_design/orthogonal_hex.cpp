@@ -17,8 +17,6 @@
 #include <fiction/layouts/tile_based_layout.hpp>
 #include <fiction/networks/technology_network.hpp>
 
-#include <kitty/dynamic_truth_table.hpp>
-#include <mockturtle/algorithms/simulation.hpp>
 #include <mockturtle/networks/aig.hpp>
 #include <mockturtle/networks/mig.hpp>
 #include <mockturtle/views/names_view.hpp>
@@ -203,15 +201,6 @@ TEST_CASE("Native hexagonal orthogonal layout stays compact on RCA2", "[orthogon
     CHECK(stats.num_wires <= 160u);
     CHECK(stats.num_crossings <= 32u);
 
-    const auto mapped_tts = mockturtle::simulate<kitty::dynamic_truth_table>(
-        mapped, mockturtle::default_simulator<kitty::dynamic_truth_table>(static_cast<unsigned>(mapped.num_pis())));
-    const auto layout_tts = mockturtle::simulate<kitty::dynamic_truth_table>(
-        layout, mockturtle::default_simulator<kitty::dynamic_truth_table>(static_cast<unsigned>(layout.num_pis())));
-
-    REQUIRE(mapped_tts.size() == layout_tts.size());
-
-    for (auto index = 0u; index < mapped_tts.size(); ++index)
-    {
-        CHECK(mapped_tts[index] == layout_tts[index]);
-    }
+    check_eq(mapped, layout);
+    check_eq(*networks.front(), layout);
 }

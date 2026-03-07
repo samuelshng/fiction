@@ -9,6 +9,7 @@
 #include "fiction/algorithms/network_transformation/fanout_substitution.hpp"
 #include "fiction/algorithms/physical_design/orthogonal.hpp"
 #include "fiction/layouts/clocking_scheme.hpp"
+#include "fiction/networks/netlist.hpp"
 #include "fiction/traits.hpp"
 #include "fiction/utils/name_utils.hpp"
 #include "fiction/utils/network_utils.hpp"
@@ -60,7 +61,7 @@ class orthogonal_hex_impl
     /**
      * @brief Internal technology-mapped and fanout-normalized network type.
      */
-    using network_type = mockturtle::names_view<technology_network>;
+    using network_type = mockturtle::names_view<netlist>;
     /**
      * @brief Fanout-annotated view of the working network.
      */
@@ -206,7 +207,7 @@ class orthogonal_hex_impl
     {
         if constexpr (has_output_field<Signal>::value)
         {
-            signal.output = static_cast<decltype(signal.output)>(output_idx != 0u);
+            signal.output = static_cast<decltype(signal.output)>(output_idx);
         }
     }
 
@@ -218,7 +219,14 @@ class orthogonal_hex_impl
      */
     [[nodiscard]] uint32_t node_num_outputs(const mockturtle::node<network_type>& n) const noexcept
     {
-        (void)n;
+        if constexpr (mockturtle::has_is_multioutput_v<network_type> && mockturtle::has_num_outputs_v<network_type>)
+        {
+            if (ntk.is_multioutput(n))
+            {
+                return ntk.num_outputs(n);
+            }
+        }
+
         return 1u;
     }
 
@@ -977,43 +985,76 @@ class orthogonal_hex_impl
     [[nodiscard]] std::vector<branch_source> candidate_branch_sources(const signal_type& source_signal) const
     {
         std::vector<branch_source>       candidates{};
-        std::queue<mockturtle::node<Lyt>> frontier{};
+        std::queue<signal_type>          frontier{};
         std::vector<bool>                visited(layout.size(), false);
 
-        const auto root = layout.get_node(source_signal);
+        const auto root      = layout.get_node(source_signal);
         const auto root_tile = layout.get_tile(root);
 
-        frontier.push(root);
+        const auto is_matching_fanin = [this](const auto fanout_node, const auto& expected_signal)
+        {
+            auto matches = false;
+
+            layout.foreach_fanin(
+                fanout_node,
+                [this, &expected_signal, &matches](const auto& fanin)
+                {
+                    if (layout.get_node(fanin) == layout.get_node(expected_signal) &&
+                        signal_output(fanin) == signal_output(expected_signal))
+                    {
+                        matches = true;
+                        return false;
+                    }
+
+                    return true;
+                });
+
+            return matches;
+        };
+
+        frontier.push(source_signal);
         visited[root] = true;
 
         candidates.push_back({source_signal, root_tile});
 
         while (!frontier.empty())
         {
-            const auto current      = frontier.front();
-            const auto current_tile = layout.get_tile(current);
+            const auto current_signal = frontier.front();
+            const auto current        = layout.get_node(current_signal);
+            const auto current_tile   = layout.get_tile(current);
             frontier.pop();
 
-            if (has_downward_launch_capacity(current_tile))
+            if (current != root && has_downward_launch_capacity(current_tile))
             {
-                candidates.push_back({static_cast<signal_type>(current_tile), current_tile});
+                candidates.push_back({current_signal, current_tile});
             }
 
-            layout.foreach_fanout(
-                current,
-                [this, &frontier, &visited](const auto& fon)
+            for (const auto& successor_base : std::array<tile_type, 2u>{layout.south_west(current_tile),
+                                                                        layout.south_east(current_tile)})
+            {
+                for (const auto& successor : std::array<tile_type, 3u>{successor_base, layout.above(successor_base),
+                                                                       layout.below(successor_base)})
                 {
-                    if (visited[fon] || layout.is_po(fon))
+                    if (!is_usable_tile(successor) || layout.is_empty_tile(successor))
                     {
-                        return;
+                        continue;
                     }
 
-                    if (layout.is_wire(fon) || layout.is_fanout(fon))
+                    const auto successor_node = layout.get_node(successor);
+
+                    if (visited[successor_node] || layout.is_po(successor_node))
                     {
-                        visited[fon] = true;
-                        frontier.push(fon);
+                        continue;
                     }
-                });
+
+                    if ((layout.is_wire(successor_node) || layout.is_fanout(successor_node)) &&
+                        is_matching_fanin(successor_node, current_signal))
+                    {
+                        visited[successor_node] = true;
+                        frontier.push(layout.make_signal(successor_node));
+                    }
+                }
+            }
         }
 
         std::sort(candidates.begin(), candidates.end(),
@@ -1421,7 +1462,26 @@ class orthogonal_hex_impl
     [[nodiscard]] std::optional<signal_type> existing_connected_successor_signal(const signal_type& current_signal,
                                                                                  const tile_type&   successor_base) const
     {
-        const auto current_tile = layout.get_tile(layout.get_node(current_signal));
+        const auto has_matching_fanin = [this, &current_signal](const auto candidate_node)
+        {
+            auto matches = false;
+
+            layout.foreach_fanin(
+                candidate_node,
+                [this, &current_signal, &matches](const auto& fanin)
+                {
+                    if (layout.get_node(fanin) == layout.get_node(current_signal) &&
+                        signal_output(fanin) == signal_output(current_signal))
+                    {
+                        matches = true;
+                        return false;
+                    }
+
+                    return true;
+                });
+
+            return matches;
+        };
 
         for (const auto& candidate : std::array<tile_type, 3u>{successor_base, layout.above(successor_base),
                                                                layout.below(successor_base)})
@@ -1431,11 +1491,11 @@ class orthogonal_hex_impl
                 continue;
             }
 
-            const auto candidate_signal = static_cast<signal_type>(candidate);
+            const auto candidate_node = layout.get_node(candidate);
 
-            if (layout.is_outgoing_signal(current_tile, candidate_signal) && layout.is_incoming_signal(candidate, current_signal))
+            if (has_matching_fanin(candidate_node))
             {
-                return candidate_signal;
+                return layout.make_signal(candidate_node);
             }
         }
 
@@ -1448,7 +1508,7 @@ class orthogonal_hex_impl
      * @param source_signal Source network signal.
      * @return Corresponding layout signal.
      */
-    [[nodiscard]] const signal_type& source_layout_signal(const mockturtle::signal<network_type>& source_signal) const
+    [[nodiscard]] signal_type source_layout_signal(const mockturtle::signal<network_type>& source_signal) const
     {
         const auto source_node  = ntk.get_node(source_signal);
         const auto source_index = signal_output(source_signal);

@@ -6,6 +6,7 @@
 
 #include "stores.hpp"  // NOLINT(misc-include-cleaner)
 
+#include <fiction/algorithms/physical_design/post_layout_optimization_hex.hpp>
 #include <fiction/algorithms/physical_design/post_layout_optimization.hpp>
 #include <fiction/algorithms/physical_design/wiring_reduction.hpp>
 #include <fiction/layouts/clocking_scheme.hpp>
@@ -23,9 +24,9 @@ namespace alice
 {
 
 optimize_command::optimize_command(const environment::ptr& e) :
-        command(e, "Optimizes a 2DDWave-clocked Cartesian layout with respect to area. It achieves this objective "
-                   "by strategically repositioning gates within the layout, removing excess wiring, and "
-                   "effectively relocating outputs to more favorable positions.")
+        command(e, "Optimizes a gate-level layout with respect to area. Cartesian 2DDWave layouts use post-layout "
+                   "optimization and optional wiring reduction. Native pointy-top ROW-clocked hexagonal layouts are "
+                   "compacted to their occupied hexagonal bounding box.")
 {
     add_flag("--wiring_reduction_only,-w",
              "Do not attempt gate repositioning, but apply wiring reduction "
@@ -58,20 +59,6 @@ void optimize_command::execute()
 
     const auto& lyt = gls.current();
 
-    const auto is_twoddwave_clocked = [](auto&& lyt_ptr) -> bool
-    { return lyt_ptr->is_clocking_scheme(fiction::clock_name::TWODDWAVE); };
-
-    // error case: layout is not 2DDWave-clocked
-    if (!std::visit(is_twoddwave_clocked, lyt))
-    {
-        env->out() << "[e] layout has to be 2DDWave-clocked\n";
-        ps  = {};
-        psw = {};
-        st  = {};
-        stw = {};
-        return;
-    }
-
     if (is_set("timeout"))
     {
         // convert timeout entered in seconds to milliseconds
@@ -87,6 +74,12 @@ void optimize_command::execute()
 
         if constexpr (fiction::is_cartesian_layout_v<Lyt>)
         {
+            if (!lyt_ptr->is_clocking_scheme(fiction::clock_name::TWODDWAVE))
+            {
+                env->out() << "[e] Cartesian layouts have to be 2DDWave-clocked\n";
+                return;
+            }
+
             if (is_set("wiring_reduction_only"))
             {
                 fiction::wiring_reduction(lyt_copy, psw, &stw);
@@ -108,9 +101,50 @@ void optimize_command::execute()
 
             gls.extend() = std::make_shared<Lyt>(lyt_copy);
         }
+        else if constexpr (fiction::is_hexagonal_layout_v<Lyt>)
+        {
+            if constexpr (fiction::has_odd_row_hex_arrangement_v<Lyt> || fiction::has_even_row_hex_arrangement_v<Lyt>)
+            {
+                if (!lyt_ptr->is_clocking_scheme(fiction::clock_name::ROW))
+                {
+                    env->out() << "[e] native hexagonal optimization requires a ROW-clocked layout\n";
+                    return;
+                }
+
+                if (is_set("wiring_reduction_only"))
+                {
+                    env->out() << "[w] `--wiring_reduction_only` is ignored for native hexagonal layouts\n";
+                }
+
+                if (is_set("max_gate_relocations"))
+                {
+                    env->out() << "[w] `--max_gate_relocations` is ignored for native hexagonal layouts\n";
+                }
+
+                if (ps.planar_optimization)
+                {
+                    env->out() << "[w] `--planar_optimization` is ignored for native hexagonal layouts\n";
+                }
+
+                fiction::post_layout_optimization_hex(lyt_copy, ps, &st);
+
+                if (is_set("verbose"))
+                {
+                    st.report(env->out());
+                }
+
+                fiction::restore_names(*lyt_ptr, lyt_copy);
+
+                gls.extend() = std::make_shared<Lyt>(lyt_copy);
+            }
+            else
+            {
+                env->out() << "[e] native hexagonal optimization supports only pointy-top odd/even row layouts\n";
+            }
+        }
         else
         {
-            env->out() << "[e] layout has to be Cartesian\n";
+            env->out() << "[e] layout has to be Cartesian or native pointy-top hexagonal\n";
         }
     };
 
