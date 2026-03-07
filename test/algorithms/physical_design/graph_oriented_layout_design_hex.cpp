@@ -4,12 +4,15 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "utils/benchmark_path_utils.hpp"
 #include "utils/blueprints/network_blueprints.hpp"
 #include "utils/equivalence_checking_utils.hpp"
+#include "utils/hex_layout_port_legality.hpp"
 
 #include <fiction/algorithms/network_transformation/technology_mapping.hpp>
 #include <fiction/algorithms/physical_design/graph_oriented_layout_design.hpp>
 #include <fiction/algorithms/physical_design/graph_oriented_layout_design_hex.hpp>
+#include <fiction/io/read_fgl_layout.hpp>
 #include <fiction/io/network_reader.hpp>
 #include <fiction/layouts/cartesian_layout.hpp>
 #include <fiction/layouts/clocked_layout.hpp>
@@ -21,7 +24,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <filesystem>
 #include <functional>
 #include <optional>
 #include <sstream>
@@ -55,6 +57,24 @@ void check_hex_io_placement(const hex_gate_layout& lyt)
         });
 }
 
+/**
+ * @brief Verifies that a native hex GOLD layout respects the strict one-connection-per-side projected port model.
+ *
+ * @param lyt Layout to inspect.
+ */
+void check_projected_hex_port_legality(const hex_gate_layout& lyt)
+{
+    const auto violations = test::hex_layout_port_legality::collect_port_violations(lyt);
+
+    INFO("projected pointy-top hex port violations:");
+    for (const auto& violation : violations)
+    {
+        INFO(violation);
+    }
+
+    CHECK(violations.empty());
+}
+
 template <typename Ntk>
 std::optional<hex_gate_layout>
 run_gold_hex_native(const Ntk& ntk, graph_oriented_layout_design_params params,
@@ -83,6 +103,7 @@ TEST_CASE("Mapped half adder flow on hexagonal grid",
     const auto layout = run_gold_hex_native(mapped_ha, params, &stats);
     REQUIRE(layout.has_value());
     check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
 
     uint64_t layout_num_ha_gates = 0;
     layout->foreach_gate(
@@ -95,6 +116,112 @@ TEST_CASE("Mapped half adder flow on hexagonal grid",
         });
     CHECK(layout_num_ha_gates == 1);
     CHECK(layout->num_pos() == 2u);
+}
+
+TEST_CASE("Projected port legality flags same-side stacked outputs on native hex GOLD layouts",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    static constexpr auto invalid_native_hex_fgl = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                                   "<fgl>\n"
+                                                   "  <layout>\n"
+                                                   "    <name>invalid_native_hex</name>\n"
+                                                   "    <topology>even_row_hex</topology>\n"
+                                                   "    <size>\n"
+                                                   "      <x>1</x>\n"
+                                                   "      <y>2</y>\n"
+                                                   "      <z>1</z>\n"
+                                                   "    </size>\n"
+                                                   "    <clocking>\n"
+                                                   "      <name>ROW</name>\n"
+                                                   "    </clocking>\n"
+                                                   "  </layout>\n"
+                                                   "  <gates>\n"
+                                                   "    <gate>\n"
+                                                   "      <id>0</id>\n"
+                                                   "      <type>PI</type>\n"
+                                                   "      <name>a</name>\n"
+                                                   "      <loc>\n"
+                                                   "        <x>0</x>\n"
+                                                   "        <y>0</y>\n"
+                                                   "        <z>0</z>\n"
+                                                   "      </loc>\n"
+                                                   "    </gate>\n"
+                                                   "    <gate>\n"
+                                                   "      <id>1</id>\n"
+                                                   "      <type>PI</type>\n"
+                                                   "      <name>b</name>\n"
+                                                   "      <loc>\n"
+                                                   "        <x>1</x>\n"
+                                                   "        <y>0</y>\n"
+                                                   "        <z>0</z>\n"
+                                                   "      </loc>\n"
+                                                   "    </gate>\n"
+                                                   "    <gate>\n"
+                                                   "      <id>2</id>\n"
+                                                   "      <type>HA</type>\n"
+                                                   "      <loc>\n"
+                                                   "        <x>1</x>\n"
+                                                   "        <y>1</y>\n"
+                                                   "        <z>0</z>\n"
+                                                   "      </loc>\n"
+                                                   "      <incoming>\n"
+                                                   "        <signal>\n"
+                                                   "          <x>0</x>\n"
+                                                   "          <y>0</y>\n"
+                                                   "          <z>0</z>\n"
+                                                   "          <p>0</p>\n"
+                                                   "        </signal>\n"
+                                                   "        <signal>\n"
+                                                   "          <x>1</x>\n"
+                                                   "          <y>0</y>\n"
+                                                   "          <z>0</z>\n"
+                                                   "          <p>0</p>\n"
+                                                   "        </signal>\n"
+                                                   "      </incoming>\n"
+                                                   "    </gate>\n"
+                                                   "    <gate>\n"
+                                                   "      <id>3</id>\n"
+                                                   "      <type>BUF</type>\n"
+                                                   "      <loc>\n"
+                                                   "        <x>1</x>\n"
+                                                   "        <y>2</y>\n"
+                                                   "        <z>0</z>\n"
+                                                   "      </loc>\n"
+                                                   "      <incoming>\n"
+                                                   "        <signal>\n"
+                                                   "          <x>1</x>\n"
+                                                   "          <y>1</y>\n"
+                                                   "          <z>0</z>\n"
+                                                   "          <p>0</p>\n"
+                                                   "        </signal>\n"
+                                                   "      </incoming>\n"
+                                                   "    </gate>\n"
+                                                   "    <gate>\n"
+                                                   "      <id>4</id>\n"
+                                                   "      <type>BUF</type>\n"
+                                                   "      <loc>\n"
+                                                   "        <x>1</x>\n"
+                                                   "        <y>2</y>\n"
+                                                   "        <z>1</z>\n"
+                                                   "      </loc>\n"
+                                                   "      <incoming>\n"
+                                                   "        <signal>\n"
+                                                   "          <x>1</x>\n"
+                                                   "          <y>1</y>\n"
+                                                   "          <z>0</z>\n"
+                                                   "          <p>1</p>\n"
+                                                   "        </signal>\n"
+                                                   "      </incoming>\n"
+                                                   "    </gate>\n"
+                                                   "  </gates>\n"
+                                                   "</fgl>\n";
+
+    std::istringstream layout_stream{invalid_native_hex_fgl};
+    const auto         layout = read_fgl_layout<hex_gate_layout>(layout_stream);
+
+    const auto violations = test::hex_layout_port_legality::collect_port_violations(layout);
+
+    CHECK_FALSE(violations.empty());
 }
 
 TEST_CASE("CLI-like gold hex options on mapped half adder",
@@ -119,6 +246,7 @@ TEST_CASE("CLI-like gold hex options on mapped half adder",
     const auto layout = run_gold_hex_native(mapped_ha, params, &stats);
     REQUIRE(layout.has_value());
     check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
     CHECK(layout->num_pis() == mapped_ha.num_pis());
     CHECK(layout->num_pos() == mapped_ha.num_pos());
 }
@@ -145,14 +273,14 @@ TEST_CASE("Custom cost objective wiring for hex flow",
 
     const auto layout = run_gold_hex_native(mapped_ha, params, &stats, custom_cost_objective);
     REQUIRE(layout.has_value());
+    check_projected_hex_port_legality(*layout);
     CHECK(layout->num_gates() >= mapped_ha.num_gates());
 }
 
 TEST_CASE("Mapped RCA2 with skipped PIs remains placeable on hex grid",
           "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
 {
-    const auto rca2_file_name =
-        std::filesystem::exists("benchmarks/TOY/RCA2.v") ? "benchmarks/TOY/RCA2.v" : "../../benchmarks/TOY/RCA2.v";
+    const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
 
     std::ostringstream         os{};
     network_reader<aig_ptr>    reader{rca2_file_name, os};
@@ -175,14 +303,52 @@ TEST_CASE("Mapped RCA2 with skipped PIs remains placeable on hex grid",
     params.mode                       = graph_oriented_layout_design_params::effort_mode::HIGH_EFFORT;
     params.seed                       = 0u;
     params.tiles_to_skip_between_pis  = 1u;
-    params.timeout                    = 100000u;
+    params.timeout                    = 10000u;
     params.cost                       = graph_oriented_layout_design_params::cost_objective::AREA;
 
     const auto layout = run_gold_hex_native(mapped, params, &stats);
     REQUIRE(layout.has_value());
     check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
     CHECK(layout->num_pis() == mapped.num_pis());
     CHECK(layout->num_pos() == mapped.num_pos());
+}
+
+TEST_CASE("Mapped RCA2 first native hex GOLD solution respects projected port legality",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
+
+    std::ostringstream      os{};
+    network_reader<aig_ptr> reader{rca2_file_name, os};
+    REQUIRE(os.str().empty());
+
+    const auto networks = reader.get_networks();
+    REQUIRE(networks.size() == 1u);
+
+    technology_mapping_params map_params{};
+    map_params.ha   = true;
+    map_params.and2 = true;
+    map_params.or2  = true;
+    map_params.xor2 = true;
+    map_params.inv  = true;
+
+    auto mapped = technology_mapping(*networks.front(), map_params);
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                      = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    params.return_first              = true;
+    params.enable_multithreading     = true;
+    params.seed                      = 0u;
+    params.tiles_to_skip_between_pis = 1u;
+    params.timeout                   = 10000u;
+    params.cost                      = graph_oriented_layout_design_params::cost_objective::AREA;
+
+    const auto layout = run_gold_hex_native(mapped, params, &stats);
+    REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
 }
 
 TEST_CASE("Hex GOLD explicit input pin ordering can be preferred",
@@ -208,6 +374,7 @@ TEST_CASE("Hex GOLD explicit input pin ordering can be preferred",
     const auto layout = run_gold_hex_native(ntk, params, &stats);
     REQUIRE(layout.has_value());
     check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
 
     std::unordered_map<std::string, uint64_t> pi_x{};
     layout->foreach_pi(
@@ -279,6 +446,7 @@ TEST_CASE("Hex GOLD explicit output pin ordering can be preferred",
     const auto layout = run_gold_hex_native(ntk, params, &stats);
     REQUIRE(layout.has_value());
     check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
 
     std::unordered_map<std::string, uint64_t> po_x{};
     layout->foreach_po(

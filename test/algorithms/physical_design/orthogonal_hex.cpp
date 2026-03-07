@@ -5,8 +5,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "utils/benchmark_path_utils.hpp"
 #include "utils/blueprints/network_blueprints.hpp"
 #include "utils/equivalence_checking_utils.hpp"
+#include "utils/hex_layout_port_legality.hpp"
 
 #include <fiction/algorithms/physical_design/orthogonal_hex.hpp>
 #include <fiction/algorithms/network_transformation/technology_mapping.hpp>
@@ -83,6 +85,26 @@ void check_hex_downward_data_flow(const Lyt& layout)
                 CHECK(is_lower_neighbor(tile, static_cast<typename Lyt::tile>(outgoing)));
             }
         });
+}
+
+/**
+ * @brief Verifies that a native hex layout does not reuse any projected top/bottom side more than once.
+ *
+ * @tparam Lyt Layout type.
+ * @param layout Layout to inspect.
+ */
+template <typename Lyt>
+void check_projected_hex_port_legality(const Lyt& layout)
+{
+    const auto violations = test::hex_layout_port_legality::collect_port_violations(layout);
+
+    INFO("projected pointy-top hex port violations:");
+    for (const auto& violation : violations)
+    {
+        INFO(violation);
+    }
+
+    CHECK(violations.empty());
 }
 
 template <typename Lyt, typename Ntk>
@@ -174,7 +196,7 @@ TEST_CASE("Native hexagonal orthogonal layout stays compact on RCA2", "[orthogon
     using gate_layout =
         gate_level_layout<clocked_layout<tile_based_layout<hexagonal_layout<offset::ucoord_t, even_row_hex>>>>;
 
-    constexpr const char* rca2_file_name = "../../benchmarks/TOY/RCA2.v";
+    const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
 
     std::ostringstream os{};
     network_reader<aig_ptr> reader{rca2_file_name, os};
@@ -201,6 +223,7 @@ TEST_CASE("Native hexagonal orthogonal layout stays compact on RCA2", "[orthogon
     CHECK(stats.num_wires <= 160u);
     CHECK(stats.num_crossings <= 32u);
 
+    check_projected_hex_port_legality(layout);
     check_eq(mapped, layout);
     check_eq(*networks.front(), layout);
 }
