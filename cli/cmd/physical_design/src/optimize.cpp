@@ -26,7 +26,7 @@ namespace alice
 optimize_command::optimize_command(const environment::ptr& e) :
         command(e, "Optimizes a gate-level layout with respect to area. Cartesian 2DDWave layouts use post-layout "
                    "optimization and optional wiring reduction. Native pointy-top ROW-clocked hexagonal layouts are "
-                   "compacted to their occupied hexagonal bounding box.")
+                   "compacted, vertically tightened by removing wire-only rows, and re-routed conservatively.")
 {
     add_flag("--wiring_reduction_only,-w",
              "Do not attempt gate repositioning, but apply wiring reduction "

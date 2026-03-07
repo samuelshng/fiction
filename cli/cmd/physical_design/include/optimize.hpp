@@ -16,7 +16,7 @@ namespace alice
 {
 
 /**
- * Optimizes a 2DDWave-clocked Cartesian layout.
+ * Optimizes a Cartesian or native pointy-top hexagonal gate-level layout.
  */
 class optimize_command final : public command
 {
@@ -51,7 +51,7 @@ class optimize_command final : public command
     fiction::wiring_reduction_stats stw{};
 
     /**
-     * Optimizes a 2DDWave-clocked Cartesian layout.
+     * Optimizes a Cartesian or native pointy-top hexagonal gate-level layout.
      */
     void execute() override;
 };
