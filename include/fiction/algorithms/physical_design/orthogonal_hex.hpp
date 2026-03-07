@@ -26,6 +26,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <numeric>
 #include <optional>
@@ -166,6 +167,7 @@ class orthogonal_hex_impl
         compute_depths();
         compute_horizontal_slots();
         compute_output_slots();
+        compute_placement_slack();
         instantiate_layout();
         reserve_blocked_tiles();
         place_primary_inputs();
@@ -493,11 +495,48 @@ class orthogonal_hex_impl
     }
 
     /**
+     * @brief Computes additional placement slack for direct primary outputs.
+     *
+     * Cartesian orthogonal reserves structural space for output-bearing nodes while placing the logic network. The
+     * native hex variant needs the same idea: rows that drive direct POs receive extra vertical slack below them, and
+     * the horizontal slot search budget is widened so later gates can move around these reserved corridors.
+     */
+    void compute_placement_slack()
+    {
+        depth_row_extra.assign(max_gate_depth + 1u, 0u);
+
+        std::unordered_set<mockturtle::node<network_type>> po_driver_nodes{};
+        uint64_t                                           multioutput_po_driver_nodes{0u};
+
+        topo_ntk.foreach_node(
+            [this, &po_driver_nodes, &multioutput_po_driver_nodes](const auto& n)
+            {
+                if (ntk.is_constant(n) || !ntk.is_po(n))
+                {
+                    return;
+                }
+
+                po_driver_nodes.insert(n);
+
+                auto& depth_extra = depth_row_extra[node_depth[n]];
+                depth_extra       = std::max(depth_extra, direct_po_row_extra);
+
+                if (node_num_outputs(n) > 1u)
+                {
+                    depth_extra = std::max(depth_extra, multioutput_direct_po_row_extra);
+                    ++multioutput_po_driver_nodes;
+                }
+            });
+
+        placement_slot_slack = po_driver_nodes.size() + multioutput_po_driver_nodes;
+    }
+
+    /**
      * @brief Creates the target layout with generous spacing for monotone routing.
      */
     void instantiate_layout()
     {
-        max_output_slot = max_slot + ntk.num_pos();
+        max_output_slot = max_slot + ntk.num_pos() + placement_slot_slack;
 
         row_pitch = determine_row_pitch();
 
@@ -506,7 +545,14 @@ class orthogonal_hex_impl
             ++row_pitch;
         }
 
-        po_row    = (max_gate_depth + 1u) * row_pitch;
+        depth_row_y.assign(max_gate_depth + 1u, 0u);
+
+        for (uint64_t depth = 1u; depth <= max_gate_depth; ++depth)
+        {
+            depth_row_y[depth] = depth_row_y[depth - 1u] + row_pitch + depth_row_extra[depth - 1u];
+        }
+
+        po_row = depth_row_y[max_gate_depth] + row_pitch + depth_row_extra[max_gate_depth];
 
         const auto width = actual_x_from_slot(max_output_slot) + x_margin;
 
@@ -520,7 +566,7 @@ class orthogonal_hex_impl
                     return;
                 }
 
-                node_tile[n] = tile_type{actual_x_from_slot(node_slot[n]), node_depth[n] * row_pitch, 0u};
+                node_tile[n] = tile_type{actual_x_from_slot(node_slot[n]), depth_row_y[node_depth[n]], 0u};
             });
     }
 
@@ -780,7 +826,8 @@ class orthogonal_hex_impl
                         for (const auto& po_entry : upper_entries(po_t))
                         {
                             debug << " (" << po_entry.x << ", " << po_entry.y << ", " << po_entry.z << ")";
-                            const auto candidate = find_monotone_path(candidate_source.tile, po_entry, blocked_tiles, {});
+                            const auto candidate =
+                                find_monotone_path(candidate_source.signal, candidate_source.tile, po_entry, blocked_tiles, {});
                             debug << '=' << candidate.size();
 
                             if (!candidate.empty())
@@ -860,17 +907,18 @@ class orthogonal_hex_impl
                 continue;
             }
 
-            if (layout.is_empty_tile(successor))
+            if (is_projected_tile_empty(successor))
             {
-                return true;
+                if (has_projected_step_capacity(source_tile, successor))
+                {
+                    return true;
+                }
+
+                continue;
             }
 
-            if (is_reusable_successor(source_tile, successor))
-            {
-                return true;
-            }
-
-            if (is_crossable_successor(source_tile, successor))
+            if (has_projected_step_capacity(source_tile, successor) && has_available_crossing_layer(successor) &&
+                is_crossable_successor(source_tile, layout.below(successor)))
             {
                 return true;
             }
@@ -902,10 +950,189 @@ class orthogonal_hex_impl
     }
 
     /**
+     * @brief Evaluates a predicate on all occupied z-layers that project to the same hex tile.
+     *
+     * @tparam Predicate Predicate type.
+     * @param t Tile whose projected `(x, y)` position is inspected.
+     * @param predicate Predicate evaluated on each occupied layer at that position.
+     * @return `true` iff the predicate matches on at least one occupied layer.
+     */
+    template <typename Predicate>
+    [[nodiscard]] bool any_projected_occupant_satisfies(const tile_type& t, Predicate&& predicate) const noexcept
+    {
+        const auto projected = layout.below(t);
+
+        if (!layout.is_empty_tile(projected) && predicate(projected))
+        {
+            return true;
+        }
+
+        if (const auto elevated = layout.above(projected);
+            elevated != projected && !layout.is_empty_tile(elevated) && predicate(elevated))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @brief Checks whether both z-layers of the projected tile are empty.
+     *
+     * @param t Tile whose projected position is inspected.
+     * @return `true` iff neither the ground nor the crossing layer is occupied there.
+     */
+    [[nodiscard]] bool is_projected_tile_empty(const tile_type& t) const noexcept
+    {
+        const auto projected = layout.below(t);
+        return layout.is_empty_tile(projected) && layout.is_empty_tile(layout.above(projected));
+    }
+
+    /**
+     * @brief Checks whether the projected tile already uses its north-west input side.
+     *
+     * @param t Tile whose projected position is inspected.
+     * @return `true` iff any stacked occupant already has a north-west incoming connection.
+     */
+    [[nodiscard]] bool has_projected_north_west_incoming(const tile_type& t) const noexcept
+    {
+        const auto projected        = layout.below(t);
+        const auto expected_neighbor = layout.north_west(projected);
+
+        return any_projected_occupant_satisfies(
+            projected,
+            [this, &expected_neighbor](const auto& occupant)
+            {
+                for (const auto& incoming : layout.incoming_data_flow(occupant))
+                {
+                    if (layout.below(static_cast<tile_type>(incoming)) == expected_neighbor)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+    }
+
+    /**
+     * @brief Checks whether the projected tile already uses its north-east input side.
+     *
+     * @param t Tile whose projected position is inspected.
+     * @return `true` iff any stacked occupant already has a north-east incoming connection.
+     */
+    [[nodiscard]] bool has_projected_north_east_incoming(const tile_type& t) const noexcept
+    {
+        const auto projected        = layout.below(t);
+        const auto expected_neighbor = layout.north_east(projected);
+
+        return any_projected_occupant_satisfies(
+            projected,
+            [this, &expected_neighbor](const auto& occupant)
+            {
+                for (const auto& incoming : layout.incoming_data_flow(occupant))
+                {
+                    if (layout.below(static_cast<tile_type>(incoming)) == expected_neighbor)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+    }
+
+    /**
+     * @brief Checks whether the projected tile already uses its south-west output side.
+     *
+     * @param t Tile whose projected position is inspected.
+     * @return `true` iff any stacked occupant already has a south-west outgoing connection.
+     */
+    [[nodiscard]] bool has_projected_south_west_outgoing(const tile_type& t) const noexcept
+    {
+        const auto projected        = layout.below(t);
+        const auto expected_neighbor = layout.south_west(projected);
+
+        return any_projected_occupant_satisfies(
+            projected,
+            [this, &expected_neighbor](const auto& occupant)
+            {
+                for (const auto& outgoing : layout.outgoing_data_flow(occupant))
+                {
+                    if (layout.below(static_cast<tile_type>(outgoing)) == expected_neighbor)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+    }
+
+    /**
+     * @brief Checks whether the projected tile already uses its south-east output side.
+     *
+     * @param t Tile whose projected position is inspected.
+     * @return `true` iff any stacked occupant already has a south-east outgoing connection.
+     */
+    [[nodiscard]] bool has_projected_south_east_outgoing(const tile_type& t) const noexcept
+    {
+        const auto projected        = layout.below(t);
+        const auto expected_neighbor = layout.south_east(projected);
+
+        return any_projected_occupant_satisfies(
+            projected,
+            [this, &expected_neighbor](const auto& occupant)
+            {
+                for (const auto& outgoing : layout.outgoing_data_flow(occupant))
+                {
+                    if (layout.below(static_cast<tile_type>(outgoing)) == expected_neighbor)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+    }
+
+    /**
+     * @brief Checks whether a new routed step still has free projected source and target sides.
+     *
+     * A step to `south_east(current)` consumes the current tile's `SE` output side and the successor tile's `NW`
+     * input side. A step to `south_west(current)` analogously consumes `SW` and `NE`.
+     *
+     * @param current Current path tile.
+     * @param successor Candidate successor tile.
+     * @return `true` iff the step would not reuse an already occupied projected side.
+     */
+    [[nodiscard]] bool has_projected_step_capacity(const tile_type& current, const tile_type& successor) const noexcept
+    {
+        const auto current_projected   = layout.below(current);
+        const auto successor_projected = layout.below(successor);
+
+        if (successor_projected == layout.south_east(current_projected))
+        {
+            return !has_projected_south_east_outgoing(current_projected) &&
+                   !has_projected_north_west_incoming(successor_projected);
+        }
+
+        if (successor_projected == layout.south_west(current_projected))
+        {
+            return !has_projected_south_west_outgoing(current_projected) &&
+                   !has_projected_north_east_incoming(successor_projected);
+        }
+
+        return false;
+    }
+
+    /**
      * @brief Decides whether an occupied successor tile already continues the same routed signal.
      *
      * This allows the path finder to traverse previously materialized wire branches of the same net before branching
-     * off again later, instead of mistaking them for foreign obstructions.
+     * off again later, instead of mistaking them for foreign obstructions. Logic tiles are intentionally excluded:
+     * multiple outputs may share the same source tile, so geometric adjacency alone is not enough to prove that a
+     * successor belongs to the same routed signal.
      *
      * @param current Current path tile.
      * @param successor Candidate occupied successor tile on the ground layer.
@@ -914,6 +1141,13 @@ class orthogonal_hex_impl
     [[nodiscard]] bool is_reusable_successor(const tile_type& current, const tile_type& successor) const noexcept
     {
         if (layout.is_empty_tile(current))
+        {
+            return false;
+        }
+
+        const auto current_node = layout.get_node(current);
+
+        if (!layout.is_wire(current_node))
         {
             return false;
         }
@@ -938,19 +1172,90 @@ class orthogonal_hex_impl
     }
 
     /**
-     * @brief Decides whether an occupied successor tile can be used as a legal pointy-top crossing.
+     * @brief Checks whether the appropriate crossing layer is available above an occupied projected tile.
+     *
+     * When the path uses the ground-layer coordinate of an occupied projected tile, the alternative crossing layer is
+     * `above(projected)`. When the path already uses the crossing-layer coordinate, that exact tile must be empty.
+     *
+     * @param successor Candidate successor tile of the path.
+     * @return `true` iff the route can be materialized on the non-occupied layer of that projected tile.
+     */
+    [[nodiscard]] bool has_available_crossing_layer(const tile_type& successor) const noexcept
+    {
+        const auto successor_projected = layout.below(successor);
+
+        if (layout.is_empty_tile(successor_projected))
+        {
+            return false;
+        }
+
+        if (successor == successor_projected)
+        {
+            return layout.is_empty_tile(layout.above(successor_projected));
+        }
+
+        return layout.is_empty_tile(successor);
+    }
+
+    /**
+     * @brief Enforces distinct launch sides for direct routes from multi-output gates.
+     *
+     * The first routed segment leaving a two-output gate is output-sensitive: output `0` launches on the gate's
+     * south-east edge and output `1` launches on the south-west edge. Once a signal has left the source gate, later
+     * branches are handled by regular wire-side capacity checks on the routed tree.
+     *
+     * @param source_signal Routed source signal.
+     * @param source Root tile from which the current path was launched.
+     * @param current Current path tile.
+     * @param successor Candidate successor tile.
+     * @param source_node Optional source-network node if the source tile is not materialized in the layout yet.
+     * @return `true` iff the current step respects the source gate's output-side assignment.
+     */
+    [[nodiscard]] bool uses_legal_output_launch_side(const signal_type& source_signal, const tile_type& source,
+                                                     const tile_type& current, const tile_type& successor,
+                                                     const std::optional<mockturtle::node<network_type>>& source_node =
+                                                         std::nullopt) const noexcept
+    {
+        if (current != source)
+        {
+            return true;
+        }
+
+        const auto launch_node = source_node.has_value() ? *source_node : layout.get_node(source);
+
+        if (!ntk.is_multioutput(launch_node) || node_num_outputs(launch_node) < 2u)
+        {
+            return true;
+        }
+
+        const auto source_projected    = layout.below(source);
+        const auto successor_projected = layout.below(successor);
+
+        switch (signal_output(source_signal))
+        {
+            case 0u:
+                return successor_projected == layout.south_east(source_projected);
+            case 1u:
+                return successor_projected == layout.south_west(source_projected);
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * @brief Decides whether an occupied projected successor tile can host a legal pointy-top crossing.
      *
      * Only proper wire tiles are crossable, never fanouts or I/O tiles. Moreover, the existing wire orientation must be
      * opposite to the one induced by the current routing step: a `SE` step may only cross a `NE->SW` wire and a `SW`
      * step may only cross a `NW->SE` wire.
      *
      * @param current Current path tile.
-     * @param successor Candidate occupied successor tile on the ground layer.
-     * @return `true` iff the successor can host a legal crossing.
+     * @param successor_projected Occupied successor tile on the projected ground layer.
+     * @return `true` iff the projected successor can host a legal crossing.
      */
-    [[nodiscard]] bool is_crossable_successor(const tile_type& current, const tile_type& successor) const noexcept
+    [[nodiscard]] bool is_crossable_successor(const tile_type& current, const tile_type& successor_projected) const noexcept
     {
-        const auto successor_node = layout.get_node(successor);
+        const auto successor_node = layout.get_node(successor_projected);
 
         if (!layout.is_wire(successor_node) || layout.is_fanout(successor_node) || layout.is_pi(successor_node) ||
             layout.is_po(successor_node))
@@ -958,19 +1263,16 @@ class orthogonal_hex_impl
             return false;
         }
 
-        if (!layout.is_empty_tile(layout.above(successor)))
+        const auto current_projected = layout.below(current);
+
+        if (successor_projected == layout.south_east(current_projected))
         {
-            return false;
+            return has_ne_sw_orientation(successor_projected) && !has_nw_se_orientation(successor_projected);
         }
 
-        if (successor == layout.south_east(current))
+        if (successor_projected == layout.south_west(current_projected))
         {
-            return has_ne_sw_orientation(successor) && !has_nw_se_orientation(successor);
-        }
-
-        if (successor == layout.south_west(current))
-        {
-            return has_nw_se_orientation(successor) && !has_ne_sw_orientation(successor);
+            return has_nw_se_orientation(successor_projected) && !has_ne_sw_orientation(successor_projected);
         }
 
         return false;
@@ -1190,6 +1492,10 @@ class orthogonal_hex_impl
                 std::vector<planned_route> planned_routes{};
                 planned_routes.reserve(num_fanin);
                 std::unordered_set<uint64_t> temporary_blocked{};
+                std::unordered_set<uint64_t> temporary_north_west_incoming{};
+                std::unordered_set<uint64_t> temporary_north_east_incoming{};
+                std::unordered_set<uint64_t> temporary_south_west_outgoing{};
+                std::unordered_set<uint64_t> temporary_south_east_outgoing{};
 
                 auto valid_assignment = true;
 
@@ -1237,7 +1543,8 @@ class orthogonal_hex_impl
 
                     for (const auto& candidate_source : candidate_sources)
                     {
-                        path = find_monotone_path(candidate_source.tile, entry_t, blocked_tiles, temporary_blocked);
+                        path = find_monotone_path(candidate_source.signal, candidate_source.tile, entry_t, blocked_tiles,
+                                                 temporary_blocked);
 
                         debug << " fi" << fanin_index << " (" << candidate_source.tile.x << ", " << candidate_source.tile.y
                               << ", " << candidate_source.tile.z << ")->(" << entry_t.x << ", " << entry_t.y << ", "
@@ -1256,9 +1563,66 @@ class orthogonal_hex_impl
                         break;
                     }
 
+                    const auto reserve_projected_step = [this, &temporary_north_west_incoming, &temporary_north_east_incoming,
+                                                         &temporary_south_west_outgoing,
+                                                         &temporary_south_east_outgoing](const auto& current,
+                                                                                         const auto& successor)
+                    {
+                        const auto current_projected_key   = tile_key(layout.below(current));
+                        const auto successor_projected_key = tile_key(layout.below(successor));
+                        const auto current_projected       = layout.below(current);
+                        const auto successor_projected     = layout.below(successor);
+
+                        if (successor_projected == layout.south_east(current_projected))
+                        {
+                            if (has_projected_south_east_outgoing(current_projected) ||
+                                has_projected_north_west_incoming(successor_projected) ||
+                                temporary_south_east_outgoing.count(current_projected_key) != 0u ||
+                                temporary_north_west_incoming.count(successor_projected_key) != 0u)
+                            {
+                                return false;
+                            }
+
+                            temporary_south_east_outgoing.insert(current_projected_key);
+                            temporary_north_west_incoming.insert(successor_projected_key);
+                            return true;
+                        }
+
+                        if (successor_projected == layout.south_west(current_projected))
+                        {
+                            if (has_projected_south_west_outgoing(current_projected) ||
+                                has_projected_north_east_incoming(successor_projected) ||
+                                temporary_south_west_outgoing.count(current_projected_key) != 0u ||
+                                temporary_north_east_incoming.count(successor_projected_key) != 0u)
+                            {
+                                return false;
+                            }
+
+                            temporary_south_west_outgoing.insert(current_projected_key);
+                            temporary_north_east_incoming.insert(successor_projected_key);
+                            return true;
+                        }
+
+                        return false;
+                    };
+
+                    for (auto it = path.cbegin(); std::next(it) != path.cend(); ++it)
+                    {
+                        if (!reserve_projected_step(*it, *std::next(it)))
+                        {
+                            valid_assignment = false;
+                            break;
+                        }
+                    }
+
+                    if (!valid_assignment)
+                    {
+                        break;
+                    }
+
                     for (auto it = path.cbegin() + 1; it != path.cend(); ++it)
                     {
-                        temporary_blocked.insert(tile_key(*it));
+                        temporary_blocked.insert(tile_key(layout.below(*it)));
                     }
 
                     planned_routes.push_back({fanin_index, selected_source->signal, entry_t, path});
@@ -1279,15 +1643,18 @@ class orthogonal_hex_impl
     /**
  * @brief Finds a downward-only path on the pointy-top hex grid.
      *
+     * @param source_signal Routed signal launched from `source`.
      * @param source Start tile.
      * @param target End tile.
      * @param hard_blocked Structurally blocked tiles.
-     * @param soft_blocked Temporarily blocked tiles for the current planning step.
+     * @param soft_blocked Temporarily blocked projected tiles for the current planning step.
+     * @param source_node Optional source-network node if `source` is not materialized in the layout yet.
      * @return Path from `source` to `target`, or an empty path if none was found.
      */
-    [[nodiscard]] path_type find_monotone_path(const tile_type& source, const tile_type& target,
-                                               const std::unordered_set<uint64_t>& hard_blocked,
-                                               const std::unordered_set<uint64_t>& soft_blocked) const
+    [[nodiscard]] path_type find_monotone_path(
+        const signal_type& source_signal, const tile_type& source, const tile_type& target,
+        const std::unordered_set<uint64_t>& hard_blocked, const std::unordered_set<uint64_t>& soft_blocked,
+        const std::optional<mockturtle::node<network_type>>& source_node = std::nullopt) const
     {
         if (source == target)
         {
@@ -1330,7 +1697,14 @@ class orthogonal_hex_impl
                     continue;
                 }
 
-                if (soft_blocked.count(successor_key) != 0u && successor != target)
+                if (const auto successor_projected_key = tile_key(layout.below(successor));
+                    soft_blocked.count(successor_projected_key) != 0u &&
+                    layout.below(successor) != layout.below(target))
+                {
+                    continue;
+                }
+
+                if (!uses_legal_output_launch_side(source_signal, source, current, successor, source_node))
                 {
                     continue;
                 }
@@ -1400,24 +1774,22 @@ class orthogonal_hex_impl
             return false;
         }
 
-        if (layout.is_empty_tile(successor))
+        if (is_projected_tile_empty(successor))
         {
-            return true;
+            return has_projected_step_capacity(current, successor);
         }
 
-        if (is_reusable_successor(current, successor))
-        {
-            return true;
-        }
-
-        const auto elevated_successor = layout.above(successor);
-
-        if (!layout.is_empty_tile(elevated_successor))
+        if (!has_projected_step_capacity(current, successor))
         {
             return false;
         }
 
-        return is_crossable_successor(current, successor);
+        if (!has_available_crossing_layer(successor))
+        {
+            return false;
+        }
+
+        return is_crossable_successor(current, layout.below(successor));
     }
 
     /**
@@ -1566,7 +1938,14 @@ class orthogonal_hex_impl
      * @brief Additional vertical slack for monotone hex routing.
      */
     static constexpr uint64_t row_pitch_slack = 2u;
-
+    /**
+     * @brief Additional rows reserved below depths that drive at least one direct primary output.
+     */
+    static constexpr uint64_t direct_po_row_extra = 1u;
+    /**
+     * @brief Additional rows reserved below depths that contain a multi-output direct-PO driver.
+     */
+    static constexpr uint64_t multioutput_direct_po_row_extra = 2u;
     /**
      * @brief Converted and normalized working network.
      */
@@ -1608,6 +1987,14 @@ class orthogonal_hex_impl
      */
     mockturtle::node_map<std::vector<signal_type>, network_type> node_signal{ntk};
     /**
+     * @brief Absolute y coordinate per topological depth after output-aware row expansion.
+     */
+    std::vector<uint64_t> depth_row_y{};
+    /**
+     * @brief Additional vertical slack inserted below each depth.
+     */
+    std::vector<uint64_t> depth_row_extra{};
+    /**
      * @brief Abstract output slot per PO.
      */
     std::vector<uint64_t> output_slot{};
@@ -1627,6 +2014,10 @@ class orthogonal_hex_impl
      * @brief Maximum horizontal slot used by any node or output.
      */
     uint64_t max_slot{0u};
+    /**
+     * @brief Additional horizontal slots reserved for output-aware detours during placement.
+     */
+    uint64_t placement_slot_slack{0u};
     /**
      * @brief Maximum bottom-border slot that may be used for PO placement.
      */

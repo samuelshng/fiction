@@ -98,12 +98,15 @@ void check_projected_hex_port_legality(const Lyt& layout)
 {
     const auto violations = test::hex_layout_port_legality::collect_port_violations(layout);
 
-    INFO("projected pointy-top hex port violations:");
+    std::ostringstream os{};
+    os << "projected pointy-top hex port violations:";
+
     for (const auto& violation : violations)
     {
-        INFO(violation);
+        os << '\n' << violation;
     }
 
+    INFO(os.str());
     CHECK(violations.empty());
 }
 
