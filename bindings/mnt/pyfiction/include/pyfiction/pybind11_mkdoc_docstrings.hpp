@@ -5162,6 +5162,18 @@ Parameter ``value``:
 Returns:
     The string representation of the value.)doc";
 
+static const char *__doc_fiction_detail_append_unique_hex_tile =
+R"doc(Appends a tile to a vector only if it is not present already.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``tiles``:
+    Tile list to update.
+
+Parameter ``t``:
+    Tile to append.)doc";
+
 static const char *__doc_fiction_detail_apply_default_inner_to_outer_order =
 R"doc(Applies default inner-to-outer ordering to PO-PI route pairs.
 
@@ -5407,6 +5419,62 @@ Returns:
 
 static const char *__doc_fiction_detail_can_copy_output = R"doc()doc";
 
+static const char *__doc_fiction_detail_can_shift_hex_structural_suffix_up =
+R"doc(Checks whether all structural nodes below a cut row can be shifted
+upward by one row without collisions.
+
+Routing wires are ignored because they are removed before the shift is
+applied and reconstructed afterward.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``row``:
+    Last row that stays fixed.
+
+Returns:
+    `true` iff shifting every structural node with `y > row` to `y -
+    1` is tile-wise legal.)doc";
+
+static const char *__doc_fiction_detail_candidate_hex_gate_tiles =
+R"doc(Enumerates candidate relocation tiles for one structural gate.
+
+Candidates are ordered to prefer upward movement first and then
+leftward movement on the same row.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout that defines the current free space.
+
+Parameter ``old_tile``:
+    Current tile of the relocated gate.
+
+Parameter ``max_candidates``:
+    Maximum number of candidate tiles to enumerate.
+
+Returns:
+    Candidate tiles in priority order.)doc";
+
+static const char *__doc_fiction_detail_candidate_hex_po_columns =
+R"doc(Enumerates border columns near a preferred x coordinate.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout that defines the column range.
+
+Parameter ``preferred_x``:
+    Preferred x coordinate.
+
+Returns:
+    Columns ordered by increasing distance from `preferred_x`.)doc";
+
 static const char *__doc_fiction_detail_check_and_optimize_po_positions =
 R"doc(Utility function that checks and optimizes PO positions after each
 gate relocation iteration. This function moves POs that are not
@@ -5422,6 +5490,24 @@ Parameter ``lyt``:
 
 Parameter ``moved_gates``:
     Moved gates counter to decrement if PO is moved.)doc";
+
+static const char *__doc_fiction_detail_clear_hex_routing =
+R"doc(Removes all recreatable routing from a native hex layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout whose routing is to be deleted.)doc";
+
+static const char *__doc_fiction_detail_clear_hex_routing_2 =
+R"doc(Removes all recreatable routing from a native hex layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout whose routing is to be deleted.)doc";
 
 static const char *__doc_fiction_detail_clustercomplete_impl = R"doc()doc";
 
@@ -5937,6 +6023,20 @@ Parameter ``respect_clocking``:
 Returns:
     Directed fanin edge keys.)doc";
 
+static const char *__doc_fiction_detail_collect_movable_hex_gate_tiles =
+R"doc(Collects all movable structural gate tiles in bottom-up order.
+
+PIs, POs, constants, and recreatable routing wires are excluded.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Structural gate tiles ordered from bottom-right to top-left.)doc";
+
 static const char *__doc_fiction_detail_collect_occupied_tile_keys =
 R"doc(Collects all occupied tile keys of a layout.
 
@@ -5974,6 +6074,28 @@ Parameter ``ntk_or_lyt``:
 
 Returns:
     Ordered PO names if all names are present and unique.)doc";
+
+static const char *__doc_fiction_detail_collect_promising_hex_relocation_candidates =
+R"doc(Collects a small beam of promising first-step relocation candidates
+for native hex optimization.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to explore from.
+
+Parameter ``ps``:
+    Post-layout optimization parameters.
+
+Parameter ``beam_width``:
+    Maximum number of candidates to keep.
+
+Parameter ``candidate_budget``:
+    Maximum number of relocation candidates to evaluate.
+
+Returns:
+    Beam of promising candidate layouts ordered by quality.)doc";
 
 static const char *__doc_fiction_detail_color_routing_impl = R"doc()doc";
 
@@ -6025,6 +6147,74 @@ static const char *__doc_fiction_detail_coloring_container_color_south = R"doc()
 static const char *__doc_fiction_detail_coloring_container_coloring_container = R"doc()doc";
 
 static const char *__doc_fiction_detail_coloring_container_opposite_color = R"doc()doc";
+
+static const char *__doc_fiction_detail_compact_hex_structural_suffixes =
+R"doc(Compacts native hex layouts by shifting structural suffixes upward row
+by row.
+
+For each cut row, all structural nodes below it are moved one row
+upward together if this does not create tile conflicts. Routing is
+then rebuilt globally, followed by PO and wire-row cleanup.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to optimize.
+
+Parameter ``allow_crossings``:
+    Whether rerouting may use crossings.
+
+Returns:
+    `true` iff at least one structural suffix shift was accepted.)doc";
+
+static const char *__doc_fiction_detail_compact_hex_wire_rows =
+R"doc(Removes vertically redundant wire-only rows from a native hex layout.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to compact.
+
+Parameter ``allow_crossings``:
+    Whether rerouting may use crossings.
+
+Returns:
+    `true` iff at least one row could be removed.)doc";
+
+static const char *__doc_fiction_detail_compact_hex_wire_rows_2 =
+R"doc(Removes vertically redundant wire-only rows from a native hex layout.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to compact.
+
+Parameter ``allow_crossings``:
+    Whether rerouting may use crossings.
+
+Returns:
+    `true` iff at least one row could be removed.)doc";
+
+static const char *__doc_fiction_detail_compact_to_bounding_box =
+R"doc(Shrinks a layout to its occupied 2D bounding box.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to compact.)doc";
+
+static const char *__doc_fiction_detail_compact_to_bounding_box_2 =
+R"doc(Shrinks a layout to its occupied 2D bounding box.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to compact.)doc";
 
 static const char *__doc_fiction_detail_compare_gate_tiles =
 R"doc(Custom comparison function for sorting tiles based on the sum of their
@@ -6118,6 +6308,25 @@ static const char *__doc_fiction_detail_convert_array_of_arrays =
 R"doc(Based on https://stackoverflow.com/questions/57756557/initializing-a-
 stdarray-with-a-constant-value)doc";
 
+static const char *__doc_fiction_detail_convert_hex_signal_to_technology_signal =
+R"doc(Converts one traced layout signal into the corresponding technology-
+network signal.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Source layout.
+
+Parameter ``old2new``:
+    Mapping from layout nodes to technology-network signals.
+
+Parameter ``traced_signal``:
+    Structural source signal in the layout.
+
+Returns:
+    Equivalent signal in the technology network.)doc";
+
 static const char *__doc_fiction_detail_convert_network_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_convert_network_impl_convert_network_impl = R"doc()doc";
@@ -6174,6 +6383,19 @@ static const char *__doc_fiction_detail_count_gate_types_impl_ntk = R"doc()doc";
 static const char *__doc_fiction_detail_count_gate_types_impl_pst = R"doc()doc";
 
 static const char *__doc_fiction_detail_count_gate_types_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_count_hex_structural_gates =
+R"doc(Returns the number of non-routing structural gates in a native hex
+layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Number of movable structural logic gates.)doc";
 
 static const char *__doc_fiction_detail_create_array =
 R"doc(From https://stackoverflow.com/questions/57756557/initializing-a-
@@ -7158,6 +7380,25 @@ Parameter ``edges``:
 
 static const char *__doc_fiction_detail_east_south_edge_coloring = R"doc()doc";
 
+static const char *__doc_fiction_detail_ensure_mapped_hex_structural_node =
+R"doc(Ensures that one structural layout node has been reconstructed in the
+extracted technology network.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Source layout.
+
+Parameter ``ntk``:
+    Extracted technology network.
+
+Parameter ``old2new``:
+    Mapping from layout nodes to extracted output signals.
+
+Parameter ``node``:
+    Structural source node to reconstruct.)doc";
+
 static const char *__doc_fiction_detail_enumerate_all_paths_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_enumerate_all_paths_impl_collection = R"doc(Collection of all enumerated paths.)doc";
@@ -7966,6 +8207,85 @@ Parameter ``handler``:
 Parameter ``time``:
     Time passed since beginning of the solving process.)doc";
 
+static const char *__doc_fiction_detail_explore_two_step_hex_gate_relocations =
+R"doc(Explores short relocation sequences by seeding the greedy optimizer
+with promising first moves.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to optimize.
+
+Parameter ``ps``:
+    Post-layout optimization parameters.
+
+Returns:
+    `true` iff a multi-step candidate improved the layout.)doc";
+
+static const char *__doc_fiction_detail_extract_hex_local_relocation_data =
+R"doc(Extracts the local routing neighborhood of a structural gate.
+
+Only single-owner routing chains are included in `to_clear`. Shared
+branch points remain in place and act as fixed rerouting endpoints,
+mirroring the cartesian relocation strategy.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``gate_tile``:
+    Tile of the structural gate to move.
+
+Returns:
+    Local fan-ins, fan-outs, and recreatable wires around the moved
+    gate.)doc";
+
+static const char *__doc_fiction_detail_extract_hex_po_routing_data =
+R"doc(Collects routing metadata for all primary outputs in layout order.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``objectives``:
+    Extracted routing objectives.
+
+Returns:
+    PO routing metadata ordered like `foreach_po`.)doc";
+
+static const char *__doc_fiction_detail_extract_hex_routing_objectives =
+R"doc(Extracts routing objectives including source output pins from a placed
+layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Routing objectives that can recreate the current connectivity
+    after clearing all routing wires.)doc";
+
+static const char *__doc_fiction_detail_extract_hex_routing_objectives_2 =
+R"doc(Extracts routing objectives including source output pins from a placed
+layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Routing objectives that can recreate the current connectivity
+    after clearing all routing wires.)doc";
+
 static const char *__doc_fiction_detail_extract_pin_assignments =
 R"doc(Parses pin assignments from `.gate`/`.subckt` tokens.
 
@@ -7974,6 +8294,22 @@ Parameter ``tokens``:
 
 Returns:
     Mapping of pin names to net names.)doc";
+
+static const char *__doc_fiction_detail_extract_structural_hex_network =
+R"doc(Reconstructs the structural technology network represented by a routed
+native hex layout.
+
+All routing wires and fanout buffers are discarded. Only the
+functional logic graph between PIs and POs is copied.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Source layout.
+
+Returns:
+    Routing-free technology network equivalent to `lyt`.)doc";
 
 static const char *__doc_fiction_detail_fanin_fanout_data =
 R"doc(This struct stores information about the fan-in and fan-out
@@ -8148,6 +8484,24 @@ Parameter ``use_unrestricted_clocking``:
 
 Returns:
     Found path, or empty path if none exists.)doc";
+
+static const char *__doc_fiction_detail_find_incoming_signal_from =
+R"doc(Finds the incoming signal by which `source` drives `target`.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``source``:
+    Driving node.
+
+Parameter ``target``:
+    Driven node.
+
+Returns:
+    Matching incoming signal and its target input index if present.)doc";
 
 static const char *__doc_fiction_detail_gate_level_drvs_impl = R"doc()doc";
 
@@ -8722,23 +9076,6 @@ Returns:
     A vector of tiles representing the possible positions for a single
     fan-in node.)doc";
 
-static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_thread_local_dist =
-R"doc(Get thread-local distribution for generating random
-`tiles_to_skip_between_pis` values.
-
-Returns:
-    Reference to a thread-local uniform integer distribution for
-    generating random skip values.)doc";
-
-static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_thread_local_rng =
-R"doc(Get thread-local random number generator for
-`tiles_to_skip_between_pis` randomization. Each thread will have its
-own RNG to avoid mutex contention.
-
-Returns:
-    Reference to a thread-local Mersenne Twister random number
-    generator.)doc";
-
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_graph_oriented_layout_design_hex_impl =
 R"doc(Constructor for the graph-oriented layout design algorithm.
 
@@ -9184,23 +9521,6 @@ Parameter ``fc``:
 Returns:
     A vector of tiles representing the possible positions for a single
     fan-in node.)doc";
-
-static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_get_thread_local_dist =
-R"doc(Get thread-local distribution for generating random
-`tiles_to_skip_between_pis` values.
-
-Returns:
-    Reference to a thread-local uniform integer distribution for
-    generating random skip values.)doc";
-
-static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_get_thread_local_rng =
-R"doc(Get thread-local random number generator for
-`tiles_to_skip_between_pis` randomization. Each thread will have its
-own RNG to avoid mutex contention.
-
-Returns:
-    Reference to a thread-local Mersenne Twister random number
-    generator.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_graph_oriented_layout_design_impl =
 R"doc(Constructor for the graph-oriented layout design algorithm.
@@ -9888,6 +10208,83 @@ Returns:
     The network with virtual primary inputs removed, or the original
     network if unsupported.)doc";
 
+static const char *__doc_fiction_detail_hex_layout_quality =
+R"doc(Returns a lexicographic quality score for structural compactness and
+routing cost.
+
+Lower scores are better.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Tuple of structural row, structural score, wire count, and area.)doc";
+
+static const char *__doc_fiction_detail_hex_local_fanin =
+R"doc(One fan-in connection of a locally relocated gate.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_hex_local_fanin_gate_input = R"doc(Input position of the moved gate that this signal feeds.)doc";
+
+static const char *__doc_fiction_detail_hex_local_fanin_source_signal = R"doc(Upstream source signal that remains fixed while the gate is moved.)doc";
+
+static const char *__doc_fiction_detail_hex_local_fanout =
+R"doc(One fan-out connection of a locally relocated gate.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_hex_local_fanout_source_output = R"doc(Output pin index of the moved gate that drives the target.)doc";
+
+static const char *__doc_fiction_detail_hex_local_fanout_target = R"doc(Downstream target tile that remains fixed while the gate is moved.)doc";
+
+static const char *__doc_fiction_detail_hex_local_fanout_target_input = R"doc(Input position at the target that must be preserved.)doc";
+
+static const char *__doc_fiction_detail_hex_local_relocation_data =
+R"doc(Local routing neighborhood of one movable structural gate.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_hex_local_relocation_data_fanins = R"doc(Fan-in connections that must be re-established after relocation.)doc";
+
+static const char *__doc_fiction_detail_hex_local_relocation_data_fanouts = R"doc(Fan-out connections that must be re-established after relocation.)doc";
+
+static const char *__doc_fiction_detail_hex_local_relocation_data_to_clear = R"doc(Rebuildable local routing wires that may be deleted to free up space.)doc";
+
+static const char *__doc_fiction_detail_hex_po_routing_data =
+R"doc(Routing metadata for one primary output.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_hex_po_routing_data_current_target = R"doc(Current PO tile.)doc";
+
+static const char *__doc_fiction_detail_hex_po_routing_data_objective_index =
+R"doc(Index of the corresponding routing objective inside the extracted
+objective list.)doc";
+
+static const char *__doc_fiction_detail_hex_po_routing_data_preferred_x = R"doc(Preferred x coordinate for re-placement.)doc";
+
+static const char *__doc_fiction_detail_hex_routing_objective =
+R"doc(Routing objective for fixed-gate native hex rewiring.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_hex_routing_objective_source = R"doc(Source tile.)doc";
+
+static const char *__doc_fiction_detail_hex_routing_objective_source_output = R"doc(Source output pin index.)doc";
+
+static const char *__doc_fiction_detail_hex_routing_objective_target = R"doc(Target tile.)doc";
+
+static const char *__doc_fiction_detail_hex_routing_objective_target_input = R"doc(Target input pin index.)doc";
+
 static const char *__doc_fiction_detail_hexagonalization_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_hexagonalization_impl_hexagonalization_impl = R"doc()doc";
@@ -9899,6 +10296,50 @@ static const char *__doc_fiction_detail_hexagonalization_impl_ps = R"doc(Hexagon
 static const char *__doc_fiction_detail_hexagonalization_impl_pst = R"doc(Hexagonalization statistics.)doc";
 
 static const char *__doc_fiction_detail_hexagonalization_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_incoming_signal_reference =
+R"doc(Incoming signal reference between two adjacent layout nodes.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.)doc";
+
+static const char *__doc_fiction_detail_incoming_signal_reference_index = R"doc(Position of the signal in the target fanin list.)doc";
+
+static const char *__doc_fiction_detail_incoming_signal_reference_signal = R"doc(Signal found in the target fanin list.)doc";
+
+static const char *__doc_fiction_detail_internal_wire_count =
+R"doc(Returns the number of internal routing wires of a layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Number of non-I/O wire segments.)doc";
+
+static const char *__doc_fiction_detail_is_available_hex_gate_target =
+R"doc(Returns whether a tile may host a relocated structural gate after
+local routing cleanup.
+
+Both the ground tile and its crossing layer counterpart must be empty
+or part of the gate's recreatable local routing.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``candidate_tile``:
+    Ground-layer candidate tile.
+
+Parameter ``reclaimable_tiles``:
+    Local routing wires that will be deleted before rerouting.
+
+Returns:
+    `true` iff the candidate tile is available for relocation.)doc";
 
 static const char *__doc_fiction_detail_is_balanced_impl = R"doc()doc";
 
@@ -9922,6 +10363,22 @@ Parameter ``line``:
 
 Returns:
     `true` iff the line starts with '.'.)doc";
+
+static const char *__doc_fiction_detail_is_connection_wire =
+R"doc(Returns whether a node is an intermediate routing element.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``n``:
+    Node to inspect.
+
+Returns:
+    `true` iff `n` is a routing wire or fanout that can be recreated
+    during rerouting.)doc";
 
 static const char *__doc_fiction_detail_is_east_south_colored = R"doc()doc";
 
@@ -10281,6 +10738,24 @@ Returns:
     (either `OPERATIONAL` or `NON_OPERATIONAL`) and the second element
     indicating the reason if it is non-operational.)doc";
 
+static const char *__doc_fiction_detail_is_removable_hex_row =
+R"doc(Returns whether a given row contains only removable routing wires.
+
+Empty rows are considered removable as well. Fanouts, gates, and I/O
+tiles block row removal.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``row``:
+    Row to inspect.
+
+Returns:
+    `true` iff the row can be removed safely before rerouting.)doc";
+
 static const char *__doc_fiction_detail_jump_point_search_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_jump_point_search_impl_closed_list = R"doc(Closed list that acts as a set of already visited coordinates.)doc";
@@ -10454,6 +10929,18 @@ Parameter ``c``:
 Parameter ``g_val``:
     New g-value for c.)doc";
 
+static const char *__doc_fiction_detail_layout_area =
+R"doc(Returns the occupied 2D area of a layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Occupied layout area.)doc";
+
 static const char *__doc_fiction_detail_layout_invalidity_reason =
 R"doc(Reason why the layout is not a valid gate implementation for the given
 Boolean function.)doc";
@@ -10467,6 +10954,21 @@ R"doc(The layout is physically infeasible, meaning no charge distribution of
 the canvas SiDBs satisfies the criteria for physical validity.)doc";
 
 static const char *__doc_fiction_detail_layout_invalidity_reason_POTENTIAL_POSITIVE_CHARGES = R"doc(Positive SiDBs can potentially occur.)doc";
+
+static const char *__doc_fiction_detail_lexicographically_less =
+R"doc(Compares coordinates lexicographically.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lhs``:
+    Left-hand coordinate.
+
+Parameter ``rhs``:
+    Right-hand coordinate.
+
+Returns:
+    `true` iff `lhs` precedes `rhs` lexicographically.)doc";
 
 static const char *__doc_fiction_detail_materialize_path_segment =
 R"doc(Materializes a routed path segment and returns the resulting signal at
@@ -10493,6 +10995,21 @@ Parameter ``connect_to_existing_target``:
 
 Returns:
     Signal at the segment endpoint.)doc";
+
+static const char *__doc_fiction_detail_max_non_po_structural_row =
+R"doc(Returns the maximum row occupied by any non-PO structural node.
+
+Routing wires are ignored because they will be recreated after PO
+relocation.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Maximum occupied structural row.)doc";
 
 static const char *__doc_fiction_detail_names_operation = R"doc(Operation representing one `.names` declaration.)doc";
 
@@ -10954,6 +11471,37 @@ static const char *__doc_fiction_detail_operational_domain_impl_truth_table = R"
 
 static const char *__doc_fiction_detail_operational_domain_impl_values = R"doc(All dimension values.)doc";
 
+static const char *__doc_fiction_detail_optimize_hex_gate_positions =
+R"doc(Attempts to relocate structural gates toward the top-left corner.
+
+Each accepted move is followed by routing reconstruction and the
+existing PO/row compaction passes.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to optimize.
+
+Parameter ``ps``:
+    Post-layout optimization parameters.
+
+Returns:
+    `true` iff at least one structural gate was relocated
+    successfully.)doc";
+
+static const char *__doc_fiction_detail_optimize_hex_output_positions =
+R"doc(Attempts to move all POs onto a smaller common bottom border row.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to optimize.
+
+Returns:
+    `true` iff a strictly better PO border row was found.)doc";
+
 static const char *__doc_fiction_detail_optimize_output_positions =
 R"doc(Utility function that moves outputs from the last row to the previous
 row, and from the last column to the previous column, if possible.
@@ -10963,6 +11511,586 @@ Template parameter ``Lyt``:
 
 Parameter ``lyt``:
     Gate-level layout.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl =
+R"doc(Hexagonal implementation of orthogonal physical design.
+
+Unlike the cartesian orthogonal flow, this implementation is
+deliberately top-down: all PIs are placed on the northern border, all
+POs on the southern border, and every routed edge uses only downward
+hexagonal directions.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Template parameter ``Ntk``:
+    Specification network type.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_actual_x_from_slot =
+R"doc(Returns the actual x coordinate for a horizontal slot.
+
+Parameter ``slot``:
+    Abstract slot.
+
+Returns:
+    Concrete x coordinate.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_any_projected_occupant_satisfies =
+R"doc(Evaluates a predicate on all occupied z-layers that project to the
+same hex tile.
+
+Template parameter ``Predicate``:
+    Predicate type.
+
+Parameter ``t``:
+    Tile whose projected `(x, y)` position is inspected.
+
+Parameter ``predicate``:
+    Predicate evaluated on each occupied layer at that position.
+
+Returns:
+    `true` iff the predicate matches on at least one occupied layer.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_apply =
+R"doc(Runs the native hexagonal orthogonal implementation.
+
+Parameter ``src``:
+    Source network.
+
+Parameter ``p``:
+    Physical design parameters.
+
+Parameter ``st``:
+    Statistics collector.
+
+Returns:
+    Hexagonal gate-level layout.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_blocked_tiles = R"doc(Tiles reserved for nodes and gate/PO entry points.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_branch_source = R"doc(Candidate launch point on an already routed signal tree.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_branch_source_signal = R"doc(Existing layout signal at the branch point.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_branch_source_tile = R"doc(Ground-layer tile of the branch point.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_candidate_branch_sources =
+R"doc(Collects alternative launch points along an already routed signal
+tree.
+
+Parameter ``source_signal``:
+    Layout signal that drives the routed tree.
+
+Returns:
+    Candidate branch sources ordered from bottom to top.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_candidate_output_slots =
+R"doc(Enumerates candidate output slots near a preferred one.
+
+Parameter ``preferred``:
+    Preferred slot.
+
+Parameter ``used``:
+    Slots already consumed by previous POs.
+
+Returns:
+    Candidate slots in increasing distance from `preferred`.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_compute_depths = R"doc(Computes topological depths for all nodes.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_compute_horizontal_slots = R"doc(Computes one horizontal slot per non-constant node.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_compute_output_slots = R"doc(Computes one horizontal slot per primary output.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_compute_placement_slack =
+R"doc(Computes additional placement slack for direct primary outputs.
+
+Cartesian orthogonal reserves structural space for output-bearing
+nodes while placing the logic network. The native hex variant needs
+the same idea: rows that drive direct POs receive extra vertical slack
+below them, and the horizontal slot search budget is widened so later
+gates can move around these reserved corridors.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_depth_row_extra = R"doc(Additional vertical slack inserted below each depth.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_depth_row_y =
+R"doc(Absolute y coordinate per topological depth after output-aware row
+expansion.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_determine_row_pitch =
+R"doc(Computes a row pitch that is sufficient for all routed connections.
+
+On the pointy-top hex grid, a monotone routing step advances exactly
+one row downward and can shift the x coordinate by at most one.
+Therefore, the spacing between successive depth rows must be
+proportional to the largest horizontal span any gate or PO route needs
+to cover, not to the total layout width.
+
+Returns:
+    A feasible row pitch.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_existing_connected_successor_signal =
+R"doc(Reuses an already connected successor signal if the path follows an
+existing routed branch.
+
+Native hex PO branching may start from an already routed wire or
+fanout tile. In that case, the shortest path to the border can
+legitimately traverse already materialized wire tiles of the same net.
+Reusing that signal avoids stacking a second buffer above the existing
+one, which would otherwise turn a simple continuation into a bogus
+crossing tile.
+
+Parameter ``current_signal``:
+    Current routed signal.
+
+Parameter ``successor_base``:
+    Ground-layer successor tile from the planned path.
+
+Returns:
+    Existing successor signal if the net is already connected there.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_fanout_ntk = R"doc(Fanout view of `ntk`.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_find_monotone_path =
+R"doc(Finds a downward-only path on the pointy-top hex grid.
+
+Parameter ``source_signal``:
+    Routed signal launched from `source`.
+
+Parameter ``source``:
+    Start tile.
+
+Parameter ``target``:
+    End tile.
+
+Parameter ``hard_blocked``:
+    Structurally blocked tiles.
+
+Parameter ``soft_blocked``:
+    Temporarily blocked projected tiles for the current planning step.
+
+Parameter ``source_node``:
+    Optional source-network node if `source` is not materialized in
+    the layout yet.
+
+Returns:
+    Path from `source` to `target`, or an empty path if none was
+    found.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_available_crossing_layer =
+R"doc(Checks whether the appropriate crossing layer is available above an
+occupied projected tile.
+
+When the path uses the ground-layer coordinate of an occupied
+projected tile, the alternative crossing layer is `above(projected)`.
+When the path already uses the crossing-layer coordinate, that exact
+tile must be empty.
+
+Parameter ``successor``:
+    Candidate successor tile of the path.
+
+Returns:
+    `true` iff the route can be materialized on the non-occupied layer
+    of that projected tile.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_downward_launch_capacity =
+R"doc(Checks whether a routed signal can launch another downward branch from
+a tile.
+
+Parameter ``source_tile``:
+    Tile that would serve as branch source.
+
+Returns:
+    `true` iff at least one legal lower neighbor can be used.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_ne_sw_orientation =
+R"doc(Checks whether a pointy-top wire tile currently carries a north-east
+to south-west connection.
+
+Parameter ``t``:
+    Tile to inspect.
+
+Returns:
+    `true` iff the tile contains a `NE->SW` wire segment.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_nw_se_orientation =
+R"doc(Checks whether a pointy-top wire tile currently carries a north-west
+to south-east connection.
+
+Parameter ``t``:
+    Tile to inspect.
+
+Returns:
+    `true` iff the tile contains a `NW->SE` wire segment.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_output_field =
+R"doc(Tiny trait that detects whether a signal type carries an output index.
+
+Template parameter ``Signal``:
+    Signal type to inspect.
+
+Template parameter ``Dummy``:
+    Helper parameter.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_projected_north_east_incoming =
+R"doc(Checks whether the projected tile already uses its north-east input
+side.
+
+Parameter ``t``:
+    Tile whose projected position is inspected.
+
+Returns:
+    `true` iff any stacked occupant already has a north-east incoming
+    connection.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_projected_north_west_incoming =
+R"doc(Checks whether the projected tile already uses its north-west input
+side.
+
+Parameter ``t``:
+    Tile whose projected position is inspected.
+
+Returns:
+    `true` iff any stacked occupant already has a north-west incoming
+    connection.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_projected_south_east_outgoing =
+R"doc(Checks whether the projected tile already uses its south-east output
+side.
+
+Parameter ``t``:
+    Tile whose projected position is inspected.
+
+Returns:
+    `true` iff any stacked occupant already has a south-east outgoing
+    connection.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_projected_south_west_outgoing =
+R"doc(Checks whether the projected tile already uses its south-west output
+side.
+
+Parameter ``t``:
+    Tile whose projected position is inspected.
+
+Returns:
+    `true` iff any stacked occupant already has a south-west outgoing
+    connection.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_has_projected_step_capacity =
+R"doc(Checks whether a new routed step still has free projected source and
+target sides.
+
+A step to `south_east(current)` consumes the current tile's `SE`
+output side and the successor tile's `NW` input side. A step to
+`south_west(current)` analogously consumes `SW` and `NE`.
+
+Parameter ``current``:
+    Current path tile.
+
+Parameter ``successor``:
+    Candidate successor tile.
+
+Returns:
+    `true` iff the step would not reuse an already occupied projected
+    side.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_instantiate_layout = R"doc(Creates the target layout with generous spacing for monotone routing.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_is_crossable_successor =
+R"doc(Decides whether an occupied projected successor tile can host a legal
+pointy-top crossing.
+
+Only proper wire tiles are crossable, never fanouts or I/O tiles.
+Moreover, the existing wire orientation must be opposite to the one
+induced by the current routing step: a `SE` step may only cross a
+`NE->SW` wire and a `SW` step may only cross a `NW->SE` wire.
+
+Parameter ``current``:
+    Current path tile.
+
+Parameter ``successor_projected``:
+    Occupied successor tile on the projected ground layer.
+
+Returns:
+    `true` iff the projected successor can host a legal crossing.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_is_projected_tile_empty =
+R"doc(Checks whether both z-layers of the projected tile are empty.
+
+Parameter ``t``:
+    Tile whose projected position is inspected.
+
+Returns:
+    `true` iff neither the ground nor the crossing layer is occupied
+    there.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_is_reusable_successor =
+R"doc(Decides whether an occupied successor tile already continues the same
+routed signal.
+
+This allows the path finder to traverse previously materialized wire
+branches of the same net before branching off again later, instead of
+mistaking them for foreign obstructions. Logic tiles are intentionally
+excluded: multiple outputs may share the same source tile, so
+geometric adjacency alone is not enough to prove that a successor
+belongs to the same routed signal.
+
+Parameter ``current``:
+    Current path tile.
+
+Parameter ``successor``:
+    Candidate occupied successor tile on the ground layer.
+
+Returns:
+    `true` iff the successor is already a direct fanout of `current`.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_is_routable_successor =
+R"doc(Checks whether a successor tile may be used in a monotone path.
+
+Parameter ``current``:
+    Current path tile.
+
+Parameter ``successor``:
+    Candidate successor tile.
+
+Parameter ``target``:
+    Final target tile.
+
+Parameter ``hard_blocked``:
+    Structurally blocked tiles.
+
+Returns:
+    `true` iff the successor is admissible.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_is_usable_tile =
+R"doc(Checks whether a tile is a valid in-bounds location.
+
+Parameter ``t``:
+    Tile to inspect.
+
+Returns:
+    `true` iff the tile is usable.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_layout = R"doc(Result layout under construction.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_materialize_path =
+R"doc(Materializes a planned path as buffers in the layout.
+
+Parameter ``source_signal``:
+    Signal that drives the path.
+
+Parameter ``path``:
+    Path to instantiate.
+
+Returns:
+    Signal located at the path's end tile.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_max_gate_depth = R"doc(Maximum gate depth.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_max_output_slot = R"doc(Maximum bottom-border slot that may be used for PO placement.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_max_slot = R"doc(Maximum horizontal slot used by any node or output.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_nearest_free_slot =
+R"doc(Finds a free horizontal slot near a preferred one.
+
+Parameter ``used``:
+    Slots already occupied in the current row.
+
+Parameter ``preferred``:
+    Preferred slot.
+
+Returns:
+    A free slot.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_node_depth = R"doc(Topological depth per node.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_node_num_outputs =
+R"doc(Returns the number of outputs a node provides.
+
+Parameter ``n``:
+    Network node.
+
+Returns:
+    Number of outputs, at least `1`.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_node_signal = R"doc(One or two concrete layout signals per placed node.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_node_slot = R"doc(Horizontal slot per node.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_node_tile = R"doc(Concrete tile per placed node.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_ntk = R"doc(Converted and normalized working network.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_orthogonal_hex_impl =
+R"doc(Constructor.
+
+Parameter ``src``:
+    Source network.
+
+Parameter ``p``:
+    Physical design parameters.
+
+Parameter ``st``:
+    Statistics collector.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_output_slot = R"doc(Abstract output slot per PO.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_output_tile = R"doc(Concrete PO tile per output.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_place_gates = R"doc(Places and routes all non-PI gates in topological order.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_place_primary_inputs = R"doc(Places the reserved PI nodes on the top border.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_place_primary_outputs = R"doc(Places and routes all primary outputs on the bottom border.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_placement_slot_slack =
+R"doc(Additional horizontal slots reserved for output-aware detours during
+placement.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_plan_gate_routes =
+R"doc(Plans distinct monotone routes for all fanins of one gate.
+
+Parameter ``n``:
+    Gate node.
+
+Parameter ``fc``:
+    Fanin container of `n`.
+
+Returns:
+    One planned route per non-constant fanin.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_planned_route = R"doc(Planned route from an existing source tile to one gate entry tile.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_planned_route_entry = R"doc(Entry tile assigned to the fanin.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_planned_route_fanin_index = R"doc(Original fanin index in the node's fanin list.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_planned_route_path = R"doc(Concrete monotone path from source to entry.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_planned_route_source_signal = R"doc(Routed source signal from which the path is launched.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_po_row = R"doc(Y coordinate of the southern PO border.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_ps = R"doc(Physical design parameters.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_pst = R"doc(Statistics collector.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_reserve_blocked_tiles =
+R"doc(Reserves all structural tiles that routes must not consume
+accidentally.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_row_pitch = R"doc(Vertical spacing between consecutive logic levels.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_run =
+R"doc(Computes the placed and routed layout.
+
+Returns:
+    Native hexagonal orthogonal layout.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_set_signal_output =
+R"doc(Writes an output index into a signal, if supported by the signal type.
+
+Template parameter ``Signal``:
+    Signal type.
+
+Parameter ``signal``:
+    Signal to modify.
+
+Parameter ``output_idx``:
+    Output index to encode.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_signal_output =
+R"doc(Returns the stored signal output index, if any.
+
+Template parameter ``Signal``:
+    Signal type.
+
+Parameter ``signal``:
+    Signal to inspect.
+
+Returns:
+    Output index, defaults to `0`.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_source_layout_signal =
+R"doc(Looks up the placed layout signal for a source network signal.
+
+Parameter ``source_signal``:
+    Source network signal.
+
+Returns:
+    Corresponding layout signal.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_store_node_outputs =
+R"doc(Stores all outputs of a placed node.
+
+Parameter ``n``:
+    Network node.
+
+Parameter ``base_signal``:
+    Base layout signal returned by the placement call.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_tile_key =
+R"doc(Encodes a tile as an integer key for hash containers.
+
+Parameter ``t``:
+    Tile to encode.
+
+Returns:
+    Integer key.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_topo_ntk = R"doc(Topological traversal view of `ntk`.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_try_place_primary_outputs =
+R"doc(Attempts to place all primary outputs on the current bottom border.
+
+This function materializes PO wires directly into the current layout.
+If routing fails for any PO, the caller is expected to restore a
+previous layout snapshot and retry with a different bottom border row.
+
+Returns:
+    Empty on success or a detailed error message on failure.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_update_stats = R"doc(Updates the public statistics object.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_upper_entries =
+R"doc(Returns the legal upper entry tiles of a pointy-top gate.
+
+Parameter ``gate_t``:
+    Gate tile.
+
+Returns:
+    North-west and north-east entries.)doc";
+
+static const char *__doc_fiction_detail_orthogonal_hex_impl_uses_legal_output_launch_side =
+R"doc(Enforces distinct launch sides for direct routes from multi-output
+gates.
+
+The first routed segment leaving a two-output gate is output-
+sensitive: output `0` launches on the gate's south-east edge and
+output `1` launches on the south-west edge. Once a signal has left the
+source gate, later branches are handled by regular wire-side capacity
+checks on the routed tree.
+
+Parameter ``source_signal``:
+    Routed source signal.
+
+Parameter ``source``:
+    Root tile from which the current path was launched.
+
+Parameter ``current``:
+    Current path tile.
+
+Parameter ``successor``:
+    Candidate successor tile.
+
+Parameter ``source_node``:
+    Optional source-network node if the source tile is not
+    materialized in the layout yet.
+
+Returns:
+    `true` iff the current step respects the source gate's output-side
+    assignment.)doc";
 
 static const char *__doc_fiction_detail_orthogonal_impl = R"doc()doc";
 
@@ -11419,6 +12547,26 @@ static const char *__doc_fiction_detail_post_layout_optimization_impl_wiring_red
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_wiring_reduction_stats = R"doc(Wiring reduction stats.)doc";
 
+static const char *__doc_fiction_detail_prefer_hex_layout_candidate =
+R"doc(Returns whether a native hex candidate should replace a reference
+layout.
+
+The selector primarily targets compactness, but it allows a bounded
+increase in internal wires if the occupied area shrinks enough to
+compensate. Ties are broken by hex_layout_quality.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``candidate``:
+    Candidate layout.
+
+Parameter ``reference``:
+    Reference layout.
+
+Returns:
+    `true` iff `candidate` is preferable to `reference`.)doc";
+
 static const char *__doc_fiction_detail_prepare_aligned_networks_for_equivalence_checking =
 R"doc(Prepares two networks for equivalence checking and aligns named
 interfaces if possible.
@@ -11794,6 +12942,26 @@ Parameter ``cell``:
 
 static const char *__doc_fiction_detail_recursively_paint_edges = R"doc()doc";
 
+static const char *__doc_fiction_detail_refine_hex_layout_with_global_reroute =
+R"doc(Tries a full native-hex reroute and keeps it only if it improves the
+given candidate.
+
+The comparison is wire-first and area-second, mirroring the final
+native-hex reroute selection policy.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Candidate layout to refine.
+
+Parameter ``allow_crossings``:
+    Whether rerouting may use crossings.
+
+Returns:
+    Refined layout if global reroute improved it, otherwise the
+    original candidate.)doc";
+
 static const char *__doc_fiction_detail_reorder_klut_network_interface =
 R"doc(Creates a semantically equivalent `klut_network` with reordered PI and
 PO interfaces.
@@ -11828,6 +12996,51 @@ Parameter ``diag``:
 
 Parameter ``missing_name``:
     Missing net name.)doc";
+
+static const char *__doc_fiction_detail_reroute_hex_layout_wires =
+R"doc(Re-routes a fixed native hex layout without moving gates.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to reroute.
+
+Parameter ``routing_objectives``:
+    Routing objectives to reconstruct.
+
+Returns:
+    `true` iff all routing objectives could be reconstructed.)doc";
+
+static const char *__doc_fiction_detail_reroute_hex_layout_wires_2 =
+R"doc(Re-routes a fixed native hex layout without moving gates.
+
+All gates remain at their current coordinates. Only routing wires are
+removed and recreated through shortest paths with crossings disabled.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to reroute.
+
+Parameter ``routing_objectives``:
+    Routing objectives to reconstruct.
+
+Returns:
+    `true` iff all routing objectives could be reconstructed.)doc";
+
+static const char *__doc_fiction_detail_reroute_hex_layout_wires_3 =
+R"doc(Re-routes a fixed native hex layout without moving gates.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to reroute.
+
+Returns:
+    `true` iff all routing objectives could be reconstructed.)doc";
 
 static const char *__doc_fiction_detail_resolve_interface_permutation =
 R"doc(Resolves the permutation that maps a candidate interface onto a
@@ -11910,6 +13123,31 @@ R"doc(Default constructor.
 
 Parameter ``seed``:
     The seed for the random number generator.)doc";
+
+static const char *__doc_fiction_detail_route_hex_path_signal =
+R"doc(Creates the wire chain for a routed path and returns the signal that
+reaches the path target.
+
+The path target itself is not connected here so that callers can
+preserve exact input ordering explicitly.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Path``:
+    Path type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``source_signal``:
+    Driving signal at the path source.
+
+Parameter ``path``:
+    Routed path from source to target.
+
+Returns:
+    Signal that arrives at the path target.)doc";
 
 static const char *__doc_fiction_detail_route_pi_objectives_with_a_star =
 R"doc(Routes PI unscrambling objectives sequentially using A* with crossings
@@ -12189,7 +13427,55 @@ static const char *__doc_fiction_detail_search_space_graph_pi_locs =
 R"doc(Enum indicating if primary inputs (PIs) can be placed at the top or
 left.)doc";
 
+static const char *__doc_fiction_detail_search_space_graph_pi_skip_rng =
+R"doc(Random number generator used for per-PI skip randomization in a
+reproducible, per-graph manner.)doc";
+
 static const char *__doc_fiction_detail_set_signal_output = R"doc()doc";
+
+static const char *__doc_fiction_detail_shift_coordinate_after_row_removal =
+R"doc(Shifts a coordinate one row upward if it lies below a removed row.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``c``:
+    Coordinate to adjust.
+
+Parameter ``row``:
+    Removed row.
+
+Returns:
+    Adjusted coordinate.)doc";
+
+static const char *__doc_fiction_detail_shift_objectives_after_row_removal =
+R"doc(Adapts routing objectives after removing one horizontal row.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``objectives``:
+    Original routing objectives.
+
+Parameter ``row``:
+    Removed row.
+
+Returns:
+    Objectives with shifted source/target coordinates.)doc";
+
+static const char *__doc_fiction_detail_shift_structural_nodes_up_after_row_removal =
+R"doc(Moves every structural node below a removed row one step upward.
+
+Routing wires are expected to be cleared before this helper is called.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout to update.
+
+Parameter ``row``:
+    Removed row.)doc";
 
 static const char *__doc_fiction_detail_signal_output_pin =
 R"doc(Returns a signal's output pin if present, otherwise pin 0.
@@ -12202,6 +13488,18 @@ Parameter ``s``:
 
 Returns:
     Output pin index represented by `s`.)doc";
+
+static const char *__doc_fiction_detail_sort_hex_routing_objectives =
+R"doc(Sorts routing objectives by descending Manhattan distance.
+
+Longer objectives are routed first to reduce the chance that short
+local routes block global connections.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``objectives``:
+    Objectives to sort.)doc";
 
 static const char *__doc_fiction_detail_split_multioutput_network =
 R"doc(Splits all multi-output nodes in a network into dedicated single-
@@ -12233,6 +13531,21 @@ Parameter ``line``:
 
 Returns:
     Line contents before comment marker.)doc";
+
+static const char *__doc_fiction_detail_structural_gate_position_score =
+R"doc(Returns a coarse top-left compactness score for structural gates.
+
+Lower scores indicate that non-PO structural gates are placed further
+toward the top-left corner.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Returns:
+    Pair of summed row and column coordinates for structural gates.)doc";
 
 static const char *__doc_fiction_detail_sweep_parameter_to_string =
 R"doc(Converts a sweep parameter to a string representation. This is used to
@@ -12343,6 +13656,25 @@ Template parameter ``Lyt``:
 Returns:
     Topology label.)doc";
 
+static const char *__doc_fiction_detail_trace_hex_structural_signal =
+R"doc(Traces a routed layout signal back to its driving structural source.
+
+Routing wires and fanout buffers are skipped until a PI, constant, or
+structural logic gate is reached. The returned signal preserves the
+output pin of the structural source.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Layout.
+
+Parameter ``routed_signal``:
+    Signal somewhere inside a routed connection.
+
+Returns:
+    Signal emitted by the structural source of that connection.)doc";
+
 static const char *__doc_fiction_detail_trim_copy =
 R"doc(Removes leading and trailing whitespace from a string view.
 
@@ -12351,6 +13683,79 @@ Parameter ``text``:
 
 Returns:
     Trimmed copy of `text`.)doc";
+
+static const char *__doc_fiction_detail_try_global_hex_gate_relocation =
+R"doc(Attempts to relocate one structural gate and then reroute the entire
+layout from scratch.
+
+This is a fallback for cases where local neighborhood rerouting fails
+although the moved geometry may still be globally routable after a
+complete rip-up and reroute.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Original layout.
+
+Parameter ``old_tile``:
+    Current gate tile.
+
+Parameter ``new_tile``:
+    Candidate gate tile.
+
+Parameter ``local_data``:
+    Local routing neighborhood around the moved gate.
+
+Parameter ``allow_crossings``:
+    Whether rerouting may use crossings.
+
+Returns:
+    Relocated layout if the global reroute succeeded.)doc";
+
+static const char *__doc_fiction_detail_try_hex_gold_rebuild =
+R"doc(Attempts a small-network GOLD-style fallback for native hex
+optimization.
+
+The fallback reconstructs the structural logic network from the routed
+layout and invokes the graph-oriented hex placer on that reduced
+network. This is intentionally bounded to small structural networks
+because it is a global restart rather than a local post-layout edit.
+
+Template parameter ``Lyt``:
+    Native hex gate-level layout type.
+
+Parameter ``lyt``:
+    Input layout.
+
+Parameter ``ps``:
+    Post-layout optimization parameters.
+
+Returns:
+    Improved candidate layout if the fallback succeeds and remains
+    equivalent.)doc";
+
+static const char *__doc_fiction_detail_try_local_hex_gate_relocation =
+R"doc(Attempts to relocate one structural gate while rerouting only its
+local neighborhood.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    Original layout.
+
+Parameter ``old_tile``:
+    Current gate tile.
+
+Parameter ``new_tile``:
+    Candidate gate tile.
+
+Parameter ``local_data``:
+    Local routing neighborhood around the moved gate.
+
+Returns:
+    Relocated layout if the local reroute succeeded.)doc";
 
 static const char *__doc_fiction_detail_unscramble_pins_impl = R"doc()doc";
 
@@ -16242,11 +17647,12 @@ a hard feasibility constraint. Defaults to `false`.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_params_randomize_tiles_to_skip_between_pis =
 R"doc(When enabled, randomizes the tiles_to_skip_between_pis value for each
-PI placement. The random value will be chosen from `0` to
-`tiles_to_skip_between_pis` (inclusive). This can help explore
-different placement strategies and potentially find better layouts.
-Uses the same random seed as other randomization features for
-reproducibility. Defaults to `false`.)doc";
+PI placement. The random value will be chosen from
+`tiles_to_skip_between_pis - 1` to `tiles_to_skip_between_pis`
+(inclusive). When `tiles_to_skip_between_pis` is `0`, only `0` will be
+used. This can help explore different placement strategies and
+potentially find better layouts. Uses the same random seed as other
+randomization features for reproducibility. Defaults to `false`.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_params_return_first =
 R"doc(Return the first found layout, which might still have a high cost but
@@ -20581,6 +21987,39 @@ Returns:
     A gate-level layout of type `Lyt` that implements `ntk` as an FCN
     circuit.)doc";
 
+static const char *__doc_fiction_orthogonal_hex =
+R"doc(Native hexagonal orthogonal physical design with strict top-down
+constraints.
+
+This variant is intentionally separate from cartesian `orthogonal`. It
+enforces the same global I/O orientation as native hexagonal `gold`:
+all primary inputs are placed on the top border, all primary outputs
+on the bottom border, and all signal flow is routed monotonically
+downwards on the pointy-top hexagonal grid.
+
+The strict top-down variant is intentionally restricted to binary
+gates. In the pointy-top Bestagon model used here, every tile exposes
+two legal incoming ports (`NORTH_WEST`, `NORTH_EAST`) and two legal
+outgoing ports (`SOUTH_WEST`, `SOUTH_EAST`).
+
+Template parameter ``Lyt``:
+    Desired native hexagonal gate-level layout type.
+
+Template parameter ``Ntk``:
+    Specification network type.
+
+Parameter ``ntk``:
+    Specification network.
+
+Parameter ``ps``:
+    Physical design parameters.
+
+Parameter ``pst``:
+    Optional statistics object.
+
+Returns:
+    Hexagonal gate-level layout implementing `ntk`.)doc";
+
 static const char *__doc_fiction_orthogonal_physical_design_params = R"doc(Parameters for the orthogonal physical design algorithm.)doc";
 
 static const char *__doc_fiction_orthogonal_physical_design_params_number_of_clock_phases = R"doc(Number of clock phases to use. 3 and 4 are supported.)doc";
@@ -21281,6 +22720,33 @@ Parameter ``ps``:
 
 Parameter ``pst``:
     Statistics.)doc";
+
+static const char *__doc_fiction_post_layout_optimization_hex =
+R"doc(Post-layout optimization for native row-clocked pointy-top hexagonal
+gate-level layouts.
+
+Native hexagonal layouts are optimized in three conservative steps: 1.
+compact the occupied bounding box, 2. move primary outputs upward to
+the lowest feasible bottom border, 3. remove vertically redundant rows
+that contain routing wires only, 4. shift conflict-free structural
+suffixes upward when rerouting stays legal and beneficial, 5. relocate
+structural gates toward the top-left corner if rerouting stays legal
+and beneficial, 6. re-route existing connections with gates fixed in
+place to reduce excess wire detours.
+
+The rerouted layout is kept only if it does not worsen area or wiring.
+
+Template parameter ``Lyt``:
+    Hexagonal gate-level layout type.
+
+Parameter ``lyt``:
+    Row-clocked pointy-top hexagonal layout to optimize.
+
+Parameter ``ps``:
+    Post-layout optimization parameters.
+
+Parameter ``pst``:
+    Optional optimization statistics.)doc";
 
 static const char *__doc_fiction_post_layout_optimization_params = R"doc(Parameters for the post-layout optimization algorithm.)doc";
 
