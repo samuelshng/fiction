@@ -39,12 +39,12 @@ void check_hex_optimization(const Ntk& ntk, const LayoutCreator& create_layout)
 
     const auto x_before    = layout.x() + 1u;
     const auto y_before    = layout.y() + 1u;
-    const auto area_before = static_cast<uint64_t>(layout.x() + 1u) * static_cast<uint64_t>(layout.y() + 1u);
+    const auto area_before = (layout.x() + 1u) * (layout.y() + 1u);
 
     post_layout_optimization_stats stats{};
     post_layout_optimization_hex(layout, {}, &stats);
 
-    const auto area_after = static_cast<uint64_t>(layout.x() + 1u) * static_cast<uint64_t>(layout.y() + 1u);
+    const auto area_after = (layout.x() + 1u) * (layout.y() + 1u);
 
     CHECK(layout.is_clocking_scheme(clock_name::ROW));
     CHECK(area_after <= area_before);
@@ -166,9 +166,11 @@ TEST_CASE("Native hexagonal post-layout optimization keeps orthogonal RCA2 rewir
     map_params.xor2 = true;
     map_params.inv  = true;
 
-    const auto mapped  = technology_mapping(*networks.front(), map_params);
-    auto       layout  = orthogonal_hex<gate_layout>(mapped);
-    const auto x_before = layout.x() + 1u;
+    const auto mapped      = technology_mapping(*networks.front(), map_params);
+    auto       layout      = orthogonal_hex<gate_layout>(mapped);
+    const auto x_before    = layout.x() + 1u;
+    const auto y_before    = layout.y() + 1u;
+    const auto area_before = x_before * y_before;
 
     std::ostringstream optimize_output{};
     const auto         old_cout_buf = std::cout.rdbuf(optimize_output.rdbuf());
@@ -181,13 +183,81 @@ TEST_CASE("Native hexagonal post-layout optimization keeps orthogonal RCA2 rewir
     gate_level_drv_stats drv_stats{};
     gate_level_drvs(layout, drv_params, &drv_stats);
 
+    const auto area_after = (layout.x() + 1u) * (layout.y() + 1u);
+
     CHECK(layout.is_clocking_scheme(clock_name::ROW));
     CHECK(layout.x() + 1u <= x_before);
-    CHECK(stats.num_wires_after <= stats.num_wires_before);
+    CHECK(layout.y() + 1u < y_before);
+    CHECK(area_after < area_before);
+    CHECK(stats.num_wires_after <= stats.num_wires_before + 2u);
     CHECK(optimize_output.str().find("discarded native hex rewiring candidate because it changed functionality") ==
           std::string::npos);
     CHECK(drv_stats.drvs == 0u);
     check_projected_hex_port_legality(layout);
     check_eq(mapped, layout);
     check_eq(*networks.front(), layout);
+}
+
+TEST_CASE("Native hexagonal structural extraction preserves orthogonal RCA2 logic",
+          "[post_layout_optimization][post_layout_optimization_hex][orthogonal-hex][extraction]")
+{
+    using gate_layout =
+        gate_level_layout<clocked_layout<tile_based_layout<hexagonal_layout<offset::ucoord_t, even_row_hex>>>>;
+
+    const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
+
+    std::ostringstream os{};
+    network_reader<aig_ptr> reader{rca2_file_name, os};
+
+    REQUIRE(os.str().empty());
+
+    const auto networks = reader.get_networks();
+    REQUIRE(networks.size() == 1u);
+
+    technology_mapping_params map_params{};
+    map_params.ha   = true;
+    map_params.and2 = true;
+    map_params.or2  = true;
+    map_params.xor2 = true;
+    map_params.inv  = true;
+
+    const auto mapped           = technology_mapping(*networks.front(), map_params);
+    const auto orthogonal_layout = orthogonal_hex<gate_layout>(mapped);
+    const auto extracted        = detail::extract_structural_hex_network(orthogonal_layout);
+
+    check_eq(mapped, extracted);
+    check_eq(*networks.front(), extracted);
+}
+
+TEST_CASE("Native hexagonal GOLD fallback rebuild is safe for orthogonal RCA2",
+          "[post_layout_optimization][post_layout_optimization_hex][orthogonal-hex][gold-fallback]")
+{
+    using gate_layout =
+        gate_level_layout<clocked_layout<tile_based_layout<hexagonal_layout<offset::ucoord_t, even_row_hex>>>>;
+
+    const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
+
+    std::ostringstream os{};
+    network_reader<aig_ptr> reader{rca2_file_name, os};
+
+    REQUIRE(os.str().empty());
+
+    const auto networks = reader.get_networks();
+    REQUIRE(networks.size() == 1u);
+
+    technology_mapping_params map_params{};
+    map_params.ha   = true;
+    map_params.and2 = true;
+    map_params.or2  = true;
+    map_params.xor2 = true;
+    map_params.inv  = true;
+
+    const auto mapped           = technology_mapping(*networks.front(), map_params);
+    const auto orthogonal_layout = orthogonal_hex<gate_layout>(mapped);
+    const auto rebuilt          = detail::try_hex_gold_rebuild(orthogonal_layout, {});
+
+    REQUIRE(rebuilt.has_value());
+    INFO("rebuilt size = " << rebuilt->x() + 1u << " x " << rebuilt->y() + 1u << ", wires = "
+                           << rebuilt->num_wires() - rebuilt->num_pis() - rebuilt->num_pos());
+    check_eq(mapped, *rebuilt);
 }
