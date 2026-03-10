@@ -31,8 +31,8 @@
 #include <numeric>
 #include <optional>
 #include <queue>
-#include <sstream>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -147,7 +147,8 @@ class orthogonal_hex_impl
      * @param p Physical design parameters.
      * @param st Statistics collector.
      */
-    orthogonal_hex_impl(const Ntk& src, const orthogonal_physical_design_params& p, orthogonal_physical_design_stats& st) :
+    orthogonal_hex_impl(const Ntk& src, const orthogonal_physical_design_params& p,
+                        orthogonal_physical_design_stats& st) :
             ntk{fanout_substitution<network_type>(src)},
             fanout_ntk{ntk},
             topo_ntk{fanout_ntk},
@@ -302,7 +303,7 @@ class orthogonal_hex_impl
      * @param used Slots already consumed by previous POs.
      * @return Candidate slots in increasing distance from `preferred`.
      */
-    [[nodiscard]] std::vector<uint64_t> candidate_output_slots(const uint64_t preferred,
+    [[nodiscard]] std::vector<uint64_t> candidate_output_slots(const uint64_t            preferred,
                                                                const std::set<uint64_t>& used) const
     {
         std::vector<uint64_t> candidates{};
@@ -366,8 +367,7 @@ class orthogonal_hex_impl
                     const auto source_x     = actual_x_from_slot(node_slot[fin]);
                     const auto horizontal_span =
                         static_cast<uint64_t>(gate_x > source_x ? gate_x - source_x : source_x - gate_x);
-                    const auto per_gap_requirement =
-                        (horizontal_span + row_pitch_slack + depth_gap - 1u) / depth_gap;
+                    const auto per_gap_requirement = (horizontal_span + row_pitch_slack + depth_gap - 1u) / depth_gap;
 
                     required_pitch = std::max(required_pitch, per_gap_requirement);
                 }
@@ -389,8 +389,7 @@ class orthogonal_hex_impl
                 const auto target_x     = actual_x_from_slot(output_slot[index]);
                 const auto horizontal_span =
                     static_cast<uint64_t>(target_x > source_x ? target_x - source_x : source_x - target_x);
-                const auto per_gap_requirement =
-                    (horizontal_span + row_pitch_slack + depth_gap - 1u) / depth_gap;
+                const auto per_gap_requirement = (horizontal_span + row_pitch_slack + depth_gap - 1u) / depth_gap;
 
                 required_pitch = std::max(required_pitch, per_gap_requirement);
             });
@@ -421,7 +420,7 @@ class orthogonal_hex_impl
                     max_predecessor_depth = std::max(max_predecessor_depth, node_depth[fi]);
                 }
 
-                node_depth[n] = max_predecessor_depth + 1u;
+                node_depth[n]  = max_predecessor_depth + 1u;
                 max_gate_depth = std::max(max_gate_depth, node_depth[n]);
             });
     }
@@ -631,9 +630,8 @@ class orthogonal_hex_impl
                 {
                     const auto try_slot = [this, &n, &routes, &fc, &last_error, &found_placement](const uint64_t slot)
                     {
-                        const auto candidate_tile =
-                            tile_type{actual_x_from_slot(slot), node_tile[n].y, 0u};
-                        const auto candidate_key = tile_key(candidate_tile);
+                        const auto candidate_tile = tile_type{actual_x_from_slot(slot), node_tile[n].y, 0u};
+                        const auto candidate_key  = tile_key(candidate_tile);
 
                         if (blocked_tiles.count(candidate_key) != 0u)
                         {
@@ -688,22 +686,17 @@ class orthogonal_hex_impl
 
                 switch (incoming_signals.size())
                 {
-                    case 0u:
-                        gate_signal = place(layout, gate_t, ntk, n);
-                        break;
-                    case 1u:
-                        gate_signal = place(layout, gate_t, ntk, n, incoming_signals[0]);
-                        break;
+                    case 0u: gate_signal = place(layout, gate_t, ntk, n); break;
+                    case 1u: gate_signal = place(layout, gate_t, ntk, n, incoming_signals[0]); break;
                     case 2u:
-                        gate_signal = place(layout, gate_t, ntk, n, incoming_signals[0], incoming_signals[1],
-                                            fc.constant_fanin);
+                        gate_signal =
+                            place(layout, gate_t, ntk, n, incoming_signals[0], incoming_signals[1], fc.constant_fanin);
                         break;
                     case 3u:
                         gate_signal = place(layout, gate_t, ntk, n, incoming_signals[0], incoming_signals[1],
                                             incoming_signals[2]);
                         break;
-                    default:
-                        throw high_degree_fanin_exception();
+                    default: throw high_degree_fanin_exception();
                 }
 
                 store_node_outputs(n, gate_signal);
@@ -722,8 +715,8 @@ class orthogonal_hex_impl
 
         for (uint64_t extra_rows = 0u; extra_rows <= max_output_row_grow; ++extra_rows)
         {
-            po_row     = initial_po_row + extra_rows;
-            layout     = gate_layout.clone();
+            po_row = initial_po_row + extra_rows;
+            layout = gate_layout.clone();
             output_tile.clear();
             layout.resize({layout.x(), po_row, 1u});
 
@@ -769,7 +762,8 @@ class orthogonal_hex_impl
 
                 std::string name{};
 
-                if constexpr (mockturtle::has_has_output_name_v<network_type> && mockturtle::has_get_output_name_v<network_type>)
+                if constexpr (mockturtle::has_has_output_name_v<network_type> &&
+                              mockturtle::has_get_output_name_v<network_type>)
                 {
                     if (ntk.has_output_name(index))
                     {
@@ -795,13 +789,13 @@ class orthogonal_hex_impl
                     return;
                 }
 
-                const auto preferred_slot    = output_slot[index];
-                const auto source_signal     = source_layout_signal(po);
-                const auto candidate_sources = candidate_branch_sources(source_signal);
-                auto       po_path           = path_type{};
-                auto       po_t              = tile_type{};
-                auto       po_source_signal  = signal_type{};
-                auto       routed            = false;
+                const auto         preferred_slot    = output_slot[index];
+                const auto         source_signal     = source_layout_signal(po);
+                const auto         candidate_sources = candidate_branch_sources(source_signal);
+                auto               po_path           = path_type{};
+                auto               po_t              = tile_type{};
+                auto               po_source_signal  = signal_type{};
+                auto               routed            = false;
                 std::ostringstream debug{};
 
                 debug << "po " << index << " driver " << driver << " preferred_slot " << preferred_slot << " sources";
@@ -826,15 +820,15 @@ class orthogonal_hex_impl
                         for (const auto& po_entry : upper_entries(po_t))
                         {
                             debug << " (" << po_entry.x << ", " << po_entry.y << ", " << po_entry.z << ")";
-                            const auto candidate =
-                                find_monotone_path(candidate_source.signal, candidate_source.tile, po_entry, blocked_tiles, {});
+                            const auto candidate = find_monotone_path(candidate_source.signal, candidate_source.tile,
+                                                                      po_entry, blocked_tiles, {});
                             debug << '=' << candidate.size();
 
                             if (!candidate.empty())
                             {
                                 po_source_signal = candidate_source.signal;
-                                po_path     = candidate;
-                                routed      = true;
+                                po_path          = candidate;
+                                routed           = true;
                                 break;
                             }
                         }
@@ -866,7 +860,7 @@ class orthogonal_hex_impl
     }
 
     /**
- * @brief Returns the legal upper entry tiles of a pointy-top gate.
+     * @brief Returns the legal upper entry tiles of a pointy-top gate.
      *
      * @param gate_t Gate tile.
      * @return North-west and north-east entries.
@@ -877,8 +871,8 @@ class orthogonal_hex_impl
 
         for (const auto& entry : std::array<tile_type, 2u>{layout.north_west(gate_t), layout.north_east(gate_t)})
         {
-            if (is_usable_tile(entry) &&
-                std::none_of(entries.cbegin(), entries.cend(), [&entry](const auto& existing) { return existing == entry; }))
+            if (is_usable_tile(entry) && std::none_of(entries.cbegin(), entries.cend(),
+                                                      [&entry](const auto& existing) { return existing == entry; }))
             {
                 entries.push_back(entry);
             }
@@ -895,7 +889,8 @@ class orthogonal_hex_impl
      */
     [[nodiscard]] bool has_downward_launch_capacity(const tile_type& source_tile) const noexcept
     {
-        for (const auto& successor : std::array<tile_type, 2u>{layout.south_west(source_tile), layout.south_east(source_tile)})
+        for (const auto& successor :
+             std::array<tile_type, 2u>{layout.south_west(source_tile), layout.south_east(source_tile)})
         {
             if (successor == source_tile || !is_usable_tile(successor))
             {
@@ -996,23 +991,23 @@ class orthogonal_hex_impl
      */
     [[nodiscard]] bool has_projected_north_west_incoming(const tile_type& t) const noexcept
     {
-        const auto projected        = layout.below(t);
+        const auto projected         = layout.below(t);
         const auto expected_neighbor = layout.north_west(projected);
 
-        return any_projected_occupant_satisfies(
-            projected,
-            [this, &expected_neighbor](const auto& occupant)
-            {
-                for (const auto& incoming : layout.incoming_data_flow(occupant))
-                {
-                    if (layout.below(static_cast<tile_type>(incoming)) == expected_neighbor)
-                    {
-                        return true;
-                    }
-                }
+        return any_projected_occupant_satisfies(projected,
+                                                [this, &expected_neighbor](const auto& occupant)
+                                                {
+                                                    for (const auto& incoming : layout.incoming_data_flow(occupant))
+                                                    {
+                                                        if (layout.below(static_cast<tile_type>(incoming)) ==
+                                                            expected_neighbor)
+                                                        {
+                                                            return true;
+                                                        }
+                                                    }
 
-                return false;
-            });
+                                                    return false;
+                                                });
     }
 
     /**
@@ -1023,23 +1018,23 @@ class orthogonal_hex_impl
      */
     [[nodiscard]] bool has_projected_north_east_incoming(const tile_type& t) const noexcept
     {
-        const auto projected        = layout.below(t);
+        const auto projected         = layout.below(t);
         const auto expected_neighbor = layout.north_east(projected);
 
-        return any_projected_occupant_satisfies(
-            projected,
-            [this, &expected_neighbor](const auto& occupant)
-            {
-                for (const auto& incoming : layout.incoming_data_flow(occupant))
-                {
-                    if (layout.below(static_cast<tile_type>(incoming)) == expected_neighbor)
-                    {
-                        return true;
-                    }
-                }
+        return any_projected_occupant_satisfies(projected,
+                                                [this, &expected_neighbor](const auto& occupant)
+                                                {
+                                                    for (const auto& incoming : layout.incoming_data_flow(occupant))
+                                                    {
+                                                        if (layout.below(static_cast<tile_type>(incoming)) ==
+                                                            expected_neighbor)
+                                                        {
+                                                            return true;
+                                                        }
+                                                    }
 
-                return false;
-            });
+                                                    return false;
+                                                });
     }
 
     /**
@@ -1050,23 +1045,23 @@ class orthogonal_hex_impl
      */
     [[nodiscard]] bool has_projected_south_west_outgoing(const tile_type& t) const noexcept
     {
-        const auto projected        = layout.below(t);
+        const auto projected         = layout.below(t);
         const auto expected_neighbor = layout.south_west(projected);
 
-        return any_projected_occupant_satisfies(
-            projected,
-            [this, &expected_neighbor](const auto& occupant)
-            {
-                for (const auto& outgoing : layout.outgoing_data_flow(occupant))
-                {
-                    if (layout.below(static_cast<tile_type>(outgoing)) == expected_neighbor)
-                    {
-                        return true;
-                    }
-                }
+        return any_projected_occupant_satisfies(projected,
+                                                [this, &expected_neighbor](const auto& occupant)
+                                                {
+                                                    for (const auto& outgoing : layout.outgoing_data_flow(occupant))
+                                                    {
+                                                        if (layout.below(static_cast<tile_type>(outgoing)) ==
+                                                            expected_neighbor)
+                                                        {
+                                                            return true;
+                                                        }
+                                                    }
 
-                return false;
-            });
+                                                    return false;
+                                                });
     }
 
     /**
@@ -1077,23 +1072,23 @@ class orthogonal_hex_impl
      */
     [[nodiscard]] bool has_projected_south_east_outgoing(const tile_type& t) const noexcept
     {
-        const auto projected        = layout.below(t);
+        const auto projected         = layout.below(t);
         const auto expected_neighbor = layout.south_east(projected);
 
-        return any_projected_occupant_satisfies(
-            projected,
-            [this, &expected_neighbor](const auto& occupant)
-            {
-                for (const auto& outgoing : layout.outgoing_data_flow(occupant))
-                {
-                    if (layout.below(static_cast<tile_type>(outgoing)) == expected_neighbor)
-                    {
-                        return true;
-                    }
-                }
+        return any_projected_occupant_satisfies(projected,
+                                                [this, &expected_neighbor](const auto& occupant)
+                                                {
+                                                    for (const auto& outgoing : layout.outgoing_data_flow(occupant))
+                                                    {
+                                                        if (layout.below(static_cast<tile_type>(outgoing)) ==
+                                                            expected_neighbor)
+                                                        {
+                                                            return true;
+                                                        }
+                                                    }
 
-                return false;
-            });
+                                                    return false;
+                                                });
     }
 
     /**
@@ -1152,7 +1147,8 @@ class orthogonal_hex_impl
             return false;
         }
 
-        for (const auto& candidate : std::array<tile_type, 3u>{successor, layout.above(successor), layout.below(successor)})
+        for (const auto& candidate :
+             std::array<tile_type, 3u>{successor, layout.above(successor), layout.below(successor)})
         {
             if (!is_usable_tile(candidate) || layout.is_empty_tile(candidate))
             {
@@ -1162,7 +1158,8 @@ class orthogonal_hex_impl
             const auto candidate_signal = static_cast<signal_type>(candidate);
             const auto current_signal   = static_cast<signal_type>(current);
 
-            if (layout.is_outgoing_signal(current, candidate_signal) && layout.is_incoming_signal(candidate, current_signal))
+            if (layout.is_outgoing_signal(current, candidate_signal) &&
+                layout.is_incoming_signal(candidate, current_signal))
             {
                 return true;
             }
@@ -1211,10 +1208,9 @@ class orthogonal_hex_impl
      * @param source_node Optional source-network node if the source tile is not materialized in the layout yet.
      * @return `true` iff the current step respects the source gate's output-side assignment.
      */
-    [[nodiscard]] bool uses_legal_output_launch_side(const signal_type& source_signal, const tile_type& source,
-                                                     const tile_type& current, const tile_type& successor,
-                                                     const std::optional<mockturtle::node<network_type>>& source_node =
-                                                         std::nullopt) const noexcept
+    [[nodiscard]] bool uses_legal_output_launch_side(
+        const signal_type& source_signal, const tile_type& source, const tile_type& current, const tile_type& successor,
+        const std::optional<mockturtle::node<network_type>>& source_node = std::nullopt) const noexcept
     {
         if (current != source)
         {
@@ -1233,12 +1229,9 @@ class orthogonal_hex_impl
 
         switch (signal_output(source_signal))
         {
-            case 0u:
-                return successor_projected == layout.south_east(source_projected);
-            case 1u:
-                return successor_projected == layout.south_west(source_projected);
-            default:
-                return false;
+            case 0u: return successor_projected == layout.south_east(source_projected);
+            case 1u: return successor_projected == layout.south_west(source_projected);
+            default: return false;
         }
     }
 
@@ -1253,7 +1246,8 @@ class orthogonal_hex_impl
      * @param successor_projected Occupied successor tile on the projected ground layer.
      * @return `true` iff the projected successor can host a legal crossing.
      */
-    [[nodiscard]] bool is_crossable_successor(const tile_type& current, const tile_type& successor_projected) const noexcept
+    [[nodiscard]] bool is_crossable_successor(const tile_type& current,
+                                              const tile_type& successor_projected) const noexcept
     {
         const auto successor_node = layout.get_node(successor_projected);
 
@@ -1286,9 +1280,9 @@ class orthogonal_hex_impl
      */
     [[nodiscard]] std::vector<branch_source> candidate_branch_sources(const signal_type& source_signal) const
     {
-        std::vector<branch_source>       candidates{};
-        std::queue<signal_type>          frontier{};
-        std::vector<bool>                visited(layout.size(), false);
+        std::vector<branch_source> candidates{};
+        std::queue<signal_type>    frontier{};
+        std::vector<bool>          visited(layout.size(), false);
 
         const auto root      = layout.get_node(source_signal);
         const auto root_tile = layout.get_tile(root);
@@ -1297,19 +1291,18 @@ class orthogonal_hex_impl
         {
             auto matches = false;
 
-            layout.foreach_fanin(
-                fanout_node,
-                [this, &expected_signal, &matches](const auto& fanin)
-                {
-                    if (layout.get_node(fanin) == layout.get_node(expected_signal) &&
-                        signal_output(fanin) == signal_output(expected_signal))
-                    {
-                        matches = true;
-                        return false;
-                    }
+            layout.foreach_fanin(fanout_node,
+                                 [this, &expected_signal, &matches](const auto& fanin)
+                                 {
+                                     if (layout.get_node(fanin) == layout.get_node(expected_signal) &&
+                                         signal_output(fanin) == signal_output(expected_signal))
+                                     {
+                                         matches = true;
+                                         return false;
+                                     }
 
-                    return true;
-                });
+                                     return true;
+                                 });
 
             return matches;
         };
@@ -1331,8 +1324,8 @@ class orthogonal_hex_impl
                 candidates.push_back({current_signal, current_tile});
             }
 
-            for (const auto& successor_base : std::array<tile_type, 2u>{layout.south_west(current_tile),
-                                                                        layout.south_east(current_tile)})
+            for (const auto& successor_base :
+                 std::array<tile_type, 2u>{layout.south_west(current_tile), layout.south_east(current_tile)})
             {
                 for (const auto& successor : std::array<tile_type, 3u>{successor_base, layout.above(successor_base),
                                                                        layout.below(successor_base)})
@@ -1390,7 +1383,7 @@ class orthogonal_hex_impl
      * @return One planned route per non-constant fanin.
      */
     [[nodiscard]] std::vector<planned_route> plan_gate_routes(const mockturtle::node<network_type>& n,
-                                                              const fanin_container<network_type>&   fc) const
+                                                              const fanin_container<network_type>&  fc) const
     {
         const auto gate_t    = node_tile[n];
         const auto entries   = upper_entries(gate_t);
@@ -1430,15 +1423,17 @@ class orthogonal_hex_impl
 
             for (uint32_t i = 0u; i < assignment.size(); ++i)
             {
-                const auto entry_t  = entries[assignment[i]];
+                const auto entry_t   = entries[assignment[i]];
                 auto       best_cost = std::numeric_limits<uint64_t>::max();
 
                 for (const auto& candidate_source : source_candidates_by_fanin[i])
                 {
-                    const auto horizontal_offset = static_cast<uint64_t>(
-                        candidate_source.tile.x > entry_t.x ? candidate_source.tile.x - entry_t.x : entry_t.x - candidate_source.tile.x);
-                    const auto vertical_offset = static_cast<uint64_t>(
-                        candidate_source.tile.y > entry_t.y ? candidate_source.tile.y - entry_t.y : entry_t.y - candidate_source.tile.y);
+                    const auto horizontal_offset = static_cast<uint64_t>(candidate_source.tile.x > entry_t.x ?
+                                                                             candidate_source.tile.x - entry_t.x :
+                                                                             entry_t.x - candidate_source.tile.x);
+                    const auto vertical_offset   = static_cast<uint64_t>(candidate_source.tile.y > entry_t.y ?
+                                                                             candidate_source.tile.y - entry_t.y :
+                                                                             entry_t.y - candidate_source.tile.y);
 
                     best_cost = std::min(best_cost, horizontal_offset + vertical_offset);
                 }
@@ -1464,8 +1459,9 @@ class orthogonal_hex_impl
         {
             const auto route_span = [this, &assignment, &entries, &fc](const auto fanin_index)
             {
-                const auto source_t = layout.get_tile(layout.get_node(source_layout_signal(fc.fanin_signals[fanin_index])));
-                const auto entry_t  = entries[assignment[fanin_index]];
+                const auto source_t =
+                    layout.get_tile(layout.get_node(source_layout_signal(fc.fanin_signals[fanin_index])));
+                const auto entry_t = entries[assignment[fanin_index]];
 
                 return static_cast<uint64_t>(source_t.x > entry_t.x ? source_t.x - entry_t.x : entry_t.x - source_t.x) +
                        entry_t.y - source_t.y;
@@ -1481,11 +1477,8 @@ class orthogonal_hex_impl
                 routing_orders.push_back(routing_order);
             } while (std::next_permutation(routing_order.begin(), routing_order.end()));
 
-            std::sort(routing_orders.begin(), routing_orders.end(),
-                      [&route_span](const auto& lhs, const auto& rhs)
-                      {
-                          return route_span(lhs.front()) > route_span(rhs.front());
-                      });
+            std::sort(routing_orders.begin(), routing_orders.end(), [&route_span](const auto& lhs, const auto& rhs)
+                      { return route_span(lhs.front()) > route_span(rhs.front()); });
 
             for (const auto& current_routing_order : routing_orders)
             {
@@ -1513,8 +1506,8 @@ class orthogonal_hex_impl
 
                 for (const auto fanin_index : current_routing_order)
                 {
-                    const auto entry_t = entries[assignment[fanin_index]];
-                    auto       path    = path_type{};
+                    const auto                   entry_t = entries[assignment[fanin_index]];
+                    auto                         path    = path_type{};
                     std::optional<branch_source> selected_source{};
 
                     auto candidate_sources = source_candidates_by_fanin[fanin_index];
@@ -1530,8 +1523,10 @@ class orthogonal_hex_impl
                                       return lhs_vertical < rhs_vertical;
                                   }
 
-                                  const auto lhs_horizontal = lhs.tile.x > entry_t.x ? lhs.tile.x - entry_t.x : entry_t.x - lhs.tile.x;
-                                  const auto rhs_horizontal = rhs.tile.x > entry_t.x ? rhs.tile.x - entry_t.x : entry_t.x - rhs.tile.x;
+                                  const auto lhs_horizontal =
+                                      lhs.tile.x > entry_t.x ? lhs.tile.x - entry_t.x : entry_t.x - lhs.tile.x;
+                                  const auto rhs_horizontal =
+                                      rhs.tile.x > entry_t.x ? rhs.tile.x - entry_t.x : entry_t.x - rhs.tile.x;
 
                                   if (lhs_horizontal != rhs_horizontal)
                                   {
@@ -1543,12 +1538,12 @@ class orthogonal_hex_impl
 
                     for (const auto& candidate_source : candidate_sources)
                     {
-                        path = find_monotone_path(candidate_source.signal, candidate_source.tile, entry_t, blocked_tiles,
-                                                 temporary_blocked);
+                        path = find_monotone_path(candidate_source.signal, candidate_source.tile, entry_t,
+                                                  blocked_tiles, temporary_blocked);
 
-                        debug << " fi" << fanin_index << " (" << candidate_source.tile.x << ", " << candidate_source.tile.y
-                              << ", " << candidate_source.tile.z << ")->(" << entry_t.x << ", " << entry_t.y << ", "
-                              << entry_t.z << ")=" << path.size();
+                        debug << " fi" << fanin_index << " (" << candidate_source.tile.x << ", "
+                              << candidate_source.tile.y << ", " << candidate_source.tile.z << ")->(" << entry_t.x
+                              << ", " << entry_t.y << ", " << entry_t.z << ")=" << path.size();
 
                         if (!path.empty())
                         {
@@ -1563,10 +1558,10 @@ class orthogonal_hex_impl
                         break;
                     }
 
-                    const auto reserve_projected_step = [this, &temporary_north_west_incoming, &temporary_north_east_incoming,
-                                                         &temporary_south_west_outgoing,
-                                                         &temporary_south_east_outgoing](const auto& current,
-                                                                                         const auto& successor)
+                    const auto reserve_projected_step =
+                        [this, &temporary_north_west_incoming, &temporary_north_east_incoming,
+                         &temporary_south_west_outgoing,
+                         &temporary_south_east_outgoing](const auto& current, const auto& successor)
                     {
                         const auto current_projected_key   = tile_key(layout.below(current));
                         const auto successor_projected_key = tile_key(layout.below(successor));
@@ -1641,7 +1636,7 @@ class orthogonal_hex_impl
     }
 
     /**
- * @brief Finds a downward-only path on the pointy-top hex grid.
+     * @brief Finds a downward-only path on the pointy-top hex grid.
      *
      * @param source_signal Routed signal launched from `source`.
      * @param source Start tile.
@@ -1651,19 +1646,20 @@ class orthogonal_hex_impl
      * @param source_node Optional source-network node if `source` is not materialized in the layout yet.
      * @return Path from `source` to `target`, or an empty path if none was found.
      */
-    [[nodiscard]] path_type find_monotone_path(
-        const signal_type& source_signal, const tile_type& source, const tile_type& target,
-        const std::unordered_set<uint64_t>& hard_blocked, const std::unordered_set<uint64_t>& soft_blocked,
-        const std::optional<mockturtle::node<network_type>>& source_node = std::nullopt) const
+    [[nodiscard]] path_type
+    find_monotone_path(const signal_type& source_signal, const tile_type& source, const tile_type& target,
+                       const std::unordered_set<uint64_t>&                  hard_blocked,
+                       const std::unordered_set<uint64_t>&                  soft_blocked,
+                       const std::optional<mockturtle::node<network_type>>& source_node = std::nullopt) const
     {
         if (source == target)
         {
             return path_type{source};
         }
 
-        std::queue<tile_type> frontier{};
+        std::queue<tile_type>                  frontier{};
         std::unordered_map<uint64_t, uint64_t> parent{};
-        std::unordered_set<uint64_t> visited{};
+        std::unordered_set<uint64_t>           visited{};
 
         frontier.push(source);
         visited.insert(tile_key(source));
@@ -1764,7 +1760,8 @@ class orthogonal_hex_impl
      * @param hard_blocked Structurally blocked tiles.
      * @return `true` iff the successor is admissible.
      */
-    [[nodiscard]] bool is_routable_successor(const tile_type& current, const tile_type& successor, const tile_type& target,
+    [[nodiscard]] bool is_routable_successor(const tile_type& current, const tile_type& successor,
+                                             const tile_type&                    target,
                                              const std::unordered_set<uint64_t>& hard_blocked) const
     {
         const auto successor_key = tile_key(successor);
@@ -1832,31 +1829,30 @@ class orthogonal_hex_impl
      * @return Existing successor signal if the net is already connected there.
      */
     [[nodiscard]] std::optional<signal_type> existing_connected_successor_signal(const signal_type& current_signal,
-                                                                                 const tile_type&   successor_base) const
+                                                                                 const tile_type& successor_base) const
     {
         const auto has_matching_fanin = [this, &current_signal](const auto candidate_node)
         {
             auto matches = false;
 
-            layout.foreach_fanin(
-                candidate_node,
-                [this, &current_signal, &matches](const auto& fanin)
-                {
-                    if (layout.get_node(fanin) == layout.get_node(current_signal) &&
-                        signal_output(fanin) == signal_output(current_signal))
-                    {
-                        matches = true;
-                        return false;
-                    }
+            layout.foreach_fanin(candidate_node,
+                                 [this, &current_signal, &matches](const auto& fanin)
+                                 {
+                                     if (layout.get_node(fanin) == layout.get_node(current_signal) &&
+                                         signal_output(fanin) == signal_output(current_signal))
+                                     {
+                                         matches = true;
+                                         return false;
+                                     }
 
-                    return true;
-                });
+                                     return true;
+                                 });
 
             return matches;
         };
 
-        for (const auto& candidate : std::array<tile_type, 3u>{successor_base, layout.above(successor_base),
-                                                               layout.below(successor_base)})
+        for (const auto& candidate :
+             std::array<tile_type, 3u>{successor_base, layout.above(successor_base), layout.below(successor_base)})
         {
             if (!is_usable_tile(candidate) || layout.is_empty_tile(candidate))
             {

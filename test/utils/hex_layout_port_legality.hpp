@@ -92,14 +92,10 @@ template <typename Lyt>
 {
     switch (side)
     {
-        case projected_port_side::north_west:
-            return "NW";
-        case projected_port_side::north_east:
-            return "NE";
-        case projected_port_side::south_west:
-            return "SW";
-        case projected_port_side::south_east:
-            return "SE";
+        case projected_port_side::north_west: return "NW";
+        case projected_port_side::north_east: return "NE";
+        case projected_port_side::south_west: return "SW";
+        case projected_port_side::south_east: return "SE";
     }
 
     return "?";
@@ -201,8 +197,7 @@ template <typename Lyt>
 
             for (const auto& incoming : lyt.incoming_data_flow(current_tile))
             {
-                if (const auto side =
-                        incoming_side(lyt, current_tile, static_cast<fiction::tile<Lyt>>(incoming));
+                if (const auto side = incoming_side(lyt, current_tile, static_cast<fiction::tile<Lyt>>(incoming));
                     side.has_value())
                 {
                     ++usage.incoming_counts[static_cast<uint8_t>(*side)];
@@ -211,8 +206,7 @@ template <typename Lyt>
 
             for (const auto& outgoing : lyt.outgoing_data_flow(current_tile))
             {
-                if (const auto side =
-                        outgoing_side(lyt, current_tile, static_cast<fiction::tile<Lyt>>(outgoing));
+                if (const auto side = outgoing_side(lyt, current_tile, static_cast<fiction::tile<Lyt>>(outgoing));
                     side.has_value())
                 {
                     ++usage.outgoing_counts[static_cast<uint8_t>(*side)];

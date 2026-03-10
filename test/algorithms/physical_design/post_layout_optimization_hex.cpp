@@ -52,17 +52,9 @@ void check_hex_optimization(const Ntk& ntk, const LayoutCreator& create_layout)
     CHECK(stats.y_size_before == y_before);
     check_eq(ntk, layout);
 
-    layout.foreach_pi(
-        [&layout](const auto& pi)
-        {
-            CHECK(layout.get_tile(pi).y == 0u);
-        });
+    layout.foreach_pi([&layout](const auto& pi) { CHECK(layout.get_tile(pi).y == 0u); });
 
-    layout.foreach_po(
-        [&layout](const auto& po)
-        {
-            CHECK(layout.get_tile(layout.get_node(po)).y == layout.y());
-        });
+    layout.foreach_po([&layout](const auto& po) { CHECK(layout.get_tile(layout.get_node(po)).y == layout.y()); });
 }
 
 /**
@@ -100,16 +92,14 @@ TEST_CASE("Native hexagonal post-layout optimization preserves orthogonal hex la
 
     SECTION("odd row")
     {
-        check_hex_optimization<odd_row_layout>(
-            blueprints::full_adder_network<technology_network>(),
-            [](const auto& ntk) { return orthogonal_hex<odd_row_layout>(ntk); });
+        check_hex_optimization<odd_row_layout>(blueprints::full_adder_network<technology_network>(),
+                                               [](const auto& ntk) { return orthogonal_hex<odd_row_layout>(ntk); });
     }
 
     SECTION("even row")
     {
-        check_hex_optimization<even_row_layout>(
-            blueprints::full_adder_network<technology_network>(),
-            [](const auto& ntk) { return orthogonal_hex<even_row_layout>(ntk); });
+        check_hex_optimization<even_row_layout>(blueprints::full_adder_network<technology_network>(),
+                                                [](const auto& ntk) { return orthogonal_hex<even_row_layout>(ntk); });
     }
 }
 
@@ -151,7 +141,7 @@ TEST_CASE("Native hexagonal post-layout optimization keeps orthogonal RCA2 rewir
 
     const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
 
-    std::ostringstream os{};
+    std::ostringstream      os{};
     network_reader<aig_ptr> reader{rca2_file_name, os};
 
     REQUIRE(os.str().empty());
@@ -172,8 +162,8 @@ TEST_CASE("Native hexagonal post-layout optimization keeps orthogonal RCA2 rewir
     const auto y_before    = layout.y() + 1u;
     const auto area_before = x_before * y_before;
 
-    std::ostringstream optimize_output{};
-    const auto         old_cout_buf = std::cout.rdbuf(optimize_output.rdbuf());
+    std::ostringstream             optimize_output{};
+    const auto                     old_cout_buf = std::cout.rdbuf(optimize_output.rdbuf());
     post_layout_optimization_stats stats{};
     post_layout_optimization_hex(layout, {}, &stats);
     std::cout.rdbuf(old_cout_buf);
@@ -206,7 +196,7 @@ TEST_CASE("Native hexagonal structural extraction preserves orthogonal RCA2 logi
 
     const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
 
-    std::ostringstream os{};
+    std::ostringstream      os{};
     network_reader<aig_ptr> reader{rca2_file_name, os};
 
     REQUIRE(os.str().empty());
@@ -221,9 +211,9 @@ TEST_CASE("Native hexagonal structural extraction preserves orthogonal RCA2 logi
     map_params.xor2 = true;
     map_params.inv  = true;
 
-    const auto mapped           = technology_mapping(*networks.front(), map_params);
+    const auto mapped            = technology_mapping(*networks.front(), map_params);
     const auto orthogonal_layout = orthogonal_hex<gate_layout>(mapped);
-    const auto extracted        = detail::extract_structural_hex_network(orthogonal_layout);
+    const auto extracted         = detail::extract_structural_hex_network(orthogonal_layout);
 
     check_eq(mapped, extracted);
     check_eq(*networks.front(), extracted);
@@ -237,7 +227,7 @@ TEST_CASE("Native hexagonal GOLD fallback rebuild is safe for orthogonal RCA2",
 
     const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
 
-    std::ostringstream os{};
+    std::ostringstream      os{};
     network_reader<aig_ptr> reader{rca2_file_name, os};
 
     REQUIRE(os.str().empty());
@@ -252,12 +242,12 @@ TEST_CASE("Native hexagonal GOLD fallback rebuild is safe for orthogonal RCA2",
     map_params.xor2 = true;
     map_params.inv  = true;
 
-    const auto mapped           = technology_mapping(*networks.front(), map_params);
+    const auto mapped            = technology_mapping(*networks.front(), map_params);
     const auto orthogonal_layout = orthogonal_hex<gate_layout>(mapped);
-    const auto rebuilt          = detail::try_hex_gold_rebuild(orthogonal_layout, {});
+    const auto rebuilt           = detail::try_hex_gold_rebuild(orthogonal_layout, {});
 
     REQUIRE(rebuilt.has_value());
-    INFO("rebuilt size = " << rebuilt->x() + 1u << " x " << rebuilt->y() + 1u << ", wires = "
-                           << rebuilt->num_wires() - rebuilt->num_pis() - rebuilt->num_pos());
+    INFO("rebuilt size = " << rebuilt->x() + 1u << " x " << rebuilt->y() + 1u
+                           << ", wires = " << rebuilt->num_wires() - rebuilt->num_pis() - rebuilt->num_pos());
     check_eq(mapped, *rebuilt);
 }

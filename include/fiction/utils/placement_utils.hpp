@@ -166,6 +166,36 @@ place(Lyt& lyt, const tile<Lyt>& t, const Ntk& ntk, const mockturtle::node<Ntk>&
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout type");
     static_assert(mockturtle::is_network_type_v<Ntk>, "Ntk is not a network type");
 
+    if constexpr (mockturtle::has_is_multioutput_v<Ntk> && mockturtle::has_node_function_pin_v<Ntk>)
+    {
+        if (ntk.is_multioutput(n))
+        {
+            const auto num_outputs = [&ntk, &n]()
+            {
+                if constexpr (mockturtle::has_num_outputs_v<Ntk>)
+                {
+                    return ntk.num_outputs(n);
+                }
+
+                return 2u;
+            }();
+
+            std::vector<kitty::dynamic_truth_table> functions{};
+            functions.reserve(num_outputs);
+
+            for (uint32_t pin = 0u; pin < num_outputs; ++pin)
+            {
+                functions.push_back(ntk.node_function_pin(n, pin));
+            }
+
+            if (c.has_value())
+            {
+                return lyt.create_node({a, b, *c}, functions, t);
+            }
+
+            return lyt.create_node({a, b}, functions, t);
+        }
+    }
     if constexpr (fiction::has_is_ha_v<Ntk> && fiction::has_create_ha_v<Lyt>)
     {
         if (ntk.is_ha(n))

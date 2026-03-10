@@ -920,7 +920,9 @@ class graph_oriented_layout_design_impl
 
     [[nodiscard]] static tec_nt initialize_network(const Ntk& src)
     {
-        if constexpr (std::is_same_v<Ntk, tec_nt>)
+        using stripped_ntk = std::remove_cv_t<std::remove_reference_t<Ntk>>;
+
+        if constexpr (std::is_same_v<stripped_ntk, tec_nt>)
         {
             return src;
         }
@@ -2346,10 +2348,17 @@ class graph_oriented_layout_design_impl
                         }
                     });
 
-                if (contains_multioutput_gate && (!has_valid_multioutput_launches(layout) ||
-                                                  (fiction::equivalence_checking(ntk, layout) == eq_type::NO)))
+                if (contains_multioutput_gate)
                 {
-                    return {{}, std::nullopt};
+                    // `equivalence_checking` mutates traversal state on its network operands. Network copies in
+                    // `ssg_vec` share storage, therefore each worker needs an isolated clone for this validation step.
+                    const tec_nt network_for_check{ssg.network.clone()};
+
+                    if (!has_valid_multioutput_launches(layout) ||
+                        (fiction::equivalence_checking(network_for_check, layout) == eq_type::NO))
+                    {
+                        return {{}, std::nullopt};
+                    }
                 }
 
                 const auto bb_after_plo = fiction::bounding_box_2d(layout);

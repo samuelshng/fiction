@@ -10,8 +10,8 @@
 #include "utils/equivalence_checking_utils.hpp"
 #include "utils/hex_layout_port_legality.hpp"
 
-#include <fiction/algorithms/physical_design/orthogonal_hex.hpp>
 #include <fiction/algorithms/network_transformation/technology_mapping.hpp>
+#include <fiction/algorithms/physical_design/orthogonal_hex.hpp>
 #include <fiction/io/network_reader.hpp>
 #include <fiction/layouts/clocked_layout.hpp>
 #include <fiction/layouts/gate_level_layout.hpp>
@@ -33,17 +33,9 @@ using namespace fiction;
 template <typename Lyt>
 void check_hex_border_io_placement(const Lyt& layout)
 {
-    layout.foreach_pi(
-        [&layout](const auto& pi)
-        {
-            CHECK(layout.get_tile(pi).y == 0u);
-        });
+    layout.foreach_pi([&layout](const auto& pi) { CHECK(layout.get_tile(pi).y == 0u); });
 
-    layout.foreach_po(
-        [&layout](const auto& po)
-        {
-            CHECK(layout.get_tile(layout.get_node(po)).y == layout.y());
-        });
+    layout.foreach_po([&layout](const auto& po) { CHECK(layout.get_tile(layout.get_node(po)).y == layout.y()); });
 }
 
 template <typename Lyt>
@@ -137,7 +129,8 @@ TEST_CASE("Native hexagonal orthogonal layout equivalence", "[orthogonal][orthog
 
         SECTION("unbalanced_and_inv")
         {
-            check_native_hex_ortho_equiv<gate_layout>(blueprints::unbalanced_and_inv_network<mockturtle::aig_network>());
+            check_native_hex_ortho_equiv<gate_layout>(
+                blueprints::unbalanced_and_inv_network<mockturtle::aig_network>());
         }
         SECTION("clpl")
         {
@@ -160,7 +153,8 @@ TEST_CASE("Native hexagonal orthogonal layout equivalence", "[orthogonal][orthog
 
         SECTION("unbalanced_and_inv")
         {
-            check_native_hex_ortho_equiv<gate_layout>(blueprints::unbalanced_and_inv_network<mockturtle::aig_network>());
+            check_native_hex_ortho_equiv<gate_layout>(
+                blueprints::unbalanced_and_inv_network<mockturtle::aig_network>());
         }
         SECTION("clpl")
         {
@@ -175,7 +169,6 @@ TEST_CASE("Native hexagonal orthogonal layout equivalence", "[orthogonal][orthog
             check_native_hex_ortho_equiv<gate_layout>(blueprints::multi_output_network<technology_network>());
         }
     }
-
 }
 
 TEST_CASE("Name conservation after native hexagonal orthogonal physical design", "[orthogonal][orthogonal-hex]")
@@ -201,7 +194,7 @@ TEST_CASE("Native hexagonal orthogonal layout stays compact on RCA2", "[orthogon
 
     const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
 
-    std::ostringstream os{};
+    std::ostringstream      os{};
     network_reader<aig_ptr> reader{rca2_file_name, os};
 
     REQUIRE(os.str().empty());
@@ -219,7 +212,7 @@ TEST_CASE("Native hexagonal orthogonal layout stays compact on RCA2", "[orthogon
     const auto mapped = technology_mapping(*networks.front(), map_params);
 
     orthogonal_physical_design_stats stats{};
-    const auto layout = orthogonal_hex<gate_layout>(mapped, {}, &stats);
+    const auto                       layout = orthogonal_hex<gate_layout>(mapped, {}, &stats);
 
     CHECK(stats.x_size <= 16u);
     CHECK(stats.y_size <= 40u);

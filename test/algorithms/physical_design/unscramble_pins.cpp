@@ -57,11 +57,7 @@ std::vector<std::string> collect_pi_names_sorted_by_x(const Lyt& lyt)
     std::vector<std::pair<tile<Lyt>, std::string>> pins{};
     pins.reserve(lyt.num_pis());
 
-    lyt.foreach_pi(
-        [&lyt, &pins](const auto& pi)
-        {
-            pins.emplace_back(lyt.get_tile(pi), lyt.get_name(pi));
-        });
+    lyt.foreach_pi([&lyt, &pins](const auto& pi) { pins.emplace_back(lyt.get_tile(pi), lyt.get_name(pi)); });
 
     std::sort(pins.begin(), pins.end(),
               [](const auto& lhs, const auto& rhs)
@@ -98,11 +94,8 @@ std::vector<std::string> collect_po_names_sorted_by_x(const Lyt& lyt)
     outputs.reserve(lyt.num_pos());
 
     uint32_t po_index = 0u;
-    lyt.foreach_po(
-        [&lyt, &outputs, &po_index](const auto& po)
-        {
-            outputs.emplace_back(static_cast<tile<Lyt>>(po), lyt.get_output_name(po_index++));
-        });
+    lyt.foreach_po([&lyt, &outputs, &po_index](const auto& po)
+                   { outputs.emplace_back(static_cast<tile<Lyt>>(po), lyt.get_output_name(po_index++)); });
 
     std::sort(outputs.begin(), outputs.end(),
               [](const auto& lhs, const auto& rhs)
@@ -901,5 +894,4 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
             }
         }
     }
-
 }

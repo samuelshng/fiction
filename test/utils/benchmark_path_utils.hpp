@@ -40,6 +40,6 @@ namespace test::benchmark_path_utils
     throw std::runtime_error{"unable to locate benchmark file: " + relative_path.string()};
 }
 
-} // namespace test::benchmark_path_utils
+}  // namespace test::benchmark_path_utils
 
-#endif // FICTION_TEST_UTILS_BENCHMARK_PATH_UTILS_HPP
+#endif  // FICTION_TEST_UTILS_BENCHMARK_PATH_UTILS_HPP

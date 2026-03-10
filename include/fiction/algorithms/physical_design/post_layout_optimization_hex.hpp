@@ -17,6 +17,7 @@
 #include "fiction/traits.hpp"
 #include "fiction/utils/name_utils.hpp"
 #include "fiction/utils/routing_utils.hpp"
+
 #include <mockturtle/algorithms/cleanup.hpp>
 
 #include <algorithm>
@@ -25,8 +26,8 @@
 #include <iostream>
 #include <limits>
 #include <optional>
-#include <string>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -203,24 +204,25 @@ template <typename Lyt>
 template <typename Lyt>
 void sort_hex_routing_objectives(std::vector<hex_routing_objective<Lyt>>& objectives)
 {
-    std::stable_sort(
-        objectives.begin(), objectives.end(),
-        [](const auto& lhs, const auto& rhs)
-        {
-            if (lhs.target == rhs.target && lhs.target_input != rhs.target_input)
-            {
-                return lhs.target_input < rhs.target_input;
-            }
+    std::stable_sort(objectives.begin(), objectives.end(),
+                     [](const auto& lhs, const auto& rhs)
+                     {
+                         if (lhs.target == rhs.target && lhs.target_input != rhs.target_input)
+                         {
+                             return lhs.target_input < rhs.target_input;
+                         }
 
-            const auto lhs_distance =
-                static_cast<uint64_t>(std::abs(static_cast<int64_t>(lhs.source.x) - static_cast<int64_t>(lhs.target.x))) +
-                static_cast<uint64_t>(std::abs(static_cast<int64_t>(lhs.source.y) - static_cast<int64_t>(lhs.target.y)));
-            const auto rhs_distance =
-                static_cast<uint64_t>(std::abs(static_cast<int64_t>(rhs.source.x) - static_cast<int64_t>(rhs.target.x))) +
-                static_cast<uint64_t>(std::abs(static_cast<int64_t>(rhs.source.y) - static_cast<int64_t>(rhs.target.y)));
+                         const auto lhs_distance = static_cast<uint64_t>(std::abs(static_cast<int64_t>(lhs.source.x) -
+                                                                                  static_cast<int64_t>(lhs.target.x))) +
+                                                   static_cast<uint64_t>(std::abs(static_cast<int64_t>(lhs.source.y) -
+                                                                                  static_cast<int64_t>(lhs.target.y)));
+                         const auto rhs_distance = static_cast<uint64_t>(std::abs(static_cast<int64_t>(rhs.source.x) -
+                                                                                  static_cast<int64_t>(rhs.target.x))) +
+                                                   static_cast<uint64_t>(std::abs(static_cast<int64_t>(rhs.source.y) -
+                                                                                  static_cast<int64_t>(rhs.target.y)));
 
-            return lhs_distance > rhs_distance;
-        });
+                         return lhs_distance > rhs_distance;
+                     });
 }
 
 /**
@@ -269,7 +271,7 @@ template <typename Lyt>
 find_incoming_signal_from(const Lyt& lyt, const mockturtle::node<Lyt>& source, const mockturtle::node<Lyt>& target)
 {
     std::optional<incoming_signal_reference<Lyt>> incoming_signal{};
-    uint32_t                                     fanin_index{0u};
+    uint32_t                                      fanin_index{0u};
 
     const auto collector = [&lyt, &source, &incoming_signal, &fanin_index](const auto& fin)
     {
@@ -300,7 +302,7 @@ find_incoming_signal_from(const Lyt& lyt, const mockturtle::node<Lyt>& source, c
  * @return Signal emitted by the structural source of that connection.
  */
 template <typename Lyt>
-[[nodiscard]] mockturtle::signal<Lyt> trace_hex_structural_signal(const Lyt& lyt,
+[[nodiscard]] mockturtle::signal<Lyt> trace_hex_structural_signal(const Lyt&              lyt,
                                                                   mockturtle::signal<Lyt> routed_signal) noexcept
 {
     auto current_signal = routed_signal;
@@ -309,7 +311,7 @@ template <typename Lyt>
     if (lyt.is_po(current_node))
     {
         std::vector<mockturtle::signal<Lyt>> po_fanins{};
-        const auto                           po_fanin_collector = [&po_fanins](const auto& fin) { po_fanins.push_back(fin); };
+        const auto po_fanin_collector = [&po_fanins](const auto& fin) { po_fanins.push_back(fin); };
         lyt.template foreach_fanin<decltype(po_fanin_collector), false>(current_node, std::move(po_fanin_collector));
 
         if (!po_fanins.empty())
@@ -347,13 +349,14 @@ template <typename Lyt>
  * @return Equivalent signal in the technology network.
  */
 template <typename Lyt>
-[[nodiscard]] mockturtle::signal<tec_nt> convert_hex_signal_to_technology_signal(
-    const Lyt& lyt, tec_nt& ntk, mockturtle::node_map<std::vector<mockturtle::signal<tec_nt>>, Lyt>& old2new,
-    const mockturtle::signal<Lyt>& traced_signal)
+[[nodiscard]] mockturtle::signal<tec_nt>
+convert_hex_signal_to_technology_signal(const Lyt& lyt, tec_nt& ntk,
+                                        mockturtle::node_map<std::vector<mockturtle::signal<tec_nt>>, Lyt>& old2new,
+                                        const mockturtle::signal<Lyt>& traced_signal)
 {
-    const auto  source_node    = lyt.get_node(traced_signal);
-    auto&       mapped_outputs = old2new[source_node];
-    const auto  output_pin     = static_cast<std::size_t>(signal_output_pin<Lyt>(traced_signal));
+    const auto source_node    = lyt.get_node(traced_signal);
+    auto&      mapped_outputs = old2new[source_node];
+    const auto output_pin     = static_cast<std::size_t>(signal_output_pin<Lyt>(traced_signal));
 
     if (mapped_outputs.empty())
     {
@@ -366,8 +369,7 @@ template <typename Lyt>
             throw std::runtime_error{
                 "native hex GOLD fallback encountered unmapped PI source node " + std::to_string(source_node) +
                 " at tile (" + std::to_string(lyt.get_tile(source_node).x) + ", " +
-                std::to_string(lyt.get_tile(source_node).y) + ", " + std::to_string(lyt.get_tile(source_node).z) +
-                ")"};
+                std::to_string(lyt.get_tile(source_node).y) + ", " + std::to_string(lyt.get_tile(source_node).z) + ")"};
         }
     }
 
@@ -427,9 +429,9 @@ template <typename Lyt>
  * @param node Structural source node to reconstruct.
  */
 template <typename Lyt>
-void ensure_mapped_hex_structural_node(
-    const Lyt& lyt, tec_nt& ntk, mockturtle::node_map<std::vector<mockturtle::signal<tec_nt>>, Lyt>& old2new,
-    std::vector<uint8_t>& visit_state, const mockturtle::node<Lyt>& node)
+void ensure_mapped_hex_structural_node(const Lyt& lyt, tec_nt& ntk,
+                                       mockturtle::node_map<std::vector<mockturtle::signal<tec_nt>>, Lyt>& old2new,
+                                       std::vector<uint8_t>& visit_state, const mockturtle::node<Lyt>& node)
 {
     if (!old2new[node].empty() || lyt.is_constant(node) || lyt.is_pi(node))
     {
@@ -440,10 +442,9 @@ void ensure_mapped_hex_structural_node(
     {
         throw std::runtime_error{"native hex GOLD fallback encountered non-structural source node " +
                                  std::to_string(node) + " at tile (" + std::to_string(lyt.get_tile(node).x) + ", " +
-                                 std::to_string(lyt.get_tile(node).y) + ", " +
-                                 std::to_string(lyt.get_tile(node).z) + "), is_po=" +
-                                 std::to_string(lyt.is_po(node)) + ", is_wire=" +
-                                 std::to_string(is_connection_wire(lyt, node))};
+                                 std::to_string(lyt.get_tile(node).y) + ", " + std::to_string(lyt.get_tile(node).z) +
+                                 "), is_po=" + std::to_string(lyt.is_po(node)) +
+                                 ", is_wire=" + std::to_string(is_connection_wire(lyt, node))};
     }
 
     if (visit_state[node] == 1u)
@@ -503,19 +504,15 @@ void ensure_mapped_hex_structural_node(
 template <typename Lyt>
 [[nodiscard]] tec_nt extract_structural_hex_network(const Lyt& lyt)
 {
-    tec_nt ntk{};
+    tec_nt                                                             ntk{};
     mockturtle::node_map<std::vector<mockturtle::signal<tec_nt>>, Lyt> old2new{lyt};
     std::vector<uint8_t>                                               visit_state(lyt.size(), 0u);
-    const auto                                                         routing_objectives = extract_hex_routing_objectives(lyt);
+    const auto routing_objectives = extract_hex_routing_objectives(lyt);
 
     old2new[lyt.get_node(lyt.get_constant(false))] = {ntk.get_constant(false)};
     old2new[lyt.get_node(lyt.get_constant(true))]  = {ntk.get_constant(true)};
 
-    lyt.foreach_pi(
-        [&ntk, &old2new](const auto& pi)
-        {
-            old2new[pi] = {ntk.create_pi()};
-        });
+    lyt.foreach_pi([&ntk, &old2new](const auto& pi) { old2new[pi] = {ntk.create_pi()}; });
 
     visit_state[lyt.get_node(lyt.get_constant(false))] = 2u;
     visit_state[lyt.get_node(lyt.get_constant(true))]  = 2u;
@@ -540,17 +537,17 @@ template <typename Lyt>
 
             if (lyt.is_po(traced_node))
             {
-                const auto po_tile = lyt.get_tile(traced_node);
-                const auto po_objective =
-                    std::find_if(routing_objectives.cbegin(), routing_objectives.cend(),
-                                 [&po_tile](const auto& objective)
-                                 { return objective.target == po_tile && objective.source != po_tile; });
+                const auto po_tile      = lyt.get_tile(traced_node);
+                const auto po_objective = std::find_if(
+                    routing_objectives.cbegin(), routing_objectives.cend(), [&po_tile](const auto& objective)
+                    { return objective.target == po_tile && objective.source != po_tile; });
 
                 if (po_objective == routing_objectives.cend())
                 {
-                    throw std::runtime_error{"native hex GOLD fallback could not recover the structural driver for PO at tile (" +
-                                             std::to_string(po_tile.x) + ", " + std::to_string(po_tile.y) + ", " +
-                                             std::to_string(po_tile.z) + ")"};
+                    throw std::runtime_error{
+                        "native hex GOLD fallback could not recover the structural driver for PO at tile (" +
+                        std::to_string(po_tile.x) + ", " + std::to_string(po_tile.y) + ", " +
+                        std::to_string(po_tile.z) + ")"};
                 }
 
                 traced_signal = lyt.make_signal(lyt.get_node(po_objective->source), po_objective->source_output);
@@ -669,18 +666,18 @@ template <typename Lyt>
 
         visited[current_node] = true;
 
-        lyt.foreach_fanout(
-            current_node,
-            [&](const auto& fanout_node)
-            {
-                const auto incoming_signal = find_incoming_signal_from(lyt, current_node, fanout_node);
-                const auto source_output =
-                    is_connection_wire(lyt, current_node) ?
-                        recent_source_output :
-                        (incoming_signal.has_value() ? incoming_signal->signal.output : uint8_t{0});
-                const auto target_input = incoming_signal.has_value() ? incoming_signal->index : uint32_t{0};
-                recursively_traverse_paths(current_gate_tile, source_output, target_input, fanout_node);
-            });
+        lyt.foreach_fanout(current_node,
+                           [&](const auto& fanout_node)
+                           {
+                               const auto incoming_signal = find_incoming_signal_from(lyt, current_node, fanout_node);
+                               const auto source_output =
+                                   is_connection_wire(lyt, current_node) ?
+                                       recent_source_output :
+                                       (incoming_signal.has_value() ? incoming_signal->signal.output : uint8_t{0});
+                               const auto target_input =
+                                   incoming_signal.has_value() ? incoming_signal->index : uint32_t{0};
+                               recursively_traverse_paths(current_gate_tile, source_output, target_input, fanout_node);
+                           });
     };
 
     lyt.foreach_pi(
@@ -688,16 +685,16 @@ template <typename Lyt>
         {
             const auto pi_tile = lyt.get_tile(pi);
 
-            lyt.foreach_fanout(
-                pi,
-                [&](const auto& fanout_node)
-                {
-                    const auto incoming_signal = find_incoming_signal_from(lyt, pi, fanout_node);
-                    const auto source_output =
-                        incoming_signal.has_value() ? incoming_signal->signal.output : uint8_t{0};
-                    const auto target_input = incoming_signal.has_value() ? incoming_signal->index : uint32_t{0};
-                    recursively_traverse_paths(pi_tile, source_output, target_input, fanout_node);
-                });
+            lyt.foreach_fanout(pi,
+                               [&](const auto& fanout_node)
+                               {
+                                   const auto incoming_signal = find_incoming_signal_from(lyt, pi, fanout_node);
+                                   const auto source_output =
+                                       incoming_signal.has_value() ? incoming_signal->signal.output : uint8_t{0};
+                                   const auto target_input =
+                                       incoming_signal.has_value() ? incoming_signal->index : uint32_t{0};
+                                   recursively_traverse_paths(pi_tile, source_output, target_input, fanout_node);
+                               });
         });
 
     sort_hex_routing_objectives(objectives);
@@ -952,10 +949,10 @@ template <typename Lyt>
 
         for (uint64_t delta = 1u; delta <= lyt.y() - min_po_row; ++delta)
         {
-            const auto po_row = lyt.y() - delta;
-            auto candidate         = lyt.clone();
-            auto routing_objectives = extract_hex_routing_objectives(candidate);
-            const auto po_data      = extract_hex_po_routing_data(candidate, routing_objectives);
+            const auto po_row             = lyt.y() - delta;
+            auto       candidate          = lyt.clone();
+            auto       routing_objectives = extract_hex_routing_objectives(candidate);
+            const auto po_data            = extract_hex_po_routing_data(candidate, routing_objectives);
 
             if (po_data.size() != candidate.num_pos())
             {
@@ -982,7 +979,7 @@ template <typename Lyt>
                     candidate.move_node(candidate.get_node(po_item.current_target), po_tile, {});
                     routing_objectives[po_item.objective_index].target       = po_tile;
                     routing_objectives[po_item.objective_index].target_input = 0u;
-                    placed = true;
+                    placed                                                   = true;
                     break;
                 }
 
@@ -1012,8 +1009,8 @@ template <typename Lyt>
 
             const auto candidate_area  = layout_area(candidate);
             const auto candidate_wires = internal_wire_count(candidate);
-            const auto improves_layout =
-                (candidate_wires < baseline_wires) || (candidate_wires == baseline_wires && candidate_area < baseline_area);
+            const auto improves_layout = (candidate_wires < baseline_wires) ||
+                                         (candidate_wires == baseline_wires && candidate_area < baseline_area);
 
             if (!improves_layout)
             {
@@ -1091,70 +1088,73 @@ void append_unique_hex_tile(std::vector<tile<Lyt>>& tiles, const tile<Lyt>& t)
  * @return Local fan-ins, fan-outs, and recreatable wires around the moved gate.
  */
 template <typename Lyt>
-[[nodiscard]] hex_local_relocation_data<Lyt> extract_hex_local_relocation_data(const Lyt& lyt, const tile<Lyt>& gate_tile)
+[[nodiscard]] hex_local_relocation_data<Lyt> extract_hex_local_relocation_data(const Lyt&       lyt,
+                                                                               const tile<Lyt>& gate_tile)
 {
     auto data = hex_local_relocation_data<Lyt>{};
 
     const auto gate_node = lyt.get_node(gate_tile);
     uint32_t   gate_input{0u};
 
-    lyt.foreach_fanin(
-        gate_node,
-        [&lyt, &data, &gate_input](const auto& fin)
-        {
-            auto source_signal = fin;
-            auto source_node   = lyt.get_node(source_signal);
+    lyt.foreach_fanin(gate_node,
+                      [&lyt, &data, &gate_input](const auto& fin)
+                      {
+                          auto source_signal = fin;
+                          auto source_node   = lyt.get_node(source_signal);
 
-            while (is_connection_wire(lyt, source_node) && lyt.fanout_size(source_node) == 1u && !lyt.is_pi(source_node))
-            {
-                append_unique_hex_tile<Lyt>(data.to_clear, lyt.get_tile(source_node));
+                          while (is_connection_wire(lyt, source_node) && lyt.fanout_size(source_node) == 1u &&
+                                 !lyt.is_pi(source_node))
+                          {
+                              append_unique_hex_tile<Lyt>(data.to_clear, lyt.get_tile(source_node));
 
-                std::vector<mockturtle::signal<Lyt>> incoming_signals{};
-                lyt.foreach_fanin(source_node, [&incoming_signals](const auto& in) { incoming_signals.push_back(in); });
+                              std::vector<mockturtle::signal<Lyt>> incoming_signals{};
+                              lyt.foreach_fanin(source_node, [&incoming_signals](const auto& in)
+                                                { incoming_signals.push_back(in); });
 
-                if (incoming_signals.empty())
-                {
-                    break;
-                }
+                              if (incoming_signals.empty())
+                              {
+                                  break;
+                              }
 
-                source_signal = incoming_signals.front();
-                source_node   = lyt.get_node(source_signal);
-            }
+                              source_signal = incoming_signals.front();
+                              source_node   = lyt.get_node(source_signal);
+                          }
 
-            data.fanins.push_back({source_signal, gate_input});
-            ++gate_input;
-        });
+                          data.fanins.push_back({source_signal, gate_input});
+                          ++gate_input;
+                      });
 
-    lyt.foreach_fanout(
-        gate_node,
-        [&lyt, &data, &gate_node](const auto& immediate_target)
-        {
-            const auto immediate_signal = find_incoming_signal_from(lyt, gate_node, immediate_target);
+    lyt.foreach_fanout(gate_node,
+                       [&lyt, &data, &gate_node](const auto& immediate_target)
+                       {
+                           const auto immediate_signal = find_incoming_signal_from(lyt, gate_node, immediate_target);
 
-            auto current_node  = immediate_target;
-            auto source_output = immediate_signal.has_value() ? immediate_signal->signal.output : uint8_t{0};
-            auto target_input  = immediate_signal.has_value() ? immediate_signal->index : uint32_t{0};
+                           auto current_node = immediate_target;
+                           auto source_output =
+                               immediate_signal.has_value() ? immediate_signal->signal.output : uint8_t{0};
+                           auto target_input = immediate_signal.has_value() ? immediate_signal->index : uint32_t{0};
 
-            while (is_connection_wire(lyt, current_node) && lyt.fanout_size(current_node) == 1u && !lyt.is_po(current_node))
-            {
-                append_unique_hex_tile<Lyt>(data.to_clear, lyt.get_tile(current_node));
+                           while (is_connection_wire(lyt, current_node) && lyt.fanout_size(current_node) == 1u &&
+                                  !lyt.is_po(current_node))
+                           {
+                               append_unique_hex_tile<Lyt>(data.to_clear, lyt.get_tile(current_node));
 
-                const auto outgoing_tiles = lyt.outgoing_data_flow(lyt.get_tile(current_node));
+                               const auto outgoing_tiles = lyt.outgoing_data_flow(lyt.get_tile(current_node));
 
-                if (outgoing_tiles.empty())
-                {
-                    break;
-                }
+                               if (outgoing_tiles.empty())
+                               {
+                                   break;
+                               }
 
-                const auto next_node   = lyt.get_node(outgoing_tiles.front());
-                const auto next_signal = find_incoming_signal_from(lyt, current_node, next_node);
+                               const auto next_node   = lyt.get_node(outgoing_tiles.front());
+                               const auto next_signal = find_incoming_signal_from(lyt, current_node, next_node);
 
-                current_node = next_node;
-                target_input = next_signal.has_value() ? next_signal->index : uint32_t{0};
-            }
+                               current_node = next_node;
+                               target_input = next_signal.has_value() ? next_signal->index : uint32_t{0};
+                           }
 
-            data.fanouts.push_back({lyt.get_tile(current_node), source_output, target_input});
-        });
+                           data.fanouts.push_back({lyt.get_tile(current_node), source_output, target_input});
+                       });
 
     return data;
 }
@@ -1177,7 +1177,8 @@ template <typename Lyt>
 {
     const auto is_empty_or_reclaimable = [&lyt, &reclaimable_tiles](const auto& t)
     {
-        return lyt.is_empty_tile(t) || std::find(reclaimable_tiles.cbegin(), reclaimable_tiles.cend(), t) != reclaimable_tiles.cend();
+        return lyt.is_empty_tile(t) ||
+               std::find(reclaimable_tiles.cbegin(), reclaimable_tiles.cend(), t) != reclaimable_tiles.cend();
     };
 
     if (!is_empty_or_reclaimable(candidate_tile))
@@ -1217,8 +1218,7 @@ template <typename Lyt, typename Path>
     }
 
     std::for_each(
-        path.cbegin() + 1, path.cend() - 1,
-        [&lyt, &incoming_signal](const auto& coord)
+        path.cbegin() + 1, path.cend() - 1, [&lyt, &incoming_signal](const auto& coord)
         { incoming_signal = lyt.create_buf(incoming_signal, lyt.is_empty_tile(coord) ? coord : lyt.above(coord)); });
 
     return incoming_signal;
@@ -1249,13 +1249,12 @@ template <typename Lyt>
  * @return Relocated layout if the local reroute succeeded.
  */
 template <typename Lyt>
-[[nodiscard]] std::optional<Lyt> try_local_hex_gate_relocation(const Lyt& lyt, const tile<Lyt>& old_tile,
-                                                               const tile<Lyt>& new_tile,
-                                                               const hex_local_relocation_data<Lyt>& local_data,
-                                                               const bool                           allow_crossings)
+[[nodiscard]] std::optional<Lyt>
+try_local_hex_gate_relocation(const Lyt& lyt, const tile<Lyt>& old_tile, const tile<Lyt>& new_tile,
+                              const hex_local_relocation_data<Lyt>& local_data, const bool allow_crossings)
 {
-    auto candidate  = lyt.clone();
-    const auto node = candidate.get_node(old_tile);
+    auto       candidate = lyt.clone();
+    const auto node      = candidate.get_node(old_tile);
 
     for (const auto& t : local_data.to_clear)
     {
@@ -1263,20 +1262,19 @@ template <typename Lyt>
     }
 
     auto grouped_fanouts = local_data.fanouts;
-    std::sort(
-        grouped_fanouts.begin(), grouped_fanouts.end(),
-        [](const auto& lhs, const auto& rhs)
-        {
-            if (lhs.target != rhs.target)
-            {
-                return lexicographically_less<Lyt>(lhs.target, rhs.target);
-            }
+    std::sort(grouped_fanouts.begin(), grouped_fanouts.end(),
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.target != rhs.target)
+                  {
+                      return lexicographically_less<Lyt>(lhs.target, rhs.target);
+                  }
 
-            return lhs.target_input < rhs.target_input;
-        });
+                  return lhs.target_input < rhs.target_input;
+              });
 
-    std::vector<tile<Lyt>>                                  target_tiles{};
-    std::vector<std::vector<mockturtle::signal<Lyt>>>       target_children{};
+    std::vector<tile<Lyt>>                            target_tiles{};
+    std::vector<std::vector<mockturtle::signal<Lyt>>> target_children{};
 
     for (std::size_t i = 0u; i < grouped_fanouts.size();)
     {
@@ -1333,9 +1331,8 @@ template <typename Lyt>
     for (const auto& fanin : routed_fanins)
     {
         const auto source_tile = static_cast<tile<Lyt>>(fanin.source_signal);
-        const auto path        = a_star<layout_coordinate_path<Lyt>>(candidate, {source_tile, new_tile},
-                                                              euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(),
-                                                              params);
+        const auto path        = a_star<layout_coordinate_path<Lyt>>(
+            candidate, {source_tile, new_tile}, euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(), params);
 
         if (path.empty() && source_tile != new_tile)
         {
@@ -1373,9 +1370,8 @@ template <typename Lyt>
 
     for (const auto& fanout : routed_fanouts)
     {
-        const auto path = a_star<layout_coordinate_path<Lyt>>(candidate, {new_tile, fanout.target},
-                                                              euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(),
-                                                              params);
+        const auto path = a_star<layout_coordinate_path<Lyt>>(
+            candidate, {new_tile, fanout.target}, euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(), params);
 
         if (path.empty() && new_tile != fanout.target)
         {
@@ -1387,17 +1383,16 @@ template <typename Lyt>
             {fanout, path.empty() ? source_signal : route_hex_path_signal(candidate, source_signal, path)});
     }
 
-    std::sort(
-        routed_fanout_signals.begin(), routed_fanout_signals.end(),
-        [](const auto& lhs, const auto& rhs)
-        {
-            if (lhs.fanout.target != rhs.fanout.target)
-            {
-                return lexicographically_less<Lyt>(lhs.fanout.target, rhs.fanout.target);
-            }
+    std::sort(routed_fanout_signals.begin(), routed_fanout_signals.end(),
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.fanout.target != rhs.fanout.target)
+                  {
+                      return lexicographically_less<Lyt>(lhs.fanout.target, rhs.fanout.target);
+                  }
 
-            return lhs.fanout.target_input < rhs.fanout.target_input;
-        });
+                  return lhs.fanout.target_input < rhs.fanout.target_input;
+              });
 
     for (const auto& routed_fanout : routed_fanout_signals)
     {
@@ -1416,7 +1411,8 @@ template <typename Lyt>
             return std::nullopt;
         }
 
-        children.insert(children.cbegin() + static_cast<int64_t>(routed_fanout.fanout.target_input), routed_fanout.signal);
+        children.insert(children.cbegin() + static_cast<int64_t>(routed_fanout.fanout.target_input),
+                        routed_fanout.signal);
         candidate.move_node(candidate.get_node(routed_fanout.fanout.target), routed_fanout.fanout.target, children);
     }
 
@@ -1438,13 +1434,12 @@ template <typename Lyt>
  * @return Relocated layout if the global reroute succeeded.
  */
 template <typename Lyt>
-[[nodiscard]] std::optional<Lyt> try_global_hex_gate_relocation(const Lyt& lyt, const tile<Lyt>& old_tile,
-                                                                const tile<Lyt>& new_tile,
-                                                                const hex_local_relocation_data<Lyt>& local_data,
-                                                                const bool                           allow_crossings)
+[[nodiscard]] std::optional<Lyt>
+try_global_hex_gate_relocation(const Lyt& lyt, const tile<Lyt>& old_tile, const tile<Lyt>& new_tile,
+                               const hex_local_relocation_data<Lyt>& local_data, const bool allow_crossings)
 {
-    auto candidate  = lyt.clone();
-    const auto node = candidate.get_node(old_tile);
+    auto       candidate = lyt.clone();
+    const auto node      = candidate.get_node(old_tile);
 
     std::vector<mockturtle::signal<Lyt>> moved_gate_children(local_data.fanins.size());
 
@@ -1462,7 +1457,7 @@ template <typename Lyt>
 
     for (const auto& fanout : local_data.fanouts)
     {
-        const auto target_node = candidate.get_node(fanout.target);
+        const auto                           target_node = candidate.get_node(fanout.target);
         std::vector<mockturtle::signal<Lyt>> children{};
         candidate.foreach_fanin(target_node, [&children](const auto& fin) { children.push_back(fin); });
 
@@ -1596,22 +1591,21 @@ void shift_structural_nodes_up_after_row_removal(Lyt& lyt, const uint64_t row)
             nodes_to_shift.emplace_back(node_tile, n);
         });
 
-    std::sort(
-        nodes_to_shift.begin(), nodes_to_shift.end(),
-        [](const auto& lhs, const auto& rhs)
-        {
-            if (lhs.first.y != rhs.first.y)
-            {
-                return lhs.first.y < rhs.first.y;
-            }
+    std::sort(nodes_to_shift.begin(), nodes_to_shift.end(),
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.first.y != rhs.first.y)
+                  {
+                      return lhs.first.y < rhs.first.y;
+                  }
 
-            if (lhs.first.z != rhs.first.z)
-            {
-                return lhs.first.z < rhs.first.z;
-            }
+                  if (lhs.first.z != rhs.first.z)
+                  {
+                      return lhs.first.z < rhs.first.z;
+                  }
 
-            return lhs.first.x < rhs.first.x;
-        });
+                  return lhs.first.x < rhs.first.x;
+              });
 
     for (const auto& [old_tile, node] : nodes_to_shift)
     {
@@ -1707,8 +1701,7 @@ template <typename Lyt>
             auto target_tile = node_tile;
             --target_tile.y;
 
-            shift_is_legal =
-                !std::binary_search(fixed_tiles.cbegin(), fixed_tiles.cend(), target_tile, tile_less);
+            shift_is_legal = !std::binary_search(fixed_tiles.cbegin(), fixed_tiles.cend(), target_tile, tile_less);
         });
 
     return shift_is_legal;
@@ -1748,9 +1741,9 @@ template <typename Lyt>
             continue;
         }
 
-        const auto path = a_star<layout_coordinate_path<Lyt>>(lyt, {objective.source, objective.target},
-                                                              euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(),
-                                                              params);
+        const auto path =
+            a_star<layout_coordinate_path<Lyt>>(lyt, {objective.source, objective.target},
+                                                euclidean_distance_functor<Lyt>(), unit_cost_functor<Lyt>(), params);
 
         if (path.empty())
         {
@@ -1760,10 +1753,12 @@ template <typename Lyt>
 
         auto incoming_signal = lyt.make_signal(lyt.get_node(objective.source), objective.source_output);
 
-        std::for_each(
-            path.cbegin() + 1, path.cend() - 1,
-            [&lyt, &incoming_signal](const auto& coord)
-            { incoming_signal = lyt.create_buf(incoming_signal, lyt.is_empty_tile(coord) ? coord : lyt.above(coord)); });
+        std::for_each(path.cbegin() + 1, path.cend() - 1,
+                      [&lyt, &incoming_signal](const auto& coord)
+                      {
+                          incoming_signal =
+                              lyt.create_buf(incoming_signal, lyt.is_empty_tile(coord) ? coord : lyt.above(coord));
+                      });
 
         const auto target_node = lyt.get_node(path.target());
         auto       target_tile = lyt.get_tile(target_node);
@@ -1777,7 +1772,8 @@ template <typename Lyt>
             return false;
         }
 
-        target_children.insert(target_children.cbegin() + static_cast<int64_t>(objective.target_input), incoming_signal);
+        target_children.insert(target_children.cbegin() + static_cast<int64_t>(objective.target_input),
+                               incoming_signal);
         lyt.move_node(target_node, target_tile, target_children);
     }
 
@@ -1810,7 +1806,7 @@ template <typename Lyt>
 template <typename Lyt>
 [[nodiscard]] Lyt refine_hex_layout_with_global_reroute(const Lyt& lyt, const bool allow_crossings)
 {
-    auto best_layout = lyt.clone();
+    auto best_layout     = lyt.clone();
     auto rerouted_layout = best_layout.clone();
 
     if (!reroute_hex_layout_wires(rerouted_layout, allow_crossings))
@@ -1820,8 +1816,7 @@ template <typename Lyt>
 
     [[maybe_unused]] const auto rerouted_po_optimization =
         optimize_hex_output_positions(rerouted_layout, allow_crossings);
-    [[maybe_unused]] const auto rerouted_wire_row_compaction =
-        compact_hex_wire_rows(rerouted_layout, allow_crossings);
+    [[maybe_unused]] const auto rerouted_wire_row_compaction = compact_hex_wire_rows(rerouted_layout, allow_crossings);
     [[maybe_unused]] const auto rerouted_po_optimization_after_row_compaction =
         optimize_hex_output_positions(rerouted_layout, allow_crossings);
     compact_to_bounding_box(rerouted_layout);
@@ -1837,9 +1832,8 @@ template <typename Lyt>
     const auto rerouted_area       = layout_area(rerouted_layout);
     const auto best_wire_count     = internal_wire_count(best_layout);
     const auto rerouted_wire_count = internal_wire_count(rerouted_layout);
-    const auto improves_layout =
-        (rerouted_wire_count < best_wire_count) ||
-        (rerouted_wire_count == best_wire_count && rerouted_area <= best_area);
+    const auto improves_layout     = (rerouted_wire_count < best_wire_count) ||
+                                 (rerouted_wire_count == best_wire_count && rerouted_area <= best_area);
 
     return improves_layout ? std::move(rerouted_layout) : std::move(best_layout);
 }
@@ -1871,9 +1865,9 @@ template <typename Lyt>
                 continue;
             }
 
-            auto candidate          = lyt.clone();
-            const auto objectives   = shift_objectives_after_row_removal(extract_hex_routing_objectives(candidate), row);
-            const auto current_area = layout_area(lyt);
+            auto       candidate  = lyt.clone();
+            const auto objectives = shift_objectives_after_row_removal(extract_hex_routing_objectives(candidate), row);
+            const auto current_area  = layout_area(lyt);
             const auto current_wires = internal_wire_count(lyt);
 
             clear_hex_routing(candidate);
@@ -1893,8 +1887,8 @@ template <typename Lyt>
 
             const auto candidate_area  = layout_area(candidate);
             const auto candidate_wires = internal_wire_count(candidate);
-            const auto improves_layout =
-                (candidate_wires < current_wires) || (candidate_wires == current_wires && candidate_area < current_area);
+            const auto improves_layout = (candidate_wires < current_wires) ||
+                                         (candidate_wires == current_wires && candidate_area < current_area);
 
             if (!improves_layout)
             {
@@ -1956,8 +1950,9 @@ template <typename Lyt>
                 continue;
             }
 
-            [[maybe_unused]] const auto optimized_po_positions = optimize_hex_output_positions(candidate, allow_crossings);
-            [[maybe_unused]] const auto removed_wire_rows      = compact_hex_wire_rows(candidate, allow_crossings);
+            [[maybe_unused]] const auto optimized_po_positions =
+                optimize_hex_output_positions(candidate, allow_crossings);
+            [[maybe_unused]] const auto removed_wire_rows = compact_hex_wire_rows(candidate, allow_crossings);
             [[maybe_unused]] const auto optimized_po_positions_after_row_compaction =
                 optimize_hex_output_positions(candidate, allow_crossings);
             compact_to_bounding_box(candidate);
@@ -1968,21 +1963,19 @@ template <typename Lyt>
                 continue;
             }
 
-            const auto candidate_area       = layout_area(candidate);
-            const auto candidate_wires      = internal_wire_count(candidate);
-            const auto candidate_non_po_row = max_non_po_structural_row(candidate);
-            const auto candidate_gate_score = structural_gate_position_score(candidate);
-            const auto directly_improves_layout =
-                candidate_area < baseline_area || candidate_non_po_row < baseline_non_po_row ||
-                candidate_gate_score < baseline_gate_score;
-            const auto preserves_cost_bounds =
-                candidate_area <= baseline_area && candidate_wires <= baseline_wires;
+            const auto candidate_area           = layout_area(candidate);
+            const auto candidate_wires          = internal_wire_count(candidate);
+            const auto candidate_non_po_row     = max_non_po_structural_row(candidate);
+            const auto candidate_gate_score     = structural_gate_position_score(candidate);
+            const auto directly_improves_layout = candidate_area < baseline_area ||
+                                                  candidate_non_po_row < baseline_non_po_row ||
+                                                  candidate_gate_score < baseline_gate_score;
+            const auto preserves_cost_bounds = candidate_area <= baseline_area && candidate_wires <= baseline_wires;
             const auto preserves_exploratory_bounds =
-                candidate_area <= baseline_area &&
-                candidate_wires <= baseline_wires + exploratory_wire_slack &&
+                candidate_area <= baseline_area && candidate_wires <= baseline_wires + exploratory_wire_slack &&
                 (candidate_non_po_row < baseline_non_po_row || candidate_gate_score < baseline_gate_score);
-            const auto improves_layout = directly_improves_layout &&
-                                         (preserves_cost_bounds || preserves_exploratory_bounds);
+            const auto improves_layout =
+                directly_improves_layout && (preserves_cost_bounds || preserves_exploratory_bounds);
 
             if (!improves_layout)
             {
@@ -2024,17 +2017,16 @@ template <typename Lyt>
             gate_tiles.push_back(lyt.get_tile(n));
         });
 
-    std::sort(
-        gate_tiles.begin(), gate_tiles.end(),
-        [](const auto& lhs, const auto& rhs)
-        {
-            if (lhs.y != rhs.y)
-            {
-                return lhs.y > rhs.y;
-            }
+    std::sort(gate_tiles.begin(), gate_tiles.end(),
+              [](const auto& lhs, const auto& rhs)
+              {
+                  if (lhs.y != rhs.y)
+                  {
+                      return lhs.y > rhs.y;
+                  }
 
-            return lhs.x > rhs.x;
-        });
+                  return lhs.x > rhs.x;
+              });
 
     return gate_tiles;
 }
@@ -2053,7 +2045,7 @@ template <typename Lyt>
 template <typename Lyt>
 [[nodiscard]] std::vector<tile<Lyt>> candidate_hex_gate_tiles(const Lyt& lyt, const tile<Lyt>& old_tile,
                                                               const std::vector<tile<Lyt>>& reclaimable_tiles,
-                                                              const uint64_t                 max_candidates)
+                                                              const uint64_t                max_candidates)
 {
     std::vector<tile<Lyt>> candidates{};
     candidates.reserve(std::min<uint64_t>((lyt.x() + 1u) * (old_tile.y + 1u), max_candidates));
@@ -2109,9 +2101,9 @@ template <typename Lyt>
         return false;
     }
 
-    auto     improved             = false;
-    auto     progress             = true;
-    uint64_t relocation_attempts  = 0u;
+    auto     improved            = false;
+    auto     progress            = true;
+    uint64_t relocation_attempts = 0u;
 
     while (progress && relocation_attempts < relocation_budget)
     {
@@ -2131,15 +2123,15 @@ template <typename Lyt>
                 break;
             }
 
-            const auto local_data        = extract_hex_local_relocation_data(lyt, old_tile);
+            const auto local_data       = extract_hex_local_relocation_data(lyt, old_tile);
             const auto remaining_budget = relocation_budget - relocation_attempts;
 
             for (const auto& new_tile : candidate_hex_gate_tiles(lyt, old_tile, local_data.to_clear, remaining_budget))
             {
                 ++relocation_attempts;
 
-                auto relocated_candidate = try_local_hex_gate_relocation(lyt, old_tile, new_tile, local_data,
-                                                                         allow_crossings);
+                auto relocated_candidate =
+                    try_local_hex_gate_relocation(lyt, old_tile, new_tile, local_data, allow_crossings);
 
                 if (!relocated_candidate.has_value())
                 {
@@ -2154,8 +2146,9 @@ template <typename Lyt>
 
                 auto candidate = std::move(*relocated_candidate);
 
-                [[maybe_unused]] const auto optimized_po_positions = optimize_hex_output_positions(candidate, allow_crossings);
-                [[maybe_unused]] const auto removed_wire_rows      = compact_hex_wire_rows(candidate, allow_crossings);
+                [[maybe_unused]] const auto optimized_po_positions =
+                    optimize_hex_output_positions(candidate, allow_crossings);
+                [[maybe_unused]] const auto removed_wire_rows = compact_hex_wire_rows(candidate, allow_crossings);
                 [[maybe_unused]] const auto optimized_po_positions_after_row_compaction =
                     optimize_hex_output_positions(candidate, allow_crossings);
                 compact_to_bounding_box(candidate);
@@ -2166,23 +2159,22 @@ template <typename Lyt>
                     continue;
                 }
 
-                const auto candidate_area       = layout_area(candidate);
-                const auto candidate_wires      = internal_wire_count(candidate);
-                const auto candidate_non_po_row = max_non_po_structural_row(candidate);
-                const auto candidate_gate_score = structural_gate_position_score(candidate);
-                const auto preserves_cost_bounds =
-                    candidate_area <= baseline_area && candidate_wires <= baseline_wires;
+                const auto candidate_area        = layout_area(candidate);
+                const auto candidate_wires       = internal_wire_count(candidate);
+                const auto candidate_non_po_row  = max_non_po_structural_row(candidate);
+                const auto candidate_gate_score  = structural_gate_position_score(candidate);
+                const auto preserves_cost_bounds = candidate_area <= baseline_area && candidate_wires <= baseline_wires;
                 const auto directly_improves_layout =
                     candidate_area < baseline_area || candidate_wires < baseline_wires || candidate.y() < baseline_y ||
                     candidate.x() < baseline_x || candidate_non_po_row < baseline_non_po_row;
                 const auto improves_gate_compactness = candidate_gate_score < baseline_gate_score;
                 const auto preserves_exploratory_bounds =
-                    candidate_area <= baseline_area &&
-                    candidate_wires <= baseline_wires + exploratory_wire_slack &&
+                    candidate_area <= baseline_area && candidate_wires <= baseline_wires + exploratory_wire_slack &&
                     (candidate_non_po_row < baseline_non_po_row || improves_gate_compactness);
                 const auto improves_layout =
                     (preserves_cost_bounds && (directly_improves_layout || improves_gate_compactness)) ||
-                    (preserves_exploratory_bounds && (candidate_non_po_row < baseline_non_po_row || improves_gate_compactness));
+                    (preserves_exploratory_bounds &&
+                     (candidate_non_po_row < baseline_non_po_row || improves_gate_compactness));
 
                 if (!improves_layout)
                 {
@@ -2216,8 +2208,9 @@ template <typename Lyt>
  * @return Beam of promising candidate layouts ordered by quality.
  */
 template <typename Lyt>
-[[nodiscard]] std::vector<Lyt> collect_promising_hex_relocation_candidates(
-    const Lyt& lyt, const post_layout_optimization_params& ps, const uint64_t beam_width, const uint64_t candidate_budget)
+[[nodiscard]] std::vector<Lyt>
+collect_promising_hex_relocation_candidates(const Lyt& lyt, const post_layout_optimization_params& ps,
+                                            const uint64_t beam_width, const uint64_t candidate_budget)
 {
     constexpr uint64_t exploratory_wire_slack = 8u;
 
@@ -2226,9 +2219,9 @@ template <typename Lyt>
         return {};
     }
 
-    const auto allow_crossings = !ps.planar_optimization;
-    const auto baseline_area   = layout_area(lyt);
-    const auto baseline_wires  = internal_wire_count(lyt);
+    const auto allow_crossings  = !ps.planar_optimization;
+    const auto baseline_area    = layout_area(lyt);
+    const auto baseline_wires   = internal_wire_count(lyt);
     const auto baseline_quality = hex_layout_quality(lyt);
 
     std::vector<std::pair<std::tuple<uint64_t, uint64_t, uint64_t, uint64_t, uint64_t>, Lyt>> beam{};
@@ -2243,7 +2236,7 @@ template <typename Lyt>
             break;
         }
 
-        const auto local_data        = extract_hex_local_relocation_data(lyt, old_tile);
+        const auto local_data       = extract_hex_local_relocation_data(lyt, old_tile);
         const auto remaining_budget = candidate_budget - evaluated_candidates;
 
         for (const auto& new_tile : candidate_hex_gate_tiles(lyt, old_tile, local_data.to_clear, remaining_budget))
@@ -2266,8 +2259,9 @@ template <typename Lyt>
 
             auto candidate = std::move(*relocated_candidate);
 
-            [[maybe_unused]] const auto optimized_po_positions = optimize_hex_output_positions(candidate, allow_crossings);
-            [[maybe_unused]] const auto removed_wire_rows      = compact_hex_wire_rows(candidate, allow_crossings);
+            [[maybe_unused]] const auto optimized_po_positions =
+                optimize_hex_output_positions(candidate, allow_crossings);
+            [[maybe_unused]] const auto removed_wire_rows = compact_hex_wire_rows(candidate, allow_crossings);
             [[maybe_unused]] const auto optimized_po_positions_after_row_compaction =
                 optimize_hex_output_positions(candidate, allow_crossings);
             compact_to_bounding_box(candidate);
@@ -2292,12 +2286,7 @@ template <typename Lyt>
 
             beam.emplace_back(candidate_quality, std::move(candidate));
 
-            std::sort(
-                beam.begin(), beam.end(),
-                [](const auto& lhs, const auto& rhs)
-                {
-                    return lhs.first < rhs.first;
-                });
+            std::sort(beam.begin(), beam.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
 
             if (beam.size() > beam_width)
             {
@@ -2329,24 +2318,23 @@ template <typename Lyt>
 template <typename Lyt>
 [[nodiscard]] bool explore_two_step_hex_gate_relocations(Lyt& lyt, const post_layout_optimization_params& ps)
 {
-    constexpr uint64_t beam_width      = 4u;
+    constexpr uint64_t beam_width       = 4u;
     constexpr uint64_t candidate_budget = 64u;
 
-    const auto allow_crossings    = !ps.planar_optimization;
-    const auto original_area      = layout_area(lyt);
-    const auto original_wires     = internal_wire_count(lyt);
-    const auto original_quality   = hex_layout_quality(lyt);
+    const auto allow_crossings  = !ps.planar_optimization;
+    const auto original_area    = layout_area(lyt);
+    const auto original_wires   = internal_wire_count(lyt);
+    const auto original_quality = hex_layout_quality(lyt);
 
     auto best_candidate = lyt.clone();
     auto improved       = false;
 
     for (auto seed : collect_promising_hex_relocation_candidates(lyt, ps, beam_width, candidate_budget))
     {
-        [[maybe_unused]] const auto relocated_more_gates = optimize_hex_gate_positions(seed, ps);
-        [[maybe_unused]] const auto compacted_suffixes   = compact_hex_structural_suffixes(seed, allow_crossings);
-        [[maybe_unused]] const auto optimized_po_positions =
-            optimize_hex_output_positions(seed, allow_crossings);
-        [[maybe_unused]] const auto removed_wire_rows = compact_hex_wire_rows(seed, allow_crossings);
+        [[maybe_unused]] const auto relocated_more_gates   = optimize_hex_gate_positions(seed, ps);
+        [[maybe_unused]] const auto compacted_suffixes     = compact_hex_structural_suffixes(seed, allow_crossings);
+        [[maybe_unused]] const auto optimized_po_positions = optimize_hex_output_positions(seed, allow_crossings);
+        [[maybe_unused]] const auto removed_wire_rows      = compact_hex_wire_rows(seed, allow_crossings);
         [[maybe_unused]] const auto optimized_po_positions_after_row_compaction =
             optimize_hex_output_positions(seed, allow_crossings);
         compact_to_bounding_box(seed);
@@ -2417,7 +2405,7 @@ void post_layout_optimization_hex(const Lyt& lyt, [[maybe_unused]] post_layout_o
         st.num_wires_before     = lyt.num_wires() - lyt.num_pis() - lyt.num_pos();
         st.num_crossings_before = lyt.num_crossings();
 
-        auto& mutable_layout = const_cast<Lyt&>(lyt);
+        auto&      mutable_layout  = const_cast<Lyt&>(lyt);
         const auto allow_crossings = !ps.planar_optimization;
 
         if (!lyt.is_clocking_scheme(clock_name::ROW))
@@ -2437,7 +2425,7 @@ void post_layout_optimization_hex(const Lyt& lyt, [[maybe_unused]] post_layout_o
             return;
         }
 
-        auto best_layout = lyt.clone();
+        auto       best_layout     = lyt.clone();
         const auto original_layout = lyt.clone();
         detail::compact_to_bounding_box(best_layout);
         [[maybe_unused]] const auto optimized_po_positions =
@@ -2456,7 +2444,7 @@ void post_layout_optimization_hex(const Lyt& lyt, [[maybe_unused]] post_layout_o
 
         if (const auto gold_candidate = detail::try_hex_gold_rebuild(original_layout, ps); gold_candidate.has_value())
         {
-            auto polished_gold = *gold_candidate;
+            auto                        polished_gold = *gold_candidate;
             [[maybe_unused]] const auto optimized_gold_po_positions =
                 detail::optimize_hex_output_positions(polished_gold, allow_crossings);
             [[maybe_unused]] const auto removed_gold_wire_rows =
@@ -2478,9 +2466,10 @@ void post_layout_optimization_hex(const Lyt& lyt, [[maybe_unused]] post_layout_o
         }
 
         const auto keeps_equivalence = equivalence_checking(original_layout, best_layout) != eq_type::NO;
-        const auto improves_original = detail::prefer_hex_layout_candidate(best_layout, original_layout) ||
-                                       (detail::layout_area(best_layout) == detail::layout_area(original_layout) &&
-                                        detail::internal_wire_count(best_layout) == detail::internal_wire_count(original_layout));
+        const auto improves_original =
+            detail::prefer_hex_layout_candidate(best_layout, original_layout) ||
+            (detail::layout_area(best_layout) == detail::layout_area(original_layout) &&
+             detail::internal_wire_count(best_layout) == detail::internal_wire_count(original_layout));
 
         mutable_layout = (keeps_equivalence && improves_original) ? best_layout : original_layout;
 

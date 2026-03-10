@@ -12,8 +12,8 @@
 #include <fiction/algorithms/network_transformation/technology_mapping.hpp>
 #include <fiction/algorithms/physical_design/graph_oriented_layout_design.hpp>
 #include <fiction/algorithms/physical_design/graph_oriented_layout_design_hex.hpp>
-#include <fiction/io/read_fgl_layout.hpp>
 #include <fiction/io/network_reader.hpp>
+#include <fiction/io/read_fgl_layout.hpp>
 #include <fiction/layouts/cartesian_layout.hpp>
 #include <fiction/layouts/clocked_layout.hpp>
 #include <fiction/layouts/gate_level_layout.hpp>
@@ -285,8 +285,8 @@ TEST_CASE("Mapped RCA2 with skipped PIs remains placeable on hex grid",
 {
     const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
 
-    std::ostringstream         os{};
-    network_reader<aig_ptr>    reader{rca2_file_name, os};
+    std::ostringstream      os{};
+    network_reader<aig_ptr> reader{rca2_file_name, os};
     REQUIRE(os.str().empty());
 
     const auto networks = reader.get_networks();
@@ -303,11 +303,11 @@ TEST_CASE("Mapped RCA2 with skipped PIs remains placeable on hex grid",
 
     graph_oriented_layout_design_stats  stats{};
     graph_oriented_layout_design_params params{};
-    params.mode                       = graph_oriented_layout_design_params::effort_mode::HIGH_EFFORT;
-    params.seed                       = 0u;
-    params.tiles_to_skip_between_pis  = 1u;
-    params.timeout                    = 10000u;
-    params.cost                       = graph_oriented_layout_design_params::cost_objective::AREA;
+    params.mode                      = graph_oriented_layout_design_params::effort_mode::HIGH_EFFORT;
+    params.seed                      = 0u;
+    params.tiles_to_skip_between_pis = 1u;
+    params.timeout                   = 10000u;
+    params.cost                      = graph_oriented_layout_design_params::cost_objective::AREA;
 
     const auto layout = run_gold_hex_native(mapped, params, &stats);
     REQUIRE(layout.has_value());

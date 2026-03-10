@@ -264,6 +264,45 @@ TEST_CASE("Graph-oriented layout design preserves mapped half adder gate", "[gra
     CHECK(collect_multioutput_launch_violations(*layout).empty());
 }
 
+TEST_CASE("Graph-oriented layout design preserves mapped half adder gate with multithreading",
+          "[graph-oriented-layout-design]")
+{
+    using gate_layout = cart_gate_clk_lyt;
+
+    const auto aig_ha = blueprints::half_adder_network<mockturtle::aig_network>();
+
+    technology_mapping_stats mapping_stats{};
+    const auto               mapped_ha = technology_mapping(aig_ha, all_standard_2_input_functions(), &mapping_stats);
+    REQUIRE(!mapping_stats.mapper_stats.mapping_error);
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                  = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    params.cost                  = graph_oriented_layout_design_params::cost_objective::WIRES;
+    params.enable_multithreading = true;
+    params.timeout               = 100000u;
+    params.seed                  = 0u;
+    params.return_first          = false;
+
+    const auto layout = graph_oriented_layout_design<gate_layout>(mapped_ha, params, &stats);
+    REQUIRE(layout.has_value());
+
+    uint64_t layout_num_ha_gates = 0u;
+    layout->foreach_gate(
+        [&layout, &layout_num_ha_gates](const auto& g)
+        {
+            if (layout->is_ha(g))
+            {
+                ++layout_num_ha_gates;
+            }
+        });
+
+    CHECK(layout_num_ha_gates == 1u);
+    CHECK(layout->num_pos() == 2u);
+    check_eq(mapped_ha, *layout);
+    CHECK(collect_multioutput_launch_violations(*layout).empty());
+}
+
 TEST_CASE("Gate library application", "[graph-oriented-layout-design]")
 {
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
@@ -300,9 +339,19 @@ TEST_CASE("Graph-oriented layout design supports high-fanout multi-output gates"
     const auto layout = graph_oriented_layout_design<gate_layout>(ntk, params, &stats);
     REQUIRE(layout.has_value());
 
+    uint64_t layout_num_multioutput_gates = 0u;
+    layout->foreach_gate(
+        [&layout, &layout_num_multioutput_gates](const auto& g)
+        {
+            if (layout->is_multioutput(g))
+            {
+                ++layout_num_multioutput_gates;
+            }
+        });
+
     CHECK(layout->num_pis() == ntk.num_pis());
     CHECK(layout->num_pos() == ntk.num_pos());
-    CHECK(layout->num_gates() >= ntk.num_gates());
+    CHECK(layout_num_multioutput_gates == 1u);
     check_eq(ntk, *layout);
     CHECK(collect_multioutput_launch_violations(*layout).empty());
 }

@@ -237,7 +237,9 @@ class graph_oriented_layout_design_hex_impl
 
     [[nodiscard]] static tec_nt initialize_network(const Ntk& src)
     {
-        if constexpr (std::is_same_v<Ntk, tec_nt>)
+        using stripped_ntk = std::remove_cv_t<std::remove_reference_t<Ntk>>;
+
+        if constexpr (std::is_same_v<stripped_ntk, tec_nt>)
         {
             return src;
         }
@@ -687,8 +689,9 @@ class graph_oriented_layout_design_hex_impl
 
         return false;
     }
-    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions_pis(ObstrLyt& layout, search_space_graph<ObstrLyt>& ssg,
-                                                                      const uint64_t                 num_expansions) noexcept
+    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions_pis(ObstrLyt&                     layout,
+                                                                      search_space_graph<ObstrLyt>& ssg,
+                                                                      const uint64_t num_expansions) noexcept
     {
         uint64_t count_expansions = 0ul;
 
@@ -787,8 +790,7 @@ class graph_oriented_layout_design_hex_impl
             max_iterations = layout.y() - min_y;
         }
 
-        uint64_t expansion_limit =
-            (ssg.pi_locs == pi_locations::TOP_AND_LEFT) ? 2 * num_expansions : num_expansions;
+        uint64_t expansion_limit = (ssg.pi_locs == pi_locations::TOP_AND_LEFT) ? 2 * num_expansions : num_expansions;
         if constexpr (is_hexagonal_layout_v<ObstrLyt>)
         {
             if (ssg.pi_locs == pi_locations::TOP || ssg.pi_locs == pi_locations::TOP_AND_LEFT)
@@ -1124,8 +1126,7 @@ class graph_oriented_layout_design_hex_impl
      * @param ssg The search space graph.
      * @return A vector of tiles representing the possible positions for the current node.
      */
-    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions(ObstrLyt&                     layout,
-                                                                  search_space_graph<ObstrLyt>& ssg,
+    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions(ObstrLyt& layout, search_space_graph<ObstrLyt>& ssg,
                                                                   const placement_info<ObstrLyt>& place_info) noexcept
     {
         const auto fc = fanins(ssg.network, ssg.nodes_to_place[place_info.current_node]);

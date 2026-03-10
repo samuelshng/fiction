@@ -1,7 +1,13 @@
 target_sources(
-  fiction PRIVATE src/exact.cpp src/gold.cpp src/hex.cpp src/onepass.cpp
-                  src/optimize.cpp src/ortho.cpp src/returnpath_viz.cpp
-                  src/unscramble.cpp)
+  fiction
+  PRIVATE src/exact.cpp
+          src/gold.cpp
+          src/hex.cpp
+          src/onepass.cpp
+          src/optimize.cpp
+          src/ortho.cpp
+          src/returnpath_viz.cpp
+          src/unscramble.cpp)
 
 target_sources(
   fiction
