@@ -11088,6 +11088,8 @@ the canvas SiDBs satisfies the criteria for physical validity.)doc";
 
 static const char *__doc_fiction_detail_layout_invalidity_reason_POTENTIAL_POSITIVE_CHARGES = R"doc(Positive SiDBs can potentially occur.)doc";
 
+static const char *__doc_fiction_detail_layout_signal_for = R"doc()doc";
+
 static const char *__doc_fiction_detail_lexicographically_less =
 R"doc(Compares coordinates lexicographically.
 
@@ -12226,6 +12228,8 @@ Returns:
     assignment.)doc";
 
 static const char *__doc_fiction_detail_orthogonal_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_impl_initialize_network = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_impl_orthogonal_impl = R"doc()doc";
 
@@ -14056,7 +14060,11 @@ Throws:
 
 static const char *__doc_fiction_detail_wire_east = R"doc()doc";
 
+static const char *__doc_fiction_detail_wire_east_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_wire_south = R"doc()doc";
+
+static const char *__doc_fiction_detail_wire_south_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_wiring_reduction_impl = R"doc()doc";
 
