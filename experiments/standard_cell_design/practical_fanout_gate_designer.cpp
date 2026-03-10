@@ -109,32 +109,34 @@ int main(int argc, char* argv[])  // NOLINT
         // ====================
         // 2i1o skeleton
         // ====================
-        {create_false_single_tt(), "false_single_2", 2, skeleton_2i1o},
-        {create_false_single_tt(), "false_single_3", 3, skeleton_2i1o},
-        {create_nor_single_tt(), "nor_single_3", 3, skeleton_2i1o},
-        {create_nor_single_tt(), "nor_single_4", 4, skeleton_2i1o},
-        // {create_not_a_and_b_single_tt(), "not_a_and_b_single", 3, skeleton_2i1o}, // MIRROR OF A AND NOT B
-        {create_not_a_single_tt(), "not_a_single_3", 3, skeleton_2i1o},
-        {create_not_a_single_tt(), "not_a_single_4", 4, skeleton_2i1o},
-        {create_a_and_not_b_single_tt(), "a_and_not_b_single_4", 4, skeleton_2i1o},
-        // {create_not_b_single_tt(), "not_b_single", 3, skeleton_2i2o}, // MIRROR OF NOT A
-        {create_xor_single_tt(), "xor_single_4", 4, skeleton_2i1o},
-        {create_nand_single_tt(), "nand_single_3", 3, skeleton_2i1o},
-        {create_nand_single_tt(), "nand_single_4", 4, skeleton_2i1o},
-        {create_and_single_tt(), "and_single_3", 3, skeleton_2i1o},
-        {create_and_single_tt(), "and_single_4", 4, skeleton_2i1o},
-        {create_xnor_single_tt(), "xnor_single_3", 3, skeleton_2i1o},
-        {create_xnor_single_tt(), "xnor_single_4", 4, skeleton_2i1o},
-        // {create_b_single_tt(), "b_single", 3, skeleton_2i2o}, // MIRROR OF A
-        // {create_not_a_or_b_single_tt(), "not_a_or_b_single", 3, skeleton_2i2o}, // MIRROR OF A OR NOT B
-        {create_a_single_tt(), "a_single_3", 3, skeleton_2i1o},
-        {create_a_single_tt(), "a_single_4", 4, skeleton_2i1o},
-        {create_a_or_not_b_single_tt(), "a_or_not_b_single_3", 3, skeleton_2i1o},
-        {create_a_or_not_b_single_tt(), "a_or_not_b_single_4", 4, skeleton_2i1o},
-        {create_or_single_tt(), "or_single_3", 3, skeleton_2i1o},
-        {create_or_single_tt(), "or_single_4", 4, skeleton_2i1o},
-        {create_true_single_tt(), "true_single_2", 2, skeleton_2i1o},
-        {create_true_single_tt(), "true_single_3", 3, skeleton_2i1o},
+        // {{create_false_single_tt()}, "false_single_2", 2, skeleton_2i1o},
+        // {{create_false_single_tt()}, "false_single_3", 3, skeleton_2i1o},
+        // {{create_nor_single_tt()}, "nor_single_3", 3, skeleton_2i1o},
+        // {{create_nor_single_tt()}, "nor_single_4", 4, skeleton_2i1o},
+        // // {create_not_a_and_b_single_tt(), "not_a_and_b_single", 3, skeleton_2i1o}, // MIRROR OF A AND NOT B
+        // {{create_not_a_single_tt()}, "not_a_single_3", 3, skeleton_2i1o},
+        // {{create_not_a_single_tt()}, "not_a_single_4", 4, skeleton_2i1o},
+        {{create_a_and_not_b_single_tt()}, "a_and_not_b_single_3", 3, skeleton_2i1o},
+        // {{create_a_and_not_b_single_tt()}, "a_and_not_b_single_4", 4, skeleton_2i1o},
+        // // {create_not_b_single_tt(), "not_b_single", 3, skeleton_2i2o}, // MIRROR OF NOT A
+        {{create_xor_single_tt()}, "xor_single_3", 3, skeleton_2i1o},
+        // {{create_xor_single_tt()}, "xor_single_4", 4, skeleton_2i1o},
+        // {{create_nand_single_tt()}, "nand_single_3", 3, skeleton_2i1o},
+        // {{create_nand_single_tt()}, "nand_single_4", 4, skeleton_2i1o},
+        // {{create_and_single_tt()}, "and_single_3", 3, skeleton_2i1o},
+        // {{create_and_single_tt()}, "and_single_4", 4, skeleton_2i1o},
+        // {{create_xnor_single_tt()}, "xnor_single_3", 3, skeleton_2i1o},
+        // {{create_xnor_single_tt()}, "xnor_single_4", 4, skeleton_2i1o},
+        // // {create_b_single_tt(), "b_single", 3, skeleton_2i2o}, // MIRROR OF A
+        // // {create_not_a_or_b_single_tt(), "not_a_or_b_single", 3, skeleton_2i2o}, // MIRROR OF A OR NOT B
+        // {{create_a_single_tt()}, "a_single_3", 3, skeleton_2i1o},
+        // {{create_a_single_tt()}, "a_single_4", 4, skeleton_2i1o},
+        // {{create_a_or_not_b_single_tt()}, "a_or_not_b_single_3", 3, skeleton_2i1o},
+        // {{create_a_or_not_b_single_tt()}, "a_or_not_b_single_4", 4, skeleton_2i1o},
+        // {{create_or_single_tt()}, "or_single_3", 3, skeleton_2i1o},
+        // {{create_or_single_tt()}, "or_single_4", 4, skeleton_2i1o},
+        // {{create_true_single_tt()}, "true_single_2", 2, skeleton_2i1o},
+        // {{create_true_single_tt()}, "true_single_3", 3, skeleton_2i1o},
         // ====================
         // 2i2o skeleton
         // ====================
@@ -187,7 +189,7 @@ int main(int argc, char* argv[])  // NOLINT
 
     // Configure parameters for optimal gate finding
     const design_sidb_gates_params<fiction::cell<Lyt>> base_params{
-        is_operational_params{sidb_simulation_parameters{2, -0.32}, sidb_simulation_engine::CLUSTERCOMPLETE,
+        is_operational_params{sidb_simulation_parameters{2, -0.32}, sidb_simulation_engine::QUICKEXACT,
                               bdl_input_iterator_params{detect_bdl_wires_params{3.0}},
                               is_operational_params::operational_condition::REJECT_KINKS},
         design_sidb_gates_params<fiction::cell<Lyt>>::design_sidb_gates_mode::QUICKCELL,

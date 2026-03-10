@@ -67,3 +67,8 @@ venv/
 *.tar.*
 *.7z
 *.rar
+
+/gates-*
+/logs-*
+/commands.md
+/libs/alglib-cmake

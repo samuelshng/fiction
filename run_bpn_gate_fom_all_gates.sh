@@ -3,7 +3,8 @@
 set -e
 
 curr_time=$(date +%Y%m%d%H%M%S)
-input_dir_root=./gates-20251031050236-design-all-gates
+# input_dir_root=./gates-20251031050236-design-all-gates
+input_dir_root=./gates-20251102055202-design-2i1o-gates
 rand_sample_count=4000
 
 export FICTION_FOM_MAX_THREADS=192
