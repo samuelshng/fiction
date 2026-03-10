@@ -24,6 +24,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -60,15 +61,52 @@ namespace detail
 {
 
 /**
- * Extracts the layout coordinates for a given list of pin nodes.
+ * Returns the layout coordinate represented by a pin handle.
  *
  * @tparam Lyt Gate-level layout type.
  * @param lyt The layout.
- * @param pins Vector of pin nodes.
- * @return Vector of coordinates corresponding to the pins.
+ * @param pin Pin handle represented as a node.
+ * @return Coordinate of the referenced pin.
  */
 template <typename Lyt>
-std::vector<tile<Lyt>> determine_pin_coordinates(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& pins)
+[[nodiscard]] tile<Lyt> pin_coordinate(const Lyt& lyt, const mockturtle::node<Lyt>& pin)
+{
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
+    return lyt.get_tile(pin);
+}
+/**
+ * Returns the layout coordinate represented by a pin handle.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt The layout.
+ * @param pin Pin handle represented as a signal.
+ * @return Coordinate of the referenced pin.
+ */
+template <typename Lyt>
+[[nodiscard]] tile<Lyt> pin_coordinate(const Lyt& lyt, const mockturtle::signal<Lyt>& pin)
+{
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
+    static_cast<void>(lyt);
+
+    return static_cast<tile<Lyt>>(pin);
+}
+/**
+ * Extracts the layout coordinates for a given list of pin handles.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @tparam Pin Pin handle type.
+ * @param lyt The layout.
+ * @param pins Vector of pin handles.
+ * @return Vector of coordinates corresponding to the pins.
+ */
+template <typename Lyt, typename Pin>
+std::vector<tile<Lyt>> determine_pin_coordinates(const Lyt& lyt, const std::vector<Pin>& pins)
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
     static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
@@ -78,21 +116,22 @@ std::vector<tile<Lyt>> determine_pin_coordinates(const Lyt& lyt, const std::vect
     coords.reserve(pins.size());
     for (const auto& pin : pins)
     {
-        coords.push_back(lyt.get_tile(pin));
+        coords.push_back(pin_coordinate(lyt, pin));
     }
 
     return coords;
 }
 /**
- * Extracts the layout coordinates for a given list of pin nodes and sorts them from left to right.
+ * Extracts the layout coordinates for a given list of pin handles and sorts them from left to right.
  *
  * @tparam Lyt Gate-level layout type.
+ * @tparam Pin Pin handle type.
  * @param lyt The layout.
- * @param pins Vector of pin nodes.
+ * @param pins Vector of pin handles.
  * @return Vector of coordinates sorted by physical slot order.
  */
-template <typename Lyt>
-std::vector<tile<Lyt>> determine_pin_slot_coordinates(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& pins)
+template <typename Lyt, typename Pin>
+std::vector<tile<Lyt>> determine_pin_slot_coordinates(const Lyt& lyt, const std::vector<Pin>& pins)
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
     static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
@@ -119,18 +158,93 @@ std::vector<tile<Lyt>> determine_pin_slot_coordinates(const Lyt& lyt, const std:
     return coords;
 }
 /**
+ * Extracts interface slot coordinates for a given list of pin handles and redistributes them across the available
+ * layout width. This intentionally introduces horizontal gaps for the new external pin interface to avoid routing
+ * deadlocks caused by densely packed boundary pins.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @tparam Pin Pin handle type.
+ * @param lyt The layout.
+ * @param pins Vector of pin handles.
+ * @return Vector of coordinates sorted by physical slot order across the full interface width.
+ */
+template <typename Lyt, typename Pin>
+std::vector<tile<Lyt>> determine_distributed_pin_slot_coordinates(const Lyt& lyt, const std::vector<Pin>& pins)
+{
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
+    auto coords = determine_pin_slot_coordinates(lyt, pins);
+
+    if (coords.size() <= 1u)
+    {
+        return coords;
+    }
+
+    const auto current_span                  = static_cast<uint32_t>(coords.back().x - coords.front().x + 1u);
+    const auto required_span_for_gap_per_pin = static_cast<uint32_t>(coords.size() * 2u - 1u);
+
+    if (current_span >= required_span_for_gap_per_pin)
+    {
+        return coords;
+    }
+
+    const auto max_x = static_cast<uint32_t>(lyt.x());
+    if (max_x + 1u < coords.size())
+    {
+        return coords;
+    }
+
+    std::vector<tile<Lyt>> distributed{};
+    distributed.reserve(coords.size());
+
+    const auto y = coords.front().y;
+    const auto z = coords.front().z;
+
+    uint32_t last_x = 0u;
+
+    for (uint32_t i = 0u; i < coords.size(); ++i)
+    {
+        uint32_t x = 0u;
+
+        if (i == 0u)
+        {
+            x = 0u;
+        }
+        else if (i + 1u == coords.size())
+        {
+            x = max_x;
+        }
+        else
+        {
+            const auto raw_x = static_cast<uint32_t>((static_cast<uint64_t>(i) * static_cast<uint64_t>(max_x)) /
+                                                     static_cast<uint64_t>(coords.size() - 1u));
+            const auto max_remaining_x = max_x - static_cast<uint32_t>((coords.size() - 1u) - i);
+
+            x = std::max(raw_x, last_x + 1u);
+            x = std::min(x, max_remaining_x);
+        }
+
+        distributed.emplace_back(tile<Lyt>{x, y, z});
+        last_x = x;
+    }
+
+    return distributed;
+}
+/**
  * Calculates the horizontal permutation distances for each desired slot.
  *
  * @tparam Lyt Gate-level layout type.
+ * @tparam Pin Pin handle type.
  * @param lyt The layout.
- * @param current_permutation The current order of pins (nodes).
- * @param desired_permutation The desired order of pins (nodes).
+ * @param current_permutation The current order of pins.
+ * @param desired_permutation The desired order of pins.
  * @return Vector of horizontal distances per desired slot.
  */
-template <typename Lyt>
-std::vector<uint32_t> calculate_permutation_distances(const Lyt&                                lyt,
-                                                      const std::vector<mockturtle::node<Lyt>>& current_permutation,
-                                                      const std::vector<mockturtle::node<Lyt>>& desired_permutation)
+template <typename Lyt, typename Pin>
+std::vector<uint32_t> calculate_permutation_distances(const Lyt& lyt, const std::vector<Pin>& current_permutation,
+                                                      const std::vector<Pin>& desired_permutation)
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
     static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
@@ -144,7 +258,7 @@ std::vector<uint32_t> calculate_permutation_distances(const Lyt&                
     }
 
     const auto current_coords = determine_pin_coordinates(lyt, current_permutation);
-    const auto target_slots   = determine_pin_slot_coordinates(lyt, current_permutation);
+    const auto target_slots   = determine_distributed_pin_slot_coordinates(lyt, current_permutation);
 
     for (size_t i = 0; i < desired_permutation.size(); ++i)
     {
@@ -182,13 +296,14 @@ std::vector<uint32_t> calculate_permutation_distances(const Lyt&                
  *
  * @tparam Lyt Gate-level layout type.
  * @param lyt The layout.
- * @param current_permutation The current order of pins (nodes).
- * @param desired_permutation The desired order of pins (nodes).
+ * @tparam Pin Pin handle type.
+ * @param current_permutation The current order of pins.
+ * @param desired_permutation The desired order of pins.
  * @return The maximum number of rows required.
  */
-template <typename Lyt>
-uint32_t calculate_rows_needed(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& current_permutation,
-                               const std::vector<mockturtle::node<Lyt>>& desired_permutation)
+template <typename Lyt, typename Pin>
+uint32_t calculate_rows_needed(const Lyt& lyt, const std::vector<Pin>& current_permutation,
+                               const std::vector<Pin>& desired_permutation)
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
     static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
@@ -331,6 +446,33 @@ void copy_layout_with_offset(const SrcLyt& original_lyt, DstLyt& target_lyt, con
 
             assert(new_children.size() == original_lyt.fanin_size(node) && "Not all fanins were copied for a node");
 
+            if constexpr (mockturtle::has_is_multioutput_v<SrcLyt> && mockturtle::has_node_function_pin_v<SrcLyt>)
+            {
+                if (original_lyt.is_multioutput(node))
+                {
+                    const auto num_outputs = [&original_lyt, &node]()
+                    {
+                        if constexpr (mockturtle::has_num_outputs_v<SrcLyt>)
+                        {
+                            return original_lyt.num_outputs(node);
+                        }
+
+                        return 2u;
+                    }();
+
+                    std::vector<kitty::dynamic_truth_table> functions{};
+                    functions.reserve(num_outputs);
+
+                    for (uint32_t pin = 0u; pin < num_outputs; ++pin)
+                    {
+                        functions.push_back(original_lyt.node_function_pin(node, pin));
+                    }
+
+                    old2new[node] = target_lyt.create_node(new_children, functions, shifted_coord);
+                    return;
+                }
+            }
+
             old2new[node] = target_lyt.create_node(new_children, original_lyt.node_function(node), shifted_coord);
         });
 
@@ -424,7 +566,7 @@ create_pi_routing_objectives(const OrigLyt& lyt, WorkLyt& new_layout,
     }
 
     // Current PI coordinates define the available physical interface slots.
-    const auto current_pi_coords = determine_pin_slot_coordinates(lyt, current_pis);
+    const auto current_pi_coords = determine_distributed_pin_slot_coordinates(lyt, current_pis);
     // Precompute horizontal distances to sort objectives by route length.
     const auto pi_distances = calculate_permutation_distances(lyt, current_pis, desired_pis);
 
@@ -491,7 +633,14 @@ route_pi_objectives_with_a_star(WorkLyt& lyt, const std::vector<pi_routing_objec
                                                                   euclidean_distance_functor<WorkLyt>(),
                                                                   unit_cost_functor<WorkLyt>(), params);
 
-        assert(!path.empty() && "A* failed to route a PI unscrambling objective");
+        if (path.empty())
+        {
+            throw std::runtime_error(fmt::format(
+                "A* failed to route PI unscrambling objective from ({}, {}, {}) to ({}, {}, {}).",
+                static_cast<uint64_t>(item.objective.source.x), static_cast<uint64_t>(item.objective.source.y),
+                static_cast<uint64_t>(item.objective.source.z), static_cast<uint64_t>(item.objective.target.x),
+                static_cast<uint64_t>(item.objective.target.y), static_cast<uint64_t>(item.objective.target.z)));
+        }
 
         auto incoming_signal = lyt.make_signal(lyt.get_node(path.source()));
 
@@ -557,8 +706,8 @@ struct po_routing_objective
  */
 template <typename OrigLyt, typename WorkLyt>
 std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
-    const OrigLyt& lyt, WorkLyt& new_layout, const std::vector<mockturtle::node<OrigLyt>>& current_pos,
-    const std::vector<mockturtle::node<OrigLyt>>& desired_pos, const uint32_t pi_rows, const uint32_t po_rows)
+    const OrigLyt& lyt, WorkLyt& new_layout, const std::vector<mockturtle::signal<OrigLyt>>& current_pos,
+    const std::vector<mockturtle::signal<OrigLyt>>& desired_pos, const uint32_t pi_rows, const uint32_t po_rows)
 {
     static_assert(is_gate_level_layout_v<OrigLyt>, "OrigLyt is not a gate-level layout");
     static_assert(is_hexagonal_layout_v<OrigLyt>, "OrigLyt is not a hexagonal layout");
@@ -574,15 +723,15 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
         return {};
     }
 
-    const auto current_po_coords = determine_pin_slot_coordinates(lyt, current_pos);
+    const auto current_po_coords = determine_distributed_pin_slot_coordinates(lyt, current_pos);
 
     po_objectives.reserve(desired_pos.size());
 
     for (size_t i = 0; i < desired_pos.size(); ++i)
     {
-        const auto desired_po_node = desired_pos[i];
+        const auto desired_po_signal = desired_pos[i];
 
-        const auto current_it = std::find(current_pos.cbegin(), current_pos.cend(), desired_po_node);
+        const auto current_it = std::find(current_pos.cbegin(), current_pos.cend(), desired_po_signal);
         if (current_it == current_pos.cend())
         {
             continue;
@@ -619,7 +768,8 @@ std::vector<po_routing_objective<WorkLyt>> create_po_routing_objectives(
             return;
         };
 
-        lyt.template foreach_fanin<decltype(fanin_collector), false>(desired_po_node, std::move(fanin_collector));
+        lyt.template foreach_fanin<decltype(fanin_collector), false>(lyt.get_node(desired_po_signal),
+                                                                     std::move(fanin_collector));
 
         const auto output_name = lyt.get_output_name(static_cast<uint32_t>(current_idx));
 
@@ -750,7 +900,7 @@ class unscramble_pins_impl
 
   public:
     unscramble_pins_impl(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& input_order,
-                         const std::vector<mockturtle::node<Lyt>>& output_order, const unscramble_pins_params& p,
+                         const std::vector<mockturtle::signal<Lyt>>& output_order, const unscramble_pins_params& p,
                          unscramble_pins_stats& st) :
             layout{lyt},
             input_ordering{input_order},
@@ -775,37 +925,40 @@ class unscramble_pins_impl
         const auto& target_pos = output_ordering.empty() ? current_pos : output_ordering;
 
         // 2. Calculate unscrambling space requirements
-        const uint32_t pi_rows = calculate_rows_needed(layout, current_pis, target_pis);
-        const uint32_t po_rows = calculate_rows_needed(layout, current_pos, target_pos);
+        uint32_t pi_rows = calculate_rows_needed(layout, current_pis, target_pis);
+        uint32_t po_rows = calculate_rows_needed(layout, current_pos, target_pos);
 
-        // 3. Instantiate new obstruction-aware layout with extended height
-        obstruction_layout<Lyt> new_layout{create_extended_layout(layout, pi_rows, po_rows)};
+        const auto num_pis = static_cast<uint32_t>(layout.num_pis());
+        const auto num_pos = static_cast<uint32_t>(layout.num_pos());
 
-        // 4. Place new PIs and create routing objectives to the original PI locations (shifted by pi_rows)
-        const auto pi_routing_objectives =
-            create_pi_routing_objectives(layout, new_layout, current_pis, target_pis, pi_rows);
+        const auto max_pi_rows = pi_rows + std::max<uint32_t>(2u, num_pis * 4u);
+        const auto max_po_rows = po_rows + std::max<uint32_t>(2u, num_pos * 4u);
 
-        // 5. Route PI objectives in priority order
-        const auto pi_anchor_signals = route_pi_objectives_with_a_star(new_layout, pi_routing_objectives);
+        while (true)
+        {
+            try
+            {
+                return run_with_reserved_rows(current_pis, target_pis, current_pos, target_pos, pi_rows, po_rows);
+            }
+            catch (const std::runtime_error& e)
+            {
+                const std::string_view message{e.what()};
 
-        // 6. Copy the original layout content to the new layout with vertical offset
-        copy_layout_with_offset(layout, new_layout, pi_rows, pi_anchor_signals);
+                if (message.find("A* failed to route PI unscrambling objective") == 0u && pi_rows < max_pi_rows)
+                {
+                    pi_rows += 2u;
+                    continue;
+                }
 
-        debug::write_dot_layout<Lyt, gate_layout_hexagonal_drawer<Lyt>>(static_cast<Lyt>(new_layout),
-                                                                        "unscramble_pins_after_copy");
+                if (message.find("A* failed to route PO unscrambling objective") == 0u && po_rows < max_po_rows)
+                {
+                    po_rows += 2u;
+                    continue;
+                }
 
-        // 7. Place output source anchors, route to new output slots, and create new POs.
-        const auto po_routing_objectives =
-            create_po_routing_objectives(layout, new_layout, current_pos, target_pos, pi_rows, po_rows);
-
-        // 8. Route PO objectives and create POs at target locations.
-        route_po_objectives_with_a_star_and_create_pos(new_layout, po_routing_objectives);
-
-        // Temporary debug artifact for inspecting the fully unscrambled layout.
-        debug::write_dot_layout<Lyt, gate_layout_hexagonal_drawer<Lyt>>(static_cast<Lyt>(new_layout),
-                                                                        "unscramble_pins_full_after_routing");
-
-        return static_cast<Lyt>(new_layout);
+                throw;
+            }
+        }
     }
 
   private:
@@ -818,9 +971,9 @@ class unscramble_pins_impl
      */
     std::vector<mockturtle::node<Lyt>> input_ordering;
     /**
-     * The desired ordering of primary output nodes.
+     * The desired ordering of primary output signals.
      */
-    std::vector<mockturtle::node<Lyt>> output_ordering;
+    std::vector<mockturtle::signal<Lyt>> output_ordering;
     /**
      * Parameters for the pin unscrambling algorithm.
      */
@@ -844,17 +997,144 @@ class unscramble_pins_impl
         return pis;
     }
     /**
-     * Identifies the current primary output nodes in the layout.
+     * Identifies the current primary output signals in the layout.
      *
-     * @return Vector of primary output nodes.
+     * @return Vector of primary output signals.
      */
-    std::vector<mockturtle::node<Lyt>> get_current_pos() const
+    std::vector<mockturtle::signal<Lyt>> get_current_pos() const
     {
-        std::vector<mockturtle::node<Lyt>> pos{};
+        std::vector<mockturtle::signal<Lyt>> pos{};
         pos.reserve(layout.num_pos());
-        layout.foreach_po([&pos, this](const auto& po) { pos.push_back(layout.get_node(po)); });
+        layout.foreach_po([&pos](const auto& po) { pos.push_back(po); });
 
         return pos;
+    }
+
+    /**
+     * Performs one unscrambling attempt with explicitly reserved PI/PO routing rows.
+     *
+     * @param current_pis Current PI ordering.
+     * @param target_pis Target PI ordering.
+     * @param current_pos Current PO ordering.
+     * @param target_pos Target PO ordering.
+     * @param pi_rows Rows reserved for input unscrambling.
+     * @param po_rows Rows reserved for output unscrambling.
+     * @return Unscrambled layout.
+     */
+    [[nodiscard]] Lyt run_with_reserved_rows(const std::vector<mockturtle::node<Lyt>>&   current_pis,
+                                             const std::vector<mockturtle::node<Lyt>>&   target_pis,
+                                             const std::vector<mockturtle::signal<Lyt>>& current_pos,
+                                             const std::vector<mockturtle::signal<Lyt>>& target_pos,
+                                             const uint32_t pi_rows, const uint32_t po_rows) const
+    {
+        std::string last_pi_routing_error{};
+
+        for (uint8_t pi_order_strategy = 0u; pi_order_strategy < 6u; ++pi_order_strategy)
+        {
+            // 3. Instantiate new obstruction-aware layout with extended height
+            obstruction_layout<Lyt> new_layout{create_extended_layout(layout, pi_rows, po_rows)};
+
+            // 4. Place new PIs and create routing objectives to the original PI locations (shifted by pi_rows)
+            auto pi_routing_objectives =
+                create_pi_routing_objectives(layout, new_layout, current_pis, target_pis, pi_rows);
+
+            switch (pi_order_strategy)
+            {
+                case 0u: break;
+                case 1u:
+                    std::sort(pi_routing_objectives.begin(), pi_routing_objectives.end(),
+                              [](const auto& lhs, const auto& rhs) { return lhs.distance < rhs.distance; });
+                    break;
+                case 2u:
+                    std::sort(pi_routing_objectives.begin(), pi_routing_objectives.end(),
+                              [](const auto& lhs, const auto& rhs)
+                              {
+                                  if (lhs.objective.source.x != rhs.objective.source.x)
+                                  {
+                                      return lhs.objective.source.x < rhs.objective.source.x;
+                                  }
+
+                                  return lhs.objective.target.x < rhs.objective.target.x;
+                              });
+                    break;
+                case 3u:
+                    std::sort(pi_routing_objectives.begin(), pi_routing_objectives.end(),
+                              [](const auto& lhs, const auto& rhs)
+                              {
+                                  if (lhs.objective.source.x != rhs.objective.source.x)
+                                  {
+                                      return lhs.objective.source.x > rhs.objective.source.x;
+                                  }
+
+                                  return lhs.objective.target.x > rhs.objective.target.x;
+                              });
+                    break;
+                case 4u:
+                    std::sort(pi_routing_objectives.begin(), pi_routing_objectives.end(),
+                              [](const auto& lhs, const auto& rhs)
+                              {
+                                  if (lhs.objective.target.x != rhs.objective.target.x)
+                                  {
+                                      return lhs.objective.target.x < rhs.objective.target.x;
+                                  }
+
+                                  return lhs.objective.source.x < rhs.objective.source.x;
+                              });
+                    break;
+                case 5u:
+                    std::sort(pi_routing_objectives.begin(), pi_routing_objectives.end(),
+                              [](const auto& lhs, const auto& rhs)
+                              {
+                                  if (lhs.objective.target.x != rhs.objective.target.x)
+                                  {
+                                      return lhs.objective.target.x > rhs.objective.target.x;
+                                  }
+
+                                  return lhs.objective.source.x > rhs.objective.source.x;
+                              });
+                    break;
+                default: break;
+            }
+
+            try
+            {
+                // 5. Route PI objectives in priority order
+                const auto pi_anchor_signals = route_pi_objectives_with_a_star(new_layout, pi_routing_objectives);
+
+                // 6. Copy the original layout content to the new layout with vertical offset
+                copy_layout_with_offset(layout, new_layout, pi_rows, pi_anchor_signals);
+
+                debug::write_dot_layout<Lyt, gate_layout_hexagonal_drawer<Lyt>>(static_cast<Lyt>(new_layout),
+                                                                                "unscramble_pins_after_copy");
+
+                // 7. Place output source anchors, route to new output slots, and create new POs.
+                const auto po_routing_objectives =
+                    create_po_routing_objectives(layout, new_layout, current_pos, target_pos, pi_rows, po_rows);
+
+                // 8. Route PO objectives and create POs at target locations.
+                route_po_objectives_with_a_star_and_create_pos(new_layout, po_routing_objectives);
+
+                // Temporary debug artifact for inspecting the fully unscrambled layout.
+                debug::write_dot_layout<Lyt, gate_layout_hexagonal_drawer<Lyt>>(static_cast<Lyt>(new_layout),
+                                                                                "unscramble_pins_full_after_routing");
+
+                return static_cast<Lyt>(new_layout);
+            }
+            catch (const std::runtime_error& e)
+            {
+                const std::string_view message{e.what()};
+
+                if (message.find("A* failed to route PI unscrambling objective") == 0u)
+                {
+                    last_pi_routing_error = e.what();
+                    continue;
+                }
+
+                throw;
+            }
+        }
+
+        throw std::runtime_error{last_pi_routing_error.empty() ? "PI unscrambling failed." : last_pi_routing_error};
     }
 };
 
@@ -872,14 +1152,14 @@ class unscramble_pins_impl
  * @tparam Lyt Gate-level layout type.
  * @param lyt The gate-level layout to unscramble.
  * @param input_order The desired ordering of primary input nodes.
- * @param output_order The desired ordering of primary output nodes.
+ * @param output_order The desired ordering of primary output signals.
  * @param ps Parameters for the algorithm.
  * @param pst Statistics for the algorithm.
  * @return A new gate-level layout with unscrambled pins.
  */
 template <typename Lyt>
 Lyt unscramble_pins(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& input_order,
-                    const std::vector<mockturtle::node<Lyt>>& output_order, unscramble_pins_params ps = {},
+                    const std::vector<mockturtle::signal<Lyt>>& output_order, unscramble_pins_params ps = {},
                     unscramble_pins_stats* pst = nullptr)
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
@@ -899,6 +1179,66 @@ Lyt unscramble_pins(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& in
     }
 
     return result;
+}
+
+/**
+ * A compatibility overload that resolves primary outputs by node identity.
+ *
+ * This overload cannot express distinct permutations of multiple POs that originate from the same multi-output gate.
+ * Prefer the signal-based overload above whenever exact PO output-pin identity matters.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param lyt The gate-level layout to unscramble.
+ * @param input_order The desired ordering of primary input nodes.
+ * @param output_order The desired ordering of primary output nodes.
+ * @param ps Parameters for the algorithm.
+ * @param pst Statistics for the algorithm.
+ * @return A new gate-level layout with unscrambled pins.
+ */
+template <typename Lyt>
+Lyt unscramble_pins(const Lyt& lyt, const std::vector<mockturtle::node<Lyt>>& input_order,
+                    const std::vector<mockturtle::node<Lyt>>& output_order, unscramble_pins_params ps,
+                    unscramble_pins_stats* pst)
+{
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+    static_assert(is_hexagonal_layout_v<Lyt>, "Lyt is not a hexagonal layout");
+    static_assert(has_pointy_top_hex_orientation_v<Lyt>, "Lyt does not have pointy-top hexagonal orientation");
+
+    std::vector<mockturtle::signal<Lyt>> resolved_output_order{};
+    resolved_output_order.reserve(output_order.size());
+
+    std::vector<bool> consumed_pos(lyt.num_pos(), false);
+
+    for (const auto desired_po_node : output_order)
+    {
+        auto matched = false;
+
+        for (uint32_t index = 0u; index < lyt.num_pos(); ++index)
+        {
+            if (consumed_pos[index])
+            {
+                continue;
+            }
+
+            const auto po_signal = lyt.po_at(index);
+            if (lyt.get_node(po_signal) != desired_po_node)
+            {
+                continue;
+            }
+
+            resolved_output_order.push_back(po_signal);
+            consumed_pos[index] = true;
+            matched             = true;
+            break;
+        }
+
+        if (!matched)
+        {
+            throw std::invalid_argument("Unable to resolve PO node ordering to concrete output signals.");
+        }
+    }
+
+    return unscramble_pins(lyt, input_order, resolved_output_order, ps, pst);
 }
 
 }  // namespace fiction

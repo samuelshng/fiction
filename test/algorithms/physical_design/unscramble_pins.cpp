@@ -146,7 +146,7 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
     const auto po2 = layout.create_po(x2, "po2", {2, 10});  // Slot 1
     const auto po3 = layout.create_po(x3, "po3", {4, 10});  // Slot 2
 
-    const std::vector current_pos{layout.get_node(po1), layout.get_node(po2), layout.get_node(po3)};
+    const std::vector current_pos{layout.po_at(0), layout.po_at(1), layout.po_at(2)};
 
     SECTION("determine_pin_coordinates")
     {
@@ -186,6 +186,43 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         CHECK(coords[0] == tile<gate_layout>{0, 0});
         CHECK(coords[1] == tile<gate_layout>{2, 0});
         CHECK(coords[2] == tile<gate_layout>{4, 0});
+    }
+
+    SECTION("determine_distributed_pin_slot_coordinates")
+    {
+        SECTION("Keeps already spaced interfaces unchanged")
+        {
+            const auto coords = detail::determine_distributed_pin_slot_coordinates(layout, current_pis);
+
+            REQUIRE(coords.size() == 3);
+            CHECK(coords[0] == tile<gate_layout>{0, 0});
+            CHECK(coords[1] == tile<gate_layout>{2, 0});
+            CHECK(coords[2] == tile<gate_layout>{4, 0});
+        }
+
+        SECTION("Spreads dense interfaces across the available width")
+        {
+            gate_layout dense_layout{{20, 6}, row_clocking<gate_layout>()};
+
+            const auto pi0 = dense_layout.create_pi("pi0", {0, 0});
+            const auto pi1 = dense_layout.create_pi("pi1", {1, 0});
+            const auto pi2 = dense_layout.create_pi("pi2", {2, 0});
+            const auto pi3 = dense_layout.create_pi("pi3", {3, 0});
+            const auto pi4 = dense_layout.create_pi("pi4", {4, 0});
+
+            const std::vector dense_pis{dense_layout.get_node(pi0), dense_layout.get_node(pi1),
+                                        dense_layout.get_node(pi2), dense_layout.get_node(pi3),
+                                        dense_layout.get_node(pi4)};
+
+            const auto coords = detail::determine_distributed_pin_slot_coordinates(dense_layout, dense_pis);
+
+            REQUIRE(coords.size() == 5);
+            CHECK(coords.front() == tile<gate_layout>{0, 0});
+            CHECK(coords.back() == tile<gate_layout>{20, 0});
+            CHECK(coords[1].x > 1u);
+            CHECK(coords[2].x > coords[1].x);
+            CHECK(coords[3].x > coords[2].x);
+        }
     }
 
     SECTION("calculate_rows_needed")
@@ -258,33 +295,34 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
             {
                 SECTION("Swap")
                 {
-                    const std::vector target{layout.get_node(po3), layout.get_node(po2), layout.get_node(po1)};
+                    const std::vector target{layout.po_at(2), layout.po_at(1), layout.po_at(0)};
                     CHECK(detail::calculate_rows_needed(layout, current_pos, target) == 8);
                 }
                 SECTION("Rotate")
                 {
-                    const std::vector target{layout.get_node(po2), layout.get_node(po3), layout.get_node(po1)};
+                    const std::vector target{layout.po_at(1), layout.po_at(2), layout.po_at(0)};
                     CHECK(detail::calculate_rows_needed(layout, current_pos, target) == 8);
                 }
                 SECTION("Reverse")
                 {
-                    const std::vector target{layout.get_node(po3), layout.get_node(po2), layout.get_node(po1)};
+                    const std::vector target{layout.po_at(2), layout.po_at(1), layout.po_at(0)};
                     CHECK(detail::calculate_rows_needed(layout, current_pos, target) == 8);
                 }
             }
 
             SECTION("Larger permutations")
             {
-                std::vector<mockturtle::node<gate_layout>> large_pos{};
+                std::vector<mockturtle::signal<gate_layout>> large_pos{};
                 for (uint32_t i = 0; i < 10; ++i)
                 {
                     const auto pi = layout.create_pi(std::to_string(i), {i * 2, 11});
-                    large_pos.push_back(layout.get_node(layout.create_po(pi, std::to_string(i), {i * 2, 12})));
+                    layout.create_po(pi, std::to_string(i), {i * 2, 12});
+                    large_pos.push_back(layout.po_at(static_cast<uint32_t>(layout.num_pos() - 1)));
                 }
 
                 SECTION("Shift by one")
                 {
-                    std::vector<mockturtle::node<gate_layout>> target(large_pos.size());
+                    std::vector<mockturtle::signal<gate_layout>> target(large_pos.size());
                     target[0] = large_pos[9];
                     for (size_t i = 1; i < 10; ++i)
                     {
@@ -296,7 +334,7 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
 
                 SECTION("Full reverse")
                 {
-                    std::vector<mockturtle::node<gate_layout>> target = large_pos;
+                    std::vector<mockturtle::signal<gate_layout>> target = large_pos;
                     std::reverse(target.begin(), target.end());
 
                     CHECK(detail::calculate_rows_needed(layout, large_pos, target) == 36);
@@ -308,9 +346,10 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         {
             SECTION("Empty permutations")
             {
-                CHECK(detail::calculate_rows_needed(layout, {}, {}) == 0);
-                CHECK(detail::calculate_rows_needed(layout, current_pis, {}) == 0);
-                CHECK(detail::calculate_rows_needed(layout, {}, current_pis) == 0);
+                const std::vector<mockturtle::node<gate_layout>> empty_pins{};
+                CHECK(detail::calculate_rows_needed(layout, empty_pins, empty_pins) == 0);
+                CHECK(detail::calculate_rows_needed(layout, current_pis, empty_pins) == 0);
+                CHECK(detail::calculate_rows_needed(layout, empty_pins, current_pis) == 0);
             }
 
             SECTION("Single pin")
@@ -623,7 +662,7 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
 
     SECTION("create_po_routing_objectives")
     {
-        const std::vector desired{layout.get_node(po2), layout.get_node(po1), layout.get_node(po3)};
+        const std::vector desired{layout.po_at(1), layout.po_at(0), layout.po_at(2)};
         auto              new_layout = detail::create_extended_layout(layout, 2, 4);
 
         detail::copy_layout_with_offset(layout, new_layout, 2);
@@ -671,7 +710,7 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
 
     SECTION("route_po_objectives_with_a_star_and_create_pos")
     {
-        const std::vector desired{layout.get_node(po2), layout.get_node(po1), layout.get_node(po3)};
+        const std::vector desired{layout.po_at(1), layout.po_at(0), layout.po_at(2)};
         auto              new_layout = detail::create_extended_layout(layout, 2, 4);
 
         detail::copy_layout_with_offset(layout, new_layout, 2);
@@ -708,16 +747,19 @@ TEST_CASE("Unscramble pins helper functions", "[unscramble-pins]")
         const auto po_left   = scrambled_layout.create_po(left_buf, "left_out", {0, 2});
         const auto po_middle = scrambled_layout.create_po(middle_buf, "middle_out", {2, 2});
 
-        const std::vector current_pos{scrambled_layout.get_node(po_right), scrambled_layout.get_node(po_left),
-                                      scrambled_layout.get_node(po_middle)};
-        const std::vector desired{scrambled_layout.get_node(po_right), scrambled_layout.get_node(po_middle),
-                                  scrambled_layout.get_node(po_left)};
+        static_cast<void>(po_right);
+        static_cast<void>(po_left);
+        static_cast<void>(po_middle);
+
+        const std::vector current_po_signals{scrambled_layout.po_at(0), scrambled_layout.po_at(1),
+                                             scrambled_layout.po_at(2)};
+        const std::vector desired{scrambled_layout.po_at(0), scrambled_layout.po_at(2), scrambled_layout.po_at(1)};
 
         auto new_layout = detail::create_extended_layout(scrambled_layout, 2, 8);
         detail::copy_layout_with_offset(scrambled_layout, new_layout, 2);
 
         const auto objectives =
-            detail::create_po_routing_objectives(scrambled_layout, new_layout, current_pos, desired, 2, 8);
+            detail::create_po_routing_objectives(scrambled_layout, new_layout, current_po_signals, desired, 2, 8);
         REQUIRE(objectives.size() == 3);
 
         detail::route_po_objectives_with_a_star_and_create_pos(new_layout, objectives);
@@ -775,14 +817,16 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
         const auto po1 = layout.create_po(or1, "po1", {1, 4});
         const auto po2 = layout.create_po(buf3, "po2", {3, 4});
 
-        const std::vector pos{layout.get_node(po1), layout.get_node(po2)};
+        static_cast<void>(po1);
+        static_cast<void>(po2);
+
+        const std::vector pos{layout.po_at(0), layout.po_at(1)};
 
         SECTION("PO permutations")
         {
-            auto target_pos = pos;
-            std::sort(target_pos.begin(), target_pos.end());
+            const std::vector<std::vector<gate_layout::signal>> target_pos_samples{{pos[0], pos[1]}, {pos[1], pos[0]}};
 
-            do
+            for (const auto& target_pos : target_pos_samples)
             {
                 const auto unscrambled = unscramble_pins(layout, {}, target_pos);
                 check_eq(layout, unscrambled);
@@ -806,8 +850,36 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
                                        { actual_output_names.push_back(unscrambled.get_output_name(po_index++)); });
 
                 CHECK(actual_output_names == expected_output_names);
-            } while (std::next_permutation(target_pos.begin(), target_pos.end()));
+            }
         }
+    }
+
+    SECTION("Multiple outputs from the same gate")
+    {
+        gate_layout layout{{4, 4, 1}, row_clocking<gate_layout>()};
+
+        const auto a  = layout.create_pi("a", {0, 0});
+        const auto b  = layout.create_pi("b", {1, 0});
+        const auto ha = layout.create_ha(a, b, {0, 1});
+
+        const auto carry = ha;
+        auto       sum   = ha;
+        sum.output       = 1u;
+
+        layout.create_po(carry, "carry", {0, 2});
+        layout.create_po(sum, "sum", {1, 2});
+
+        const std::vector current_pos{layout.po_at(0), layout.po_at(1)};
+        const std::vector target_pos{current_pos[1], current_pos[0]};
+
+        const auto unscrambled = unscramble_pins(layout, {}, target_pos);
+
+        check_eq(layout, unscrambled);
+        REQUIRE(unscrambled.num_pos() == 2u);
+        CHECK(unscrambled.get_output_name(0) == "sum");
+        CHECK(unscrambled.get_output_name(1) == "carry");
+        CHECK(collect_po_names_sorted_by_x(unscrambled) == std::vector<std::string>{"sum", "carry"});
+        CHECK(collect_po_names_sorted_by_x(layout) == std::vector<std::string>{"carry", "sum"});
     }
 
     SECTION("Larger layout sampled permutations")
@@ -821,9 +893,9 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
         pis.reserve(layout.num_pis());
         layout.foreach_pi([&pis](const auto& pi) { pis.push_back(pi); });
 
-        std::vector<mockturtle::node<hex_layout>> pos{};
+        std::vector<mockturtle::signal<hex_layout>> pos{};
         pos.reserve(layout.num_pos());
-        layout.foreach_po([&layout, &pos](const auto& po) { pos.push_back(layout.get_node(po)); });
+        layout.foreach_po([&pos](const auto& po) { pos.push_back(po); });
 
         REQUIRE(pis.size() == 5);
         REQUIRE(pos.size() == 2);
@@ -893,5 +965,37 @@ TEST_CASE("Unscramble pins equivalence checking", "[unscramble-pins]")
                 check_eq(layout, unscramble_pins(layout, pi_samples[i], po_samples[i]));
             }
         }
+    }
+
+    SECTION("Dense contiguous PI interface")
+    {
+        using hex_layout = hex_even_row_gate_clk_lyt;
+
+        hex_layout layout{{15, 4, 1}, row_clocking<hex_layout>()};
+
+        std::vector<mockturtle::node<hex_layout>> pis{};
+        std::vector<std::string>                  original_pi_names{};
+
+        for (uint32_t i = 0u; i < 8u; ++i)
+        {
+            const auto name = "pi" + std::to_string(i);
+            const auto pi   = layout.create_pi(name, {i, 0});
+            const auto buf  = layout.create_buf(pi, {i, 1});
+
+            pis.push_back(layout.get_node(pi));
+            original_pi_names.push_back(name);
+            layout.create_po(buf, "po" + std::to_string(i), {i, 2});
+        }
+
+        auto target_pis = pis;
+        std::reverse(target_pis.begin(), target_pis.end());
+
+        auto expected_pi_names = original_pi_names;
+        std::reverse(expected_pi_names.begin(), expected_pi_names.end());
+
+        const auto unscrambled = unscramble_pins(layout, target_pis, {});
+
+        check_eq(layout, unscrambled);
+        CHECK(collect_pi_names_sorted_by_x(unscrambled) == expected_pi_names);
     }
 }

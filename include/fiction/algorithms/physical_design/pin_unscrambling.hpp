@@ -414,7 +414,7 @@ template <typename Lyt>
             current_pi_aliases.push_back(layout.get_name(pi));
         });
 
-    std::vector<mockturtle::node<Lyt>> current_pos{};
+    std::vector<mockturtle::signal<Lyt>> current_pos{};
     current_pos.reserve(layout.num_pos());
 
     std::vector<std::string> current_po_aliases{};
@@ -424,12 +424,12 @@ template <typename Lyt>
     layout.foreach_po(
         [&layout, &current_pos, &current_po_aliases, &po_index](const auto& po)
         {
-            current_pos.push_back(layout.get_node(po));
+            current_pos.push_back(po);
             current_po_aliases.push_back(layout.get_output_name(po_index++));
         });
 
-    std::vector<mockturtle::node<Lyt>> target_pis{};
-    std::vector<mockturtle::node<Lyt>> target_pos{};
+    std::vector<mockturtle::node<Lyt>>   target_pis{};
+    std::vector<mockturtle::signal<Lyt>> target_pos{};
 
     pin_unscrambling_result<Lyt> result{};
     result.report.topology = detail::topology_label<Lyt>();

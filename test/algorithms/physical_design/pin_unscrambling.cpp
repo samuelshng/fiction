@@ -84,6 +84,31 @@ fiction::hex_even_row_gate_clk_lyt make_two_output_test_layout()
 }
 
 /**
+ * @brief Creates a small hex-even-row layout whose two POs originate from the same 2-output gate.
+ *
+ * @return Layout object.
+ */
+fiction::hex_even_row_gate_clk_lyt make_multioutput_gate_test_layout()
+{
+    using lyt = fiction::hex_even_row_gate_clk_lyt;
+
+    lyt layout{{4, 4, 1}, fiction::row_clocking<lyt>()};
+
+    const auto pi00 = layout.create_pi("pi00", {0, 0});
+    const auto pi01 = layout.create_pi("pi01", {1, 0});
+    const auto ha   = layout.create_ha(pi00, pi01, {0, 1});
+
+    const auto carry = ha;
+    auto       sum   = ha;
+    sum.output       = 1u;
+
+    layout.create_po(carry, "po00", {0, 2});
+    layout.create_po(sum, "po01", {1, 2});
+
+    return layout;
+}
+
+/**
  * @brief Collects PI aliases sorted by physical x-coordinate.
  *
  * @tparam Lyt Gate-level layout type.
@@ -463,6 +488,37 @@ TEST_CASE("Pin unscrambling reorders multiple outputs in semantic order mode", "
     CHECK(result.report.output_mappings[0].semantic_name == "g");
     CHECK(result.report.output_mappings[0].fgl_alias == "po01");
     CHECK(result.report.output_mappings[1].semantic_name == "f");
+    CHECK(result.report.output_mappings[1].fgl_alias == "po00");
+
+    std::vector<std::string> unscrambled_po_aliases{};
+    unscrambled_po_aliases.reserve(result.layout.num_pos());
+
+    uint32_t po_index = 0u;
+    result.layout.foreach_po([&result, &unscrambled_po_aliases, &po_index](const auto&)
+                             { unscrambled_po_aliases.push_back(result.layout.get_output_name(po_index++)); });
+
+    REQUIRE(unscrambled_po_aliases.size() == 2u);
+    CHECK(unscrambled_po_aliases[0] == "po01");
+    CHECK(unscrambled_po_aliases[1] == "po00");
+    CHECK(collect_po_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"po01", "po00"});
+}
+
+TEST_CASE("Pin unscrambling reorders multi-output gate pins in semantic order mode", "[pin-unscrambling]")
+{
+    fiction::pin_unscrambling_configuration cfg{};
+    cfg.input_mappings    = {{"pi00", "a"}, {"pi01", "b"}};
+    cfg.input_order       = {"a", "b"};
+    cfg.output_mappings   = {{"po00", "carry"}, {"po01", "sum"}};
+    cfg.output_order      = {"sum", "carry"};
+    cfg.strict_full_order = true;
+
+    const auto layout = make_multioutput_gate_test_layout();
+    const auto result = fiction::run_pin_unscrambling(layout, cfg);
+
+    REQUIRE(result.report.output_mappings.size() == 2u);
+    CHECK(result.report.output_mappings[0].semantic_name == "sum");
+    CHECK(result.report.output_mappings[0].fgl_alias == "po01");
+    CHECK(result.report.output_mappings[1].semantic_name == "carry");
     CHECK(result.report.output_mappings[1].fgl_alias == "po00");
 
     std::vector<std::string> unscrambled_po_aliases{};
