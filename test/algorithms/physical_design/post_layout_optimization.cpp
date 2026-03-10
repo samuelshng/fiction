@@ -113,6 +113,36 @@ static void check_2i2o_pin_preservation_after_optimization()
 }
 
 template <typename Lyt>
+static void check_2i2o_pin_preservation_after_optimization_from_ortho()
+{
+    const auto ntk = mapped_half_adder_network_with_sum_fanout();
+
+    auto layout = orthogonal<Lyt>(ntk, {});
+
+    uint64_t num_ha = 0u;
+    layout.foreach_gate(
+        [&num_ha, &layout](const auto& g)
+        {
+            if (layout.is_ha(g))
+            {
+                ++num_ha;
+            }
+        });
+
+    REQUIRE(num_ha > 0u);
+
+    const auto reference_layout = layout;
+
+    post_layout_optimization_stats  stats{};
+    post_layout_optimization_params params{};
+    params.max_gate_relocations = 200;
+
+    post_layout_optimization<Lyt>(layout, params, &stats);
+
+    check_eq(reference_layout, layout);
+}
+
+template <typename Lyt>
 static void check_layout_equiv_all()
 {
     SECTION("maj1_network")
@@ -329,6 +359,13 @@ TEST_CASE("Layout equivalence", "[post_layout_optimization]")
         using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<>>>>;
 
         check_2i2o_pin_preservation_after_optimization<gate_layout>();
+    }
+
+    SECTION("2I2O output-pin preservation after ORTHO compaction")
+    {
+        using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<>>>>;
+
+        check_2i2o_pin_preservation_after_optimization_from_ortho<gate_layout>();
     }
 }
 

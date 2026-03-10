@@ -269,6 +269,48 @@ TEST_CASE("Hexagonalization preserves mapped half adder gate", "[hexagonalizatio
     CHECK(hex_layout.num_pos() == 2u);
 }
 
+TEST_CASE("Hexagonalization preserves mapped half adder gate after orthogonal", "[hexagonalization]")
+{
+    using cart_layout = cart_gate_clk_lyt;
+
+    const auto aig_ha = blueprints::half_adder_network<mockturtle::aig_network>();
+
+    technology_mapping_stats mapping_stats{};
+    const auto               mapped_ha = technology_mapping(aig_ha, all_standard_2_input_functions(), &mapping_stats);
+    REQUIRE(!mapping_stats.mapper_stats.mapping_error);
+
+    const auto cart_ha_layout = orthogonal<cart_layout>(mapped_ha, {});
+
+    uint64_t cart_num_ha_gates = 0u;
+    cart_ha_layout.foreach_gate(
+        [&cart_num_ha_gates, &cart_ha_layout](const auto& g)
+        {
+            if (cart_ha_layout.is_ha(g))
+            {
+                ++cart_num_ha_gates;
+            }
+        });
+    REQUIRE(cart_num_ha_gates == 1u);
+
+    hexagonalization_stats  hex_stats{};
+    hexagonalization_params hex_params{};
+    const auto              hex_layout =
+        hexagonalization<hex_even_row_gate_clk_lyt, cart_layout>(cart_ha_layout, hex_params, &hex_stats);
+
+    uint64_t hex_num_ha_gates = 0u;
+    hex_layout.foreach_gate(
+        [&hex_num_ha_gates, &hex_layout](const auto& g)
+        {
+            if (hex_layout.is_ha(g))
+            {
+                ++hex_num_ha_gates;
+            }
+        });
+    CHECK(hex_num_ha_gates == 1u);
+    CHECK(hex_layout.num_pos() == 2u);
+    check_eq(mapped_ha, hex_layout);
+}
+
 TEST_CASE("Cartesian to hexagonal")
 {
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;

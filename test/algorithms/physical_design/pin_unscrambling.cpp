@@ -5,11 +5,22 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "utils/blueprints/network_blueprints.hpp"
+#include "utils/equivalence_checking_utils.hpp"
+
+#include <fiction/algorithms/network_transformation/technology_mapping.hpp>
+#include <fiction/algorithms/physical_design/hexagonalization.hpp>
+#include <fiction/algorithms/physical_design/orthogonal.hpp>
 #include <fiction/algorithms/physical_design/pin_unscrambling.hpp>
+#include <fiction/algorithms/physical_design/post_layout_optimization.hpp>
 #include <fiction/io/pin_unscrambling_spec.hpp>
+#include <fiction/layouts/cartesian_layout.hpp>
 #include <fiction/layouts/clocked_layout.hpp>
+#include <fiction/layouts/gate_level_layout.hpp>
+#include <fiction/layouts/tile_based_layout.hpp>
 #include <fiction/types.hpp>
 
+#include <mockturtle/networks/aig.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -106,6 +117,78 @@ fiction::hex_even_row_gate_clk_lyt make_multioutput_gate_test_layout()
     layout.create_po(sum, "po01", {1, 2});
 
     return layout;
+}
+
+/**
+ * @brief Creates a mapped half adder with one additional sum-dependent output.
+ *
+ * @return Technology-mapped network with one half adder gate.
+ */
+fiction::tec_nt mapped_half_adder_network_with_sum_fanout()
+{
+    const auto aig = blueprints::half_adder_network<mockturtle::aig_network>();
+
+    fiction::technology_mapping_stats mapping_stats{};
+    auto mapped_ntk = fiction::technology_mapping(aig, fiction::all_standard_2_input_functions(), &mapping_stats);
+    REQUIRE(!mapping_stats.mapper_stats.mapping_error);
+
+    uint64_t                            num_ha = 0u;
+    mockturtle::signal<fiction::tec_nt> ha_signal{};
+
+    mapped_ntk.foreach_gate(
+        [&mapped_ntk, &num_ha, &ha_signal](const auto& g)
+        {
+            if (mapped_ntk.is_ha(g))
+            {
+                ha_signal = mapped_ntk.make_signal(g);
+                ++num_ha;
+            }
+        });
+
+    REQUIRE(num_ha == 1u);
+
+    auto sum_output   = ha_signal;
+    sum_output.output = 1u;
+
+    const auto c         = mapped_ntk.create_pi("c");
+    const auto sum_and_c = mapped_ntk.create_and(sum_output, c);
+
+    mapped_ntk.create_po(sum_and_c, "sum_and_c");
+
+    return mapped_ntk;
+}
+
+/**
+ * @brief Generates a hex layout via ORTHO, PLO, and hexagonalization for a 2-output gate case.
+ *
+ * @return Extended hexagonal layout for pin unscrambling tests.
+ */
+fiction::hex_even_row_gate_clk_lyt make_ortho_pipeline_multioutput_layout()
+{
+    using cart_layout =
+        fiction::gate_level_layout<fiction::clocked_layout<fiction::tile_based_layout<fiction::cartesian_layout<>>>>;
+
+    const auto ntk = mapped_half_adder_network_with_sum_fanout();
+
+    auto layout = fiction::orthogonal<cart_layout>(ntk, {});
+
+    fiction::post_layout_optimization_stats  opt_stats{};
+    fiction::post_layout_optimization_params opt_params{};
+    opt_params.max_gate_relocations = 200;
+
+    fiction::post_layout_optimization<cart_layout>(layout, opt_params, &opt_stats);
+    check_eq(ntk, layout);
+
+    fiction::hexagonalization_params hex_params{};
+    hex_params.input_pin_extension  = fiction::hexagonalization_params::io_pin_extension_mode::EXTEND;
+    hex_params.output_pin_extension = fiction::hexagonalization_params::io_pin_extension_mode::EXTEND;
+
+    const auto hex_layout =
+        fiction::hexagonalization<fiction::hex_even_row_gate_clk_lyt, cart_layout>(layout, hex_params);
+
+    check_eq(layout, hex_layout);
+
+    return hex_layout;
 }
 
 /**
@@ -532,6 +615,50 @@ TEST_CASE("Pin unscrambling reorders multi-output gate pins in semantic order mo
     CHECK(unscrambled_po_aliases[0] == "po01");
     CHECK(unscrambled_po_aliases[1] == "po00");
     CHECK(collect_po_aliases_sorted_by_x(result.layout) == std::vector<std::string>{"po01", "po00"});
+}
+
+TEST_CASE("Pin unscrambling supports ORTHO-PLO-HEX pipelines with multi-output gates", "[pin-unscrambling]")
+{
+    const auto layout = make_ortho_pipeline_multioutput_layout();
+
+    uint64_t num_multioutput_gates = 0u;
+    layout.foreach_gate(
+        [&layout, &num_multioutput_gates](const auto& g)
+        {
+            if (layout.is_multioutput(g))
+            {
+                ++num_multioutput_gates;
+            }
+        });
+
+    REQUIRE(num_multioutput_gates == 1u);
+
+    auto reversed_pi_order = collect_pi_aliases_sorted_by_x(layout);
+    auto reversed_po_order = collect_po_aliases_sorted_by_x(layout);
+    std::reverse(reversed_pi_order.begin(), reversed_pi_order.end());
+    std::reverse(reversed_po_order.begin(), reversed_po_order.end());
+
+    fiction::pin_unscrambling_configuration cfg{};
+    cfg.input_order       = reversed_pi_order;
+    cfg.output_order      = reversed_po_order;
+    cfg.strict_full_order = true;
+
+    const auto result = fiction::run_pin_unscrambling(layout, cfg);
+
+    uint64_t num_unscrambled_multioutput_gates = 0u;
+    result.layout.foreach_gate(
+        [&result, &num_unscrambled_multioutput_gates](const auto& g)
+        {
+            if (result.layout.is_multioutput(g))
+            {
+                ++num_unscrambled_multioutput_gates;
+            }
+        });
+
+    CHECK(num_unscrambled_multioutput_gates == 1u);
+    check_eq(layout, result.layout);
+    CHECK(collect_pi_aliases_sorted_by_x(result.layout) == reversed_pi_order);
+    CHECK(collect_po_aliases_sorted_by_x(result.layout) == reversed_po_order);
 }
 
 TEST_CASE("Pin unscrambling spec parsing rejects malformed JSON fields", "[pin-unscrambling]")
