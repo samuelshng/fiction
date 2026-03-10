@@ -9,6 +9,7 @@
 #include "fiction/algorithms/path_finding/cost.hpp"
 #include "fiction/algorithms/path_finding/distance.hpp"
 #include "fiction/algorithms/physical_design/post_layout_optimization.hpp"
+#include "fiction/algorithms/verification/equivalence_checking.hpp"
 #include "fiction/layouts/bounding_box.hpp"
 #include "fiction/layouts/clocking_scheme.hpp"
 #include "fiction/layouts/obstruction_layout.hpp"
@@ -1110,8 +1111,9 @@ class graph_oriented_layout_design_impl
      */
     [[nodiscard]] layout_coordinate_path<ObstrLyt>
     check_path(const ObstrLyt& layout, const tile<ObstrLyt>& src, const tile<ObstrLyt>& dest,
-               const new_gate_location new_gate_loc            = new_gate_location::NONE,
-               const bool              check_straight_inverter = false) noexcept
+               const new_gate_location       new_gate_loc            = new_gate_location::NONE,
+               const bool                    check_straight_inverter = false,
+               const std::optional<uint8_t>& source_output_pin       = std::nullopt) noexcept
     {
         const bool src_is_new_pos  = (new_gate_loc == new_gate_location::SRC);
         const bool dest_is_new_pos = (new_gate_loc == new_gate_location::DEST);
@@ -1129,6 +1131,12 @@ class graph_oriented_layout_design_impl
                 a_star<layout_coordinate_path<ObstrLyt>>(layout, {src, dest}, dist(), cost(), a_star_crossing_params);
 
             if (path.size() < 2)
+            {
+                return {};
+            }
+
+            if (source_output_pin.has_value() &&
+                !uses_legal_multioutput_launch_side(layout, src, *source_output_pin, path))
             {
                 return {};
             }
@@ -1152,6 +1160,243 @@ class graph_oriented_layout_design_impl
         return {};
     }
     /**
+     * Distinguishes direct launch directions for two-output gates in Cartesian 2DDWave layouts.
+     */
+    enum class launch_side : std::uint8_t
+    {
+        NONE,
+        EAST,
+        SOUTH,
+        OTHER
+    };
+    /**
+     * Summarizes immediate launch usage of a placed multi-output gate.
+     */
+    struct multioutput_launch_usage
+    {
+        std::array<launch_side, 2u> pin_sides{{launch_side::NONE, launch_side::NONE}};
+        uint32_t                    east_fanouts{0u};
+        uint32_t                    south_fanouts{0u};
+        uint32_t                    other_fanouts{0u};
+        uint32_t                    used_output_pins{0u};
+        bool                        inconsistent_pin_launch{false};
+    };
+    /**
+     * Returns the number of outputs of a network node.
+     *
+     * @tparam Network Network type.
+     * @param ntk Network instance.
+     * @param n Node in `ntk`.
+     * @return Number of outputs of `n`.
+     */
+    template <typename Network>
+    [[nodiscard]] static uint32_t node_num_outputs(const Network& ntk, const mockturtle::node<Network>& n) noexcept
+    {
+        if constexpr (mockturtle::has_num_outputs_v<Network>)
+        {
+            if (ntk.is_multioutput(n))
+            {
+                return ntk.num_outputs(n);
+            }
+        }
+
+        return ntk.is_multioutput(n) ? 2u : 1u;
+    }
+    /**
+     * Determines on which outgoing side a route leaves a source tile.
+     *
+     * @param layout Layout containing the route.
+     * @param source Source tile.
+     * @param successor First successor tile of the route.
+     * @return Launch side of the step from `source` to `successor`.
+     */
+    [[nodiscard]] static launch_side determine_launch_side(const ObstrLyt& layout, const tile<ObstrLyt>& source,
+                                                           const tile<ObstrLyt>& successor) noexcept
+    {
+        const auto source_projected    = layout.below(source);
+        const auto successor_projected = layout.below(successor);
+
+        if (successor_projected == layout.east(source_projected))
+        {
+            return launch_side::EAST;
+        }
+        if (successor_projected == layout.south(source_projected))
+        {
+            return launch_side::SOUTH;
+        }
+
+        return launch_side::OTHER;
+    }
+    /**
+     * Collects immediate launch usage for a placed multi-output gate.
+     *
+     * @param layout Layout containing the gate.
+     * @param source Tile of the placed gate.
+     * @return Summary of currently used launch sides and output pins.
+     */
+    [[nodiscard]] multioutput_launch_usage collect_multioutput_launch_usage(const ObstrLyt&       layout,
+                                                                            const tile<ObstrLyt>& source) const noexcept
+    {
+        multioutput_launch_usage usage{};
+        const auto               source_node = layout.get_node(source);
+
+        if (!layout.is_multioutput(source_node))
+        {
+            return usage;
+        }
+
+        const auto source_projected = layout.below(source);
+
+        layout.foreach_fanout(source_node,
+                              [&layout, &source, &source_projected, &usage, this](const auto& fout)
+                              {
+                                  const auto fanout_tile      = layout.get_tile(fout);
+                                  const auto launch           = determine_launch_side(layout, source, fanout_tile);
+                                  bool       has_output_index = false;
+                                  uint8_t    output_index{0u};
+
+                                  layout.foreach_fanin(
+                                      fout,
+                                      [&layout, &source_projected, &has_output_index, &output_index](const auto& fin)
+                                      {
+                                          if (layout.below(static_cast<tile<ObstrLyt>>(fin)) == source_projected)
+                                          {
+                                              has_output_index = true;
+                                              output_index     = fin.output;
+                                          }
+                                      });
+
+                                  if (!has_output_index || output_index >= usage.pin_sides.size())
+                                  {
+                                      usage.inconsistent_pin_launch = true;
+                                      return;
+                                  }
+
+                                  const auto pin = output_index;
+
+                                  if (usage.pin_sides[pin] == launch_side::NONE)
+                                  {
+                                      usage.pin_sides[pin] = launch;
+                                  }
+                                  else if (usage.pin_sides[pin] != launch)
+                                  {
+                                      usage.inconsistent_pin_launch = true;
+                                  }
+
+                                  switch (launch)
+                                  {
+                                      case launch_side::EAST: ++usage.east_fanouts; break;
+                                      case launch_side::SOUTH: ++usage.south_fanouts; break;
+                                      case launch_side::OTHER: ++usage.other_fanouts; break;
+                                      case launch_side::NONE: break;
+                                  }
+                              });
+
+        usage.used_output_pins =
+            static_cast<uint32_t>(std::count_if(usage.pin_sides.cbegin(), usage.pin_sides.cend(),
+                                                [](const auto side) { return side != launch_side::NONE; }));
+
+        return usage;
+    }
+    /**
+     * Checks whether a candidate path uses a legal immediate launch side for a two-output source gate.
+     *
+     * @param layout Layout in which the path is considered.
+     * @param source Source tile of the path.
+     * @param output_pin Output pin launched by the path.
+     * @param path Candidate route from `source`.
+     * @return `true` iff the first routed step is legal.
+     */
+    [[nodiscard]] bool uses_legal_multioutput_launch_side(const ObstrLyt& layout, const tile<ObstrLyt>& source,
+                                                          const uint8_t                           output_pin,
+                                                          const layout_coordinate_path<ObstrLyt>& path) const noexcept
+    {
+        if (path.size() < 2)
+        {
+            return false;
+        }
+
+        if (layout.is_empty_tile(source))
+        {
+            return true;
+        }
+
+        const auto source_node = layout.get_node(source);
+
+        if (!layout.is_multioutput(source_node) || output_pin >= 2u)
+        {
+            return true;
+        }
+
+        const auto launch = determine_launch_side(layout, source, path[1]);
+
+        if ((launch != launch_side::EAST) && (launch != launch_side::SOUTH))
+        {
+            return false;
+        }
+
+        const auto usage = collect_multioutput_launch_usage(layout, source);
+
+        if (usage.inconsistent_pin_launch || usage.other_fanouts != 0u || usage.east_fanouts > 1u ||
+            usage.south_fanouts > 1u)
+        {
+            return false;
+        }
+
+        if (usage.pin_sides[output_pin] != launch_side::NONE)
+        {
+            return usage.pin_sides[output_pin] == launch;
+        }
+
+        const auto other_output = static_cast<uint8_t>(output_pin == 0u ? 1u : 0u);
+
+        if (usage.pin_sides[other_output] == launch_side::EAST)
+        {
+            return launch == launch_side::SOUTH;
+        }
+        if (usage.pin_sides[other_output] == launch_side::SOUTH)
+        {
+            return launch == launch_side::EAST;
+        }
+
+        return true;
+    }
+    /**
+     * Checks whether all placed multi-output gates use valid immediate launch patterns.
+     *
+     * @param layout Layout to validate.
+     * @return `true` iff all multi-output gates launch on at most one east and one south branch.
+     */
+    [[nodiscard]] bool has_valid_multioutput_launches(const ObstrLyt& layout) const noexcept
+    {
+        bool valid = true;
+
+        layout.foreach_gate(
+            [this, &layout, &valid](const auto& gate)
+            {
+                if (!layout.is_multioutput(gate))
+                {
+                    return;
+                }
+
+                const auto usage = collect_multioutput_launch_usage(layout, layout.get_tile(gate));
+
+                if (usage.inconsistent_pin_launch || usage.other_fanouts != 0u || usage.east_fanouts > 1u ||
+                    usage.south_fanouts > 1u)
+                {
+                    valid = false;
+                    return;
+                }
+
+                if ((usage.used_output_pins == 2u) && !(usage.east_fanouts == 1u && usage.south_fanouts == 1u))
+                {
+                    valid = false;
+                }
+            });
+
+        return valid;
+    }
+    /**
      * Retrieves the possible positions for Primary Inputs (PIs) in the given layout based on the specified
      * criteria of positioning at the top or left side, with a limit on the number of possible positions.
      *
@@ -1160,8 +1405,9 @@ class graph_oriented_layout_design_impl
      * @param num_expansions The maximum number of positions to be returned (is doubled for PIs).
      * @return A vector of tiles representing the possible positions for PIs.
      */
-    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions_pis(ObstrLyt& layout, search_space_graph<ObstrLyt>& ssg,
-                                                                      const uint64_t                 num_expansions) noexcept
+    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions_pis(ObstrLyt&                     layout,
+                                                                      search_space_graph<ObstrLyt>& ssg,
+                                                                      const uint64_t num_expansions) noexcept
     {
         uint64_t count_expansions = 0ul;
 
@@ -1311,7 +1557,9 @@ class graph_oriented_layout_design_impl
             const tile<ObstrLyt> tile{x, y, 0};
             const auto check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(pre_t));
 
-            if (!check_path(layout, pre_t, tile, new_gate_location::DEST, check_straight_inverter).empty())
+            if (!check_path(layout, pre_t, tile, new_gate_location::DEST, check_straight_inverter,
+                            fc.fanin_signals[0].output)
+                     .empty())
             {
                 possible_positions.push_back(tile);
             }
@@ -1359,7 +1607,9 @@ class graph_oriented_layout_design_impl
             const tile<ObstrLyt> new_pos{pre_t.x + x, pre_t.y + y, 0};
             const auto check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(pre_t));
 
-            if (!check_path(layout, pre_t, new_pos, new_gate_location::DEST, check_straight_inverter).empty())
+            if (!check_path(layout, pre_t, new_pos, new_gate_location::DEST, check_straight_inverter,
+                            fc.fanin_signals[0].output)
+                     .empty())
             {
                 layout.resize({layout.x() + 1, layout.y() + 1, 1});
                 const tile<ObstrLyt> drain{layout.x(), layout.y(), 0};
@@ -1426,7 +1676,8 @@ class graph_oriented_layout_design_impl
             const tile<ObstrLyt> new_pos{min_x + x, min_y + y, 0};
             auto check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(pre1_t));
 
-            const auto path = check_path(layout, pre1_t, new_pos, new_gate_location::DEST, check_straight_inverter);
+            const auto path = check_path(layout, pre1_t, new_pos, new_gate_location::DEST, check_straight_inverter,
+                                         fc.fanin_signals[0].output);
             if (!path.empty())
             {
                 for (const auto& el : path)
@@ -1435,7 +1686,9 @@ class graph_oriented_layout_design_impl
                 }
 
                 check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(pre2_t));
-                if (!check_path(layout, pre2_t, new_pos, new_gate_location::DEST, check_straight_inverter).empty())
+                if (!check_path(layout, pre2_t, new_pos, new_gate_location::DEST, check_straight_inverter,
+                                fc.fanin_signals[1].output)
+                         .empty())
                 {
                     layout.resize({layout.x() + 1, layout.y() + 1, 1});
                     const tile<ObstrLyt> drain{layout.x(), layout.y(), 0};
@@ -1486,8 +1739,7 @@ class graph_oriented_layout_design_impl
      * @param ssg The search space graph.
      * @return A vector of tiles representing the possible positions for the current node.
      */
-    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions(ObstrLyt&                     layout,
-                                                                  search_space_graph<ObstrLyt>& ssg,
+    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions(ObstrLyt& layout, search_space_graph<ObstrLyt>& ssg,
                                                                   const placement_info<ObstrLyt>& place_info) noexcept
     {
         const auto fc = fanins(ssg.network, ssg.nodes_to_place[place_info.current_node]);
@@ -1539,11 +1791,65 @@ class graph_oriented_layout_design_impl
 
         for (uint64_t node = 0ul; node < place_info.current_node; node++)
         {
-            const auto layout_tile = static_cast<tile<ObstrLyt>>(place_info.node2pos[ssg.nodes_to_place[node]]);
+            const auto layout_tile  = static_cast<tile<ObstrLyt>>(place_info.node2pos[ssg.nodes_to_place[node]]);
+            const auto network_node = ssg.nodes_to_place[node];
+
+            if (ssg.network.is_multioutput(network_node) && (node_num_outputs(ssg.network, network_node) > 1u))
+            {
+                const auto usage = collect_multioutput_launch_usage(layout, layout_tile);
+
+                if (usage.inconsistent_pin_launch || usage.other_fanouts != 0u || usage.east_fanouts > 1u ||
+                    usage.south_fanouts > 1u)
+                {
+                    return false;
+                }
+
+                const tile<ObstrLyt> right_tile{layout_tile.x + 1, layout_tile.y, 0};
+                const tile<ObstrLyt> bottom_tile{layout_tile.x, layout_tile.y + 1, 0};
+                const bool           east_available  = is_empty_tile_or_crossable(right_tile);
+                const bool           south_available = is_empty_tile_or_crossable(bottom_tile);
+
+                switch (usage.used_output_pins)
+                {
+                    case 0u:
+                    {
+                        if (!(east_available && south_available))
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    case 1u:
+                    {
+                        const bool used_east  = usage.east_fanouts == 1u;
+                        const bool used_south = usage.south_fanouts == 1u;
+
+                        if (!((used_east && !used_south && south_available) ||
+                              (!used_east && used_south && east_available)))
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    case 2u:
+                    {
+                        if (!(usage.east_fanouts == 1u && usage.south_fanouts == 1u))
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        return false;
+                    }
+                }
+            }
+
             const bool no_fanout_and_not_po =
                 !layout.is_po_tile(layout_tile) && (layout.fanout_size(layout.get_node(layout_tile)) == 0);
-            const bool one_dangling_fanout = (layout.fanout_size(layout.get_node(layout_tile)) == 1) &&
-                                             ssg.network.is_fanout(ssg.nodes_to_place[node]);
+            const bool one_dangling_fanout =
+                (layout.fanout_size(layout.get_node(layout_tile)) == 1) && ssg.network.is_fanout(network_node);
 
             if (no_fanout_and_not_po || one_dangling_fanout)
             {
@@ -1572,8 +1878,8 @@ class graph_oriented_layout_design_impl
                 }
             }
 
-            const bool two_dangling_fanouts = (layout.fanout_size(layout.get_node(layout_tile)) == 0) &&
-                                              ssg.network.is_fanout(ssg.nodes_to_place[node]);
+            const bool two_dangling_fanouts =
+                (layout.fanout_size(layout.get_node(layout_tile)) == 0) && ssg.network.is_fanout(network_node);
 
             if (two_dangling_fanouts)
             {
@@ -1607,7 +1913,8 @@ class graph_oriented_layout_design_impl
 
         layout.move_node(layout.get_node(position), position, {});
 
-        const auto path = check_path(layout, pre_t, position, new_gate_location::NONE);
+        const auto path =
+            check_path(layout, pre_t, position, new_gate_location::NONE, false, fc.fanin_signals[0].output);
         assert(!path.empty());
 
         route_path(layout, src, path);
@@ -1641,7 +1948,8 @@ class graph_oriented_layout_design_impl
 
         layout.move_node(layout.get_node(position), position, {});
 
-        const auto path_1 = check_path(layout, pre1_t, position, new_gate_location::NONE);
+        const auto path_1 =
+            check_path(layout, pre1_t, position, new_gate_location::NONE, false, fc.fanin_signals[0].output);
         assert(!path_1.empty());
 
         for (const auto& el : path_1)
@@ -1649,7 +1957,8 @@ class graph_oriented_layout_design_impl
             layout.obstruct_coordinate(el);
         }
 
-        const auto path_2 = check_path(layout, pre2_t, position, new_gate_location::NONE);
+        const auto path_2 =
+            check_path(layout, pre2_t, position, new_gate_location::NONE, false, fc.fanin_signals[1].output);
         assert(!path_2.empty());
 
         for (const auto& el : path_2)
@@ -1997,6 +2306,14 @@ class graph_oriented_layout_design_impl
                 }
 
                 auto apply_plo = true;
+                layout.foreach_gate(
+                    [&layout, &apply_plo](const auto& gate)
+                    {
+                        if (layout.is_multioutput(gate))
+                        {
+                            apply_plo = false;
+                        }
+                    });
                 if (ps.straight_inverters)
                 {
                     layout.foreach_po(
@@ -2017,6 +2334,22 @@ class graph_oriented_layout_design_impl
                     plo_params.planar_optimization = ps.planar;
 
                     fiction::post_layout_optimization(layout, plo_params);
+                }
+
+                bool contains_multioutput_gate = false;
+                layout.foreach_gate(
+                    [&layout, &contains_multioutput_gate](const auto& gate)
+                    {
+                        if (layout.is_multioutput(gate))
+                        {
+                            contains_multioutput_gate = true;
+                        }
+                    });
+
+                if (contains_multioutput_gate && (!has_valid_multioutput_launches(layout) ||
+                                                  (fiction::equivalence_checking(ntk, layout) == eq_type::NO)))
+                {
+                    return {{}, std::nullopt};
                 }
 
                 const auto bb_after_plo = fiction::bounding_box_2d(layout);

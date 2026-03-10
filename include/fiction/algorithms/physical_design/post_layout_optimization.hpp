@@ -889,16 +889,193 @@ class post_layout_optimization_impl
         return ffd;
     }
     /**
+     * Distinguishes direct launch directions for two-output gates in Cartesian 2DDWave layouts.
+     */
+    enum class launch_side : std::uint8_t
+    {
+        NONE,
+        EAST,
+        SOUTH,
+        OTHER
+    };
+    /**
+     * Summarizes immediate launch usage of a placed multi-output gate.
+     */
+    struct multioutput_launch_usage
+    {
+        std::array<launch_side, 2u> pin_sides{{launch_side::NONE, launch_side::NONE}};
+        uint32_t                    east_fanouts{0u};
+        uint32_t                    south_fanouts{0u};
+        uint32_t                    other_fanouts{0u};
+        bool                        inconsistent_pin_launch{false};
+    };
+    /**
+     * Determines on which outgoing side a route leaves a source tile.
+     *
+     * @param lyt Layout containing the route.
+     * @param source Source tile.
+     * @param successor First successor tile of the route.
+     * @return Launch side of the step from `source` to `successor`.
+     */
+    [[nodiscard]] static launch_side determine_launch_side(const ObstrLyt& lyt, const tile<ObstrLyt>& source,
+                                                           const tile<ObstrLyt>& successor) noexcept
+    {
+        const auto source_projected    = lyt.below(source);
+        const auto successor_projected = lyt.below(successor);
+
+        if (successor_projected == lyt.east(source_projected))
+        {
+            return launch_side::EAST;
+        }
+        if (successor_projected == lyt.south(source_projected))
+        {
+            return launch_side::SOUTH;
+        }
+
+        return launch_side::OTHER;
+    }
+    /**
+     * Collects immediate launch usage for a placed multi-output gate.
+     *
+     * @param lyt Layout containing the gate.
+     * @param source Tile of the placed gate.
+     * @return Summary of currently used launch sides and output pins.
+     */
+    [[nodiscard]] multioutput_launch_usage collect_multioutput_launch_usage(const ObstrLyt&       lyt,
+                                                                            const tile<ObstrLyt>& source) const noexcept
+    {
+        multioutput_launch_usage usage{};
+        const auto               source_node = lyt.get_node(source);
+
+        if (!lyt.is_multioutput(source_node))
+        {
+            return usage;
+        }
+
+        const auto source_projected = lyt.below(source);
+
+        lyt.foreach_fanout(source_node,
+                           [&lyt, &source, &source_projected, &usage, this](const auto& fout)
+                           {
+                               const auto fanout_tile      = lyt.get_tile(fout);
+                               const auto launch           = determine_launch_side(lyt, source, fanout_tile);
+                               bool       has_output_index = false;
+                               uint8_t    output_index{0u};
+
+                               lyt.foreach_fanin(
+                                   fout,
+                                   [&lyt, &source_projected, &has_output_index, &output_index](const auto& fin)
+                                   {
+                                       if (lyt.below(static_cast<tile<ObstrLyt>>(fin)) == source_projected)
+                                       {
+                                           has_output_index = true;
+                                           output_index     = fin.output;
+                                       }
+                                   });
+
+                               if (!has_output_index || output_index >= usage.pin_sides.size())
+                               {
+                                   usage.inconsistent_pin_launch = true;
+                                   return;
+                               }
+
+                               if (usage.pin_sides[output_index] == launch_side::NONE)
+                               {
+                                   usage.pin_sides[output_index] = launch;
+                               }
+                               else if (usage.pin_sides[output_index] != launch)
+                               {
+                                   usage.inconsistent_pin_launch = true;
+                               }
+
+                               switch (launch)
+                               {
+                                   case launch_side::EAST: ++usage.east_fanouts; break;
+                                   case launch_side::SOUTH: ++usage.south_fanouts; break;
+                                   case launch_side::OTHER: ++usage.other_fanouts; break;
+                                   case launch_side::NONE: break;
+                               }
+                           });
+
+        return usage;
+    }
+    /**
+     * Checks whether a candidate path uses a legal immediate launch side for a two-output source gate.
+     *
+     * @param lyt Layout in which the path is considered.
+     * @param source_signal Source signal launched by the path.
+     * @param source Source tile of the path.
+     * @param path Candidate route from `source`.
+     * @return `true` iff the first routed step is legal.
+     */
+    [[nodiscard]] bool uses_legal_multioutput_launch_side(const ObstrLyt&                         lyt,
+                                                          const mockturtle::signal<ObstrLyt>&     source_signal,
+                                                          const tile<ObstrLyt>&                   source,
+                                                          const layout_coordinate_path<ObstrLyt>& path) const noexcept
+    {
+        if (path.size() < 2)
+        {
+            return false;
+        }
+
+        if (lyt.is_empty_tile(source))
+        {
+            return true;
+        }
+
+        const auto source_node = lyt.get_node(source);
+
+        if (!lyt.is_multioutput(source_node) || source_signal.output >= 2u)
+        {
+            return true;
+        }
+
+        const auto launch = determine_launch_side(lyt, source, path[1]);
+
+        if ((launch != launch_side::EAST) && (launch != launch_side::SOUTH))
+        {
+            return false;
+        }
+
+        const auto usage = collect_multioutput_launch_usage(lyt, source);
+
+        if (usage.inconsistent_pin_launch || usage.other_fanouts != 0u || usage.east_fanouts > 1u ||
+            usage.south_fanouts > 1u)
+        {
+            return false;
+        }
+
+        if (usage.pin_sides[source_signal.output] != launch_side::NONE)
+        {
+            return usage.pin_sides[source_signal.output] == launch;
+        }
+
+        const auto other_output = static_cast<uint8_t>(source_signal.output == 0u ? 1u : 0u);
+
+        if (usage.pin_sides[other_output] == launch_side::EAST)
+        {
+            return launch == launch_side::SOUTH;
+        }
+        if (usage.pin_sides[other_output] == launch_side::SOUTH)
+        {
+            return launch == launch_side::EAST;
+        }
+
+        return true;
+    }
+    /**
      * This helper function computes a path between two coordinates using the A* algorithm.
      * It then obstructs the tiles along the path in the given layout.
      *
      * @param lyt Obstructed gate-level layout.
+     * @param source_signal Optional source signal used to enforce output-pin-aware launch sides.
      * @param start_tile The starting coordinate of the path.
      * @param end_tile The ending coordinate of the path.
      * @return The computed path as a sequence of coordinates in the layout.
      */
-    layout_coordinate_path<ObstrLyt> get_path_and_obstruct(ObstrLyt& lyt, const tile<ObstrLyt>& start_tile,
-                                                           const tile<ObstrLyt>& end_tile)
+    layout_coordinate_path<ObstrLyt>
+    get_path_and_obstruct(ObstrLyt& lyt, const tile<ObstrLyt>& start_tile, const tile<ObstrLyt>& end_tile,
+                          const std::optional<mockturtle::signal<ObstrLyt>>& source_signal = std::nullopt)
     {
         using dist = twoddwave_distance_functor<ObstrLyt, uint64_t>;
         using cost = unit_cost_functor<ObstrLyt, uint8_t>;
@@ -907,6 +1084,11 @@ class post_layout_optimization_impl
 
         const auto path =
             a_star<layout_coordinate_path<ObstrLyt>>(lyt, {start_tile, end_tile}, dist(), cost(), astar_params);
+
+        if (source_signal.has_value() && !uses_legal_multioutput_launch_side(lyt, *source_signal, start_tile, path))
+        {
+            return {};
+        }
 
         // obstruct the tiles along the computed path.
         for (const auto& tile : path)
@@ -969,23 +1151,25 @@ class post_layout_optimization_impl
             if (!fanins.empty())
             {
                 new_path_from_fanin_1_to_gate =
-                    get_path_and_obstruct(lyt, static_cast<tile<ObstrLyt>>(fanins[0]), new_pos);
+                    get_path_and_obstruct(lyt, static_cast<tile<ObstrLyt>>(fanins[0]), new_pos, fanins[0]);
             }
 
             if (fanins.size() == 2)
             {
                 new_path_from_fanin_2_to_gate =
-                    get_path_and_obstruct(lyt, static_cast<tile<ObstrLyt>>(fanins[1]), new_pos);
+                    get_path_and_obstruct(lyt, static_cast<tile<ObstrLyt>>(fanins[1]), new_pos, fanins[1]);
             }
 
             if (!fanouts.empty())
             {
-                new_path_from_gate_to_fanout_1 = get_path_and_obstruct(lyt, new_pos, fanouts[0].target);
+                new_path_from_gate_to_fanout_1 = get_path_and_obstruct(
+                    lyt, new_pos, fanouts[0].target, lyt.make_signal(lyt.get_node(new_pos), fanouts[0].source_output));
             }
 
             if (fanouts.size() == 2)
             {
-                new_path_from_gate_to_fanout_2 = get_path_and_obstruct(lyt, new_pos, fanouts[1].target);
+                new_path_from_gate_to_fanout_2 = get_path_and_obstruct(
+                    lyt, new_pos, fanouts[1].target, lyt.make_signal(lyt.get_node(new_pos), fanouts[1].source_output));
             }
 
             if (!(!fanins.empty() && new_path_from_fanin_1_to_gate.empty()) &&

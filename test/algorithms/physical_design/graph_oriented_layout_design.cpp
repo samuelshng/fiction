@@ -29,7 +29,10 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <set>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 using namespace fiction;
@@ -103,6 +106,106 @@ mockturtle::names_view<fiction::netlist> multioutput_half_adder_fanout_network()
     return ntk;
 }
 
+template <typename Lyt>
+std::vector<std::string> collect_multioutput_launch_violations(const Lyt& lyt)
+{
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt must be a gate-level layout");
+    static_assert(is_cartesian_layout_v<Lyt>, "Lyt must be a Cartesian layout");
+
+    std::vector<std::string> violations{};
+
+    lyt.foreach_gate(
+        [&lyt, &violations](const auto& gate)
+        {
+            if (!lyt.is_multioutput(gate))
+            {
+                return;
+            }
+
+            const auto gate_tile = lyt.get_tile(gate);
+
+            std::set<uint8_t>           used_output_pins{};
+            std::array<std::string, 2u> pin_sides{};
+            uint32_t                    east_fanouts  = 0u;
+            uint32_t                    south_fanouts = 0u;
+            uint32_t                    other_fanouts = 0u;
+            bool                        inconsistent_pin_launch{false};
+
+            lyt.foreach_fanout(gate,
+                               [&lyt, &used_output_pins, &pin_sides, &east_fanouts, &south_fanouts, &other_fanouts,
+                                &inconsistent_pin_launch, &gate_tile](const auto& fout)
+                               {
+                                   const auto fanout_tile = lyt.get_tile(fout);
+
+                                   lyt.foreach_fanin(fout,
+                                                     [&lyt, &used_output_pins, &pin_sides, &east_fanouts,
+                                                      &south_fanouts, &other_fanouts, &inconsistent_pin_launch,
+                                                      &gate_tile, &fanout_tile](const auto& fin)
+                                                     {
+                                                         if (static_cast<tile<Lyt>>(fin) != gate_tile)
+                                                         {
+                                                             return;
+                                                         }
+
+                                                         used_output_pins.insert(fin.output);
+
+                                                         std::string side = "other";
+
+                                                         if (fanout_tile == lyt.east(gate_tile))
+                                                         {
+                                                             ++east_fanouts;
+                                                             side = "east";
+                                                         }
+                                                         else if (fanout_tile == lyt.south(gate_tile))
+                                                         {
+                                                             ++south_fanouts;
+                                                             side = "south";
+                                                         }
+                                                         else
+                                                         {
+                                                             ++other_fanouts;
+                                                         }
+
+                                                         if (fin.output < pin_sides.size())
+                                                         {
+                                                             if (pin_sides[fin.output].empty())
+                                                             {
+                                                                 pin_sides[fin.output] = side;
+                                                             }
+                                                             else if (pin_sides[fin.output] != side)
+                                                             {
+                                                                 inconsistent_pin_launch = true;
+                                                             }
+                                                         }
+                                                         else
+                                                         {
+                                                             inconsistent_pin_launch = true;
+                                                         }
+                                                     });
+                               });
+
+            if (used_output_pins.empty())
+            {
+                return;
+            }
+
+            const bool invalid_counts =
+                (other_fanouts != 0u) || (east_fanouts > 1u) || (south_fanouts > 1u) ||
+                ((used_output_pins.size() == 2u) && (east_fanouts != 1u || south_fanouts != 1u));
+
+            if (inconsistent_pin_launch || invalid_counts)
+            {
+                std::ostringstream os{};
+                os << "multi-output gate at (" << gate_tile.x << ", " << gate_tile.y << ", " << gate_tile.z
+                   << ") uses invalid launch pattern: east=" << east_fanouts << ", south=" << south_fanouts
+                   << ", other=" << other_fanouts << ", inconsistent_pin_launch=" << inconsistent_pin_launch;
+                violations.push_back(os.str());
+            }
+        });
+
+    return violations;
+}
+
 TEST_CASE("Layout equivalence after graph-oriented layout design", "[graph-oriented-layout-design]")
 {
     SECTION("Cartesian layouts")
@@ -139,6 +242,7 @@ TEST_CASE("Graph-oriented layout design preserves mapped half adder gate", "[gra
     graph_oriented_layout_design_params params{};
     params.timeout      = 100000;
     params.return_first = true;
+    params.seed         = 0u;
 
     const auto layout = graph_oriented_layout_design<gate_layout>(mapped_ha, params, &stats);
     REQUIRE(layout.has_value());
@@ -156,6 +260,8 @@ TEST_CASE("Graph-oriented layout design preserves mapped half adder gate", "[gra
     CHECK(layout_num_ha_gates == 1);
 
     CHECK(layout->num_pos() == 2u);
+    check_eq(mapped_ha, *layout);
+    CHECK(collect_multioutput_launch_violations(*layout).empty());
 }
 
 TEST_CASE("Gate library application", "[graph-oriented-layout-design]")
@@ -197,6 +303,8 @@ TEST_CASE("Graph-oriented layout design supports high-fanout multi-output gates"
     CHECK(layout->num_pis() == ntk.num_pis());
     CHECK(layout->num_pos() == ntk.num_pos());
     CHECK(layout->num_gates() >= ntk.num_gates());
+    check_eq(ntk, *layout);
+    CHECK(collect_multioutput_launch_violations(*layout).empty());
 }
 
 TEST_CASE("Different parameters", "[graph-oriented-layout-design]")
@@ -542,6 +650,7 @@ TEST_CASE("Name conservation after graph-oriented layout design", "[graph-orient
     graph_oriented_layout_design_params params{};
     params.timeout      = 100000;
     params.return_first = true;
+    params.seed         = 0u;
 
     const auto layout = graph_oriented_layout_design<gate_layout>(maj, params, &stats);
 
