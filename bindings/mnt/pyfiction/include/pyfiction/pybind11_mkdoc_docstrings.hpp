@@ -5384,14 +5384,17 @@ R"doc(Calculates the horizontal permutation distances for each desired slot.
 Template parameter ``Lyt``:
     Gate-level layout type.
 
+Template parameter ``Pin``:
+    Pin handle type.
+
 Parameter ``lyt``:
     The layout.
 
 Parameter ``current_permutation``:
-    The current order of pins (nodes).
+    The current order of pins.
 
 Parameter ``desired_permutation``:
-    The desired order of pins (nodes).
+    The desired order of pins.
 
 Returns:
     Vector of horizontal distances per desired slot.)doc";
@@ -5408,11 +5411,14 @@ Template parameter ``Lyt``:
 Parameter ``lyt``:
     The layout.
 
+Template parameter ``Pin``:
+    Pin handle type.
+
 Parameter ``current_permutation``:
-    The current order of pins (nodes).
+    The current order of pins.
 
 Parameter ``desired_permutation``:
-    The desired order of pins (nodes).
+    The desired order of pins.
 
 Returns:
     The maximum number of rows required.)doc";
@@ -7164,6 +7170,29 @@ static const char *__doc_fiction_detail_determine_clocking_impl_run = R"doc()doc
 
 static const char *__doc_fiction_detail_determine_clocking_impl_stats = R"doc(Statistics.)doc";
 
+static const char *__doc_fiction_detail_determine_distributed_pin_slot_coordinates =
+R"doc(Extracts interface slot coordinates for a given list of pin handles
+and redistributes them across the available layout width. This
+intentionally introduces horizontal gaps for the new external pin
+interface to avoid routing deadlocks caused by densely packed boundary
+pins.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Pin``:
+    Pin handle type.
+
+Parameter ``lyt``:
+    The layout.
+
+Parameter ``pins``:
+    Vector of pin handles.
+
+Returns:
+    Vector of coordinates sorted by physical slot order across the
+    full interface width.)doc";
+
 static const char *__doc_fiction_detail_determine_layout_size = R"doc()doc";
 
 static const char *__doc_fiction_detail_determine_new_coord =
@@ -7196,32 +7225,38 @@ Returns:
     The new coordinates of the tile after adjustment.)doc";
 
 static const char *__doc_fiction_detail_determine_pin_coordinates =
-R"doc(Extracts the layout coordinates for a given list of pin nodes.
+R"doc(Extracts the layout coordinates for a given list of pin handles.
 
 Template parameter ``Lyt``:
     Gate-level layout type.
+
+Template parameter ``Pin``:
+    Pin handle type.
 
 Parameter ``lyt``:
     The layout.
 
 Parameter ``pins``:
-    Vector of pin nodes.
+    Vector of pin handles.
 
 Returns:
     Vector of coordinates corresponding to the pins.)doc";
 
 static const char *__doc_fiction_detail_determine_pin_slot_coordinates =
-R"doc(Extracts the layout coordinates for a given list of pin nodes and
+R"doc(Extracts the layout coordinates for a given list of pin handles and
 sorts them from left to right.
 
 Template parameter ``Lyt``:
     Gate-level layout type.
 
+Template parameter ``Pin``:
+    Pin handle type.
+
 Parameter ``lyt``:
     The layout.
 
 Parameter ``pins``:
-    Vector of pin nodes.
+    Vector of pin handles.
 
 Returns:
     Vector of coordinates sorted by physical slot order.)doc";
@@ -9424,7 +9459,34 @@ Parameter ``new_gate_loc``:
 Returns:
     A path from `src` to `dest` if one exists.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_collect_multioutput_launch_usage =
+R"doc(Collects immediate launch usage for a placed multi-output gate.
+
+Parameter ``layout``:
+    Layout containing the gate.
+
+Parameter ``source``:
+    Tile of the placed gate.
+
+Returns:
+    Summary of currently used launch sides and output pins.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_custom_cost_objective = R"doc(Custom cost objective.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_determine_launch_side =
+R"doc(Determines on which outgoing side a route leaves a source tile.
+
+Parameter ``layout``:
+    Layout containing the route.
+
+Parameter ``source``:
+    Source tile.
+
+Parameter ``successor``:
+    First successor tile of the route.
+
+Returns:
+    Launch side of the step from `source` to `successor`.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_get_possible_positions =
 R"doc(Retrieves the possible positions for a given node in the layout based
@@ -9534,6 +9596,17 @@ Parameter ``p``:
 Parameter ``st``:
     The statistics object to record execution details.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_has_valid_multioutput_launches =
+R"doc(Checks whether all placed multi-output gates use valid immediate
+launch patterns.
+
+Parameter ``layout``:
+    Layout to validate.
+
+Returns:
+    `true` iff all multi-output gates launch on at most one east and
+    one south branch.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_improve_acp_solution =
 R"doc(Flag indicating that an initial solution has been found with the area-
 crossings product as cost objective. When set to `true`, subsequent
@@ -9573,7 +9646,48 @@ Returns:
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_initialize_network = R"doc()doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_launch_side =
+R"doc(Distinguishes direct launch directions for two-output gates in
+Cartesian 2DDWave layouts.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_launch_side_EAST = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_launch_side_NONE = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_launch_side_OTHER = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_launch_side_SOUTH = R"doc()doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_max_placed_nodes = R"doc(Keep track of the maximum number of placed nodes.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_multioutput_launch_usage = R"doc(Summarizes immediate launch usage of a placed multi-output gate.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_multioutput_launch_usage_east_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_multioutput_launch_usage_inconsistent_pin_launch = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_multioutput_launch_usage_other_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_multioutput_launch_usage_pin_sides = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_multioutput_launch_usage_south_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_multioutput_launch_usage_used_output_pins = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_node_num_outputs =
+R"doc(Returns the number of outputs of a network node.
+
+Template parameter ``Network``:
+    Network type.
+
+Parameter ``ntk``:
+    Network instance.
+
+Parameter ``n``:
+    Node in `ntk`.
+
+Returns:
+    Number of outputs of `n`.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_ntk = R"doc(The network to be placed and routed.)doc";
 
@@ -9697,6 +9811,25 @@ R"doc(This function updates statistical metrics.
 
 Parameter ``best_lyt``:
     The new best layout found.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_uses_legal_multioutput_launch_side =
+R"doc(Checks whether a candidate path uses a legal immediate launch side for
+a two-output source gate.
+
+Parameter ``layout``:
+    Layout in which the path is considered.
+
+Parameter ``source``:
+    Source tile of the path.
+
+Parameter ``output_pin``:
+    Output pin launched by the path.
+
+Parameter ``path``:
+    Candidate route from `source`.
+
+Returns:
+    `true` iff the first routed step is legal.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_valid_layout =
 R"doc(Validates the given layout based on the nodes in the network and their
@@ -12276,6 +12409,36 @@ static const char *__doc_fiction_detail_pi_routing_objective_objective = R"doc(G
 
 static const char *__doc_fiction_detail_pi_routing_objective_original_pi = R"doc(PI node in the original layout represented by this objective.)doc";
 
+static const char *__doc_fiction_detail_pin_coordinate =
+R"doc(Returns the layout coordinate represented by a pin handle.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The layout.
+
+Parameter ``pin``:
+    Pin handle represented as a node.
+
+Returns:
+    Coordinate of the referenced pin.)doc";
+
+static const char *__doc_fiction_detail_pin_coordinate_2 =
+R"doc(Returns the layout coordinate represented by a pin handle.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The layout.
+
+Parameter ``pin``:
+    Pin handle represented as a signal.
+
+Returns:
+    Coordinate of the referenced pin.)doc";
+
 static const char *__doc_fiction_detail_place_outputs =
 R"doc(Places the primary outputs (POs) in the layout.
 
@@ -12413,6 +12576,33 @@ Returns:
     routing paths were established. `false` if the relocation resulted
     in no movement (i.e., `new_pos` is the same as `old_pos`).)doc";
 
+static const char *__doc_fiction_detail_post_layout_optimization_impl_collect_multioutput_launch_usage =
+R"doc(Collects immediate launch usage for a placed multi-output gate.
+
+Parameter ``lyt``:
+    Layout containing the gate.
+
+Parameter ``source``:
+    Tile of the placed gate.
+
+Returns:
+    Summary of currently used launch sides and output pins.)doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_determine_launch_side =
+R"doc(Determines on which outgoing side a route leaves a source tile.
+
+Parameter ``lyt``:
+    Layout containing the route.
+
+Parameter ``source``:
+    Source tile.
+
+Parameter ``successor``:
+    First successor tile of the route.
+
+Returns:
+    Launch side of the step from `source` to `successor`.)doc";
+
 static const char *__doc_fiction_detail_post_layout_optimization_impl_fix_wires =
 R"doc(Utility function to move wires that cross over empty tiles down one
 layer. This can happen if the wiring of a gate is deleted.
@@ -12447,6 +12637,10 @@ layout.
 Parameter ``lyt``:
     Obstructed gate-level layout.
 
+Parameter ``source_signal``:
+    Optional source signal used to enforce output-pin-aware launch
+    sides.
+
 Parameter ``start_tile``:
     The starting coordinate of the path.
 
@@ -12477,9 +12671,33 @@ Parameter ``old_pos``:
 Returns:
     `true` if the gate was moved successfully, `false` otherwise.)doc";
 
+static const char *__doc_fiction_detail_post_layout_optimization_impl_launch_side =
+R"doc(Distinguishes direct launch directions for two-output gates in
+Cartesian 2DDWave layouts.)doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_launch_side_EAST = R"doc()doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_launch_side_NONE = R"doc()doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_launch_side_OTHER = R"doc()doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_launch_side_SOUTH = R"doc()doc";
+
 static const char *__doc_fiction_detail_post_layout_optimization_impl_max_gate_relocations = R"doc(Maximum number of relocations to try for each gate.)doc";
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_max_non_po = R"doc(Maximum coordinate of all gates that are not POs.)doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_multioutput_launch_usage = R"doc(Summarizes immediate launch usage of a placed multi-output gate.)doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_multioutput_launch_usage_east_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_multioutput_launch_usage_inconsistent_pin_launch = R"doc()doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_multioutput_launch_usage_other_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_multioutput_launch_usage_pin_sides = R"doc()doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_multioutput_launch_usage_south_fanouts = R"doc()doc";
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_plyt = R"doc(2DDWave-clocked Cartesian gate-level layout to optimize.)doc";
 
@@ -12542,6 +12760,25 @@ the remaining time.
 Returns:
     Remaining time in milliseconds before timeout, or `0` if timeout
     has been reached.)doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_uses_legal_multioutput_launch_side =
+R"doc(Checks whether a candidate path uses a legal immediate launch side for
+a two-output source gate.
+
+Parameter ``lyt``:
+    Layout in which the path is considered.
+
+Parameter ``source_signal``:
+    Source signal launched by the path.
+
+Parameter ``source``:
+    Source tile of the path.
+
+Parameter ``path``:
+    Candidate route from `source`.
+
+Returns:
+    `true` iff the first routed step is legal.)doc";
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_wiring_reduction_params = R"doc(Wiring reduction parameters.)doc";
 
@@ -26826,6 +27063,35 @@ This algorithm takes an existing gate-level layout and reorders its
 primary inputs and outputs according to a specified target ordering.
 
 @note This significantly increases the area footprint of the layout.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Parameter ``lyt``:
+    The gate-level layout to unscramble.
+
+Parameter ``input_order``:
+    The desired ordering of primary input nodes.
+
+Parameter ``output_order``:
+    The desired ordering of primary output signals.
+
+Parameter ``ps``:
+    Parameters for the algorithm.
+
+Parameter ``pst``:
+    Statistics for the algorithm.
+
+Returns:
+    A new gate-level layout with unscrambled pins.)doc";
+
+static const char *__doc_fiction_unscramble_pins_2 =
+R"doc(A compatibility overload that resolves primary outputs by node
+identity.
+
+This overload cannot express distinct permutations of multiple POs
+that originate from the same multi-output gate. Prefer the signal-
+based overload above whenever exact PO output-pin identity matters.
 
 Template parameter ``Lyt``:
     Gate-level layout type.
