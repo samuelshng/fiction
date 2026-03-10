@@ -3542,6 +3542,18 @@ Returns:
     Vector of truth tables, each representing an output of an
     A_AND_NOT_B gate.)doc";
 
+static const char *__doc_fiction_create_a_and_not_b_single_tt =
+R"doc(Creates and returns a vector of truth tables for an A_AND_NOT_B (A&!B)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an A_AND_NOT_B gate with the output fanned out.
+The function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an
+    A_AND_NOT_B gate.)doc";
+
 static const char *__doc_fiction_create_a_fan_out_tt =
 R"doc(Creates and returns a vector of truth tables for an A gate with
 fanout.
@@ -3574,6 +3586,29 @@ Returns:
     Vector of truth tables, each representing an output of an
     A_OR_NOT_B gate.)doc";
 
+static const char *__doc_fiction_create_a_or_not_b_single_tt =
+R"doc(Creates and returns a vector of truth tables for an A_OR_NOT_B (A|!B)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an A_OR_NOT_B gate with the output fanned out.
+The function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an
+    A_OR_NOT_B gate.)doc";
+
+static const char *__doc_fiction_create_a_single_tt =
+R"doc(Creates and returns a vector of truth tables for an A gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an A gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an A gate.)doc";
+
 static const char *__doc_fiction_create_and3_tt =
 R"doc(Creates and returns a truth table that implements the conjunction in
 three variables.
@@ -3601,6 +3636,18 @@ Outputs compute AND(A, B) and OR(A, B), respectively.
 
 Returns:
     Vector of truth tables representing the AND_OR function.)doc";
+
+static const char *__doc_fiction_create_and_single_tt =
+R"doc(Creates and returns a vector of truth tables for an AND gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an AND gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an AND
+    gate.)doc";
 
 static const char *__doc_fiction_create_and_tt =
 R"doc(Creates and returns a truth table that implements the conjunction in
@@ -3634,6 +3681,16 @@ Returns:
     copies of value.)doc";
 
 static const char *__doc_fiction_create_b_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a B gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a B gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a B gate.)doc";
+
+static const char *__doc_fiction_create_b_single_tt =
 R"doc(Creates and returns a vector of truth tables for a B gate with fanout.
 
 This function generates a vector of truth tables, each representing
@@ -3684,6 +3741,18 @@ Returns:
     wire function.)doc";
 
 static const char *__doc_fiction_create_false_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a FALSE (constant 0)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a FALSE gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a FALSE
+    gate.)doc";
+
+static const char *__doc_fiction_create_false_single_tt =
 R"doc(Creates and returns a vector of truth tables for a FALSE (constant 0)
 gate with fanout.
 
@@ -3796,6 +3865,18 @@ Returns:
     Vector of truth tables, each representing an output of a NAND
     gate.)doc";
 
+static const char *__doc_fiction_create_nand_single_tt =
+R"doc(Creates and returns a vector of truth tables for a NAND gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NAND gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a NAND
+    gate.)doc";
+
 static const char *__doc_fiction_create_nand_tt =
 R"doc(Creates and returns a truth table that implements the negated
 conjunction in two variables.
@@ -3814,6 +3895,17 @@ function returns a vector containing two truth tables.
 Returns:
     Vector of truth tables, each representing an output of a NOR gate.)doc";
 
+static const char *__doc_fiction_create_nor_single_tt =
+R"doc(Creates and returns a vector of truth tables for a NOR gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOR gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a NOR gate.)doc";
+
 static const char *__doc_fiction_create_nor_tt =
 R"doc(Creates and returns a truth table that implements the negated
 disjunction in two variables.
@@ -3822,6 +3914,18 @@ Returns:
     Negated disjunction in two variables.)doc";
 
 static const char *__doc_fiction_create_not_a_and_b_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a NOT_A_AND_B (!A&B)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOT_A_AND_B gate with the output fanned out.
+The function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a
+    NOT_A_AND_B gate.)doc";
+
+static const char *__doc_fiction_create_not_a_and_b_single_tt =
 R"doc(Creates and returns a vector of truth tables for a NOT_A_AND_B (!A&B)
 gate with fanout.
 
@@ -3857,7 +3961,43 @@ Returns:
     Vector of truth tables, each representing an output of a
     NOT_A_OR_B gate.)doc";
 
+static const char *__doc_fiction_create_not_a_or_b_single_tt =
+R"doc(Creates and returns a vector of truth tables for a NOT_A_OR_B (!A|B)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOT_A_OR_B gate with the output fanned out.
+The function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a
+    NOT_A_OR_B gate.)doc";
+
+static const char *__doc_fiction_create_not_a_single_tt =
+R"doc(Creates and returns a vector of truth tables for a NOT_A (!A) gate
+with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOT_A gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a NOT_A
+    gate.)doc";
+
 static const char *__doc_fiction_create_not_b_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a NOT_B (!B) gate
+with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a NOT_B gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a NOT_B
+    gate.)doc";
+
+static const char *__doc_fiction_create_not_b_single_tt =
 R"doc(Creates and returns a vector of truth tables for a NOT_B (!B) gate
 with fanout.
 
@@ -3891,6 +4031,17 @@ Returns:
     OR-AND in three variables.)doc";
 
 static const char *__doc_fiction_create_or_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for an OR gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of an OR gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of an OR gate.)doc";
+
+static const char *__doc_fiction_create_or_single_tt =
 R"doc(Creates and returns a vector of truth tables for an OR gate with
 fanout.
 
@@ -3947,7 +4098,31 @@ Returns:
     Vector of truth tables, each representing an output of a TRUE
     gate.)doc";
 
+static const char *__doc_fiction_create_true_single_tt =
+R"doc(Creates and returns a vector of truth tables for a TRUE (constant 1)
+gate with fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a TRUE gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a TRUE
+    gate.)doc";
+
 static const char *__doc_fiction_create_xnor_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a XNOR gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a XNOR gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a XNOR
+    gate.)doc";
+
+static const char *__doc_fiction_create_xnor_single_tt =
 R"doc(Creates and returns a vector of truth tables for a XNOR gate with
 fanout.
 
@@ -3981,6 +4156,17 @@ Returns:
     XOR-AND in three variables.)doc";
 
 static const char *__doc_fiction_create_xor_fan_out_tt =
+R"doc(Creates and returns a vector of truth tables for a XOR gate with
+fanout.
+
+This function generates a vector of truth tables, each representing
+one of the outputs of a XOR gate with the output fanned out. The
+function returns a vector containing two truth tables.
+
+Returns:
+    Vector of truth tables, each representing an output of a XOR gate.)doc";
+
+static const char *__doc_fiction_create_xor_single_tt =
 R"doc(Creates and returns a vector of truth tables for a XOR gate with
 fanout.
 
