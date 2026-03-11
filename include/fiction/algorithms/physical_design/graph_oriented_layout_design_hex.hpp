@@ -7,6 +7,8 @@
 
 #include "fiction/algorithms/physical_design/graph_oriented_layout_design.hpp"
 
+#include <unordered_set>
+
 namespace fiction
 {
 
@@ -136,6 +138,7 @@ class graph_oriented_layout_design_hex_impl
                                             }
                                         }
                                     }
+                                    update_search_stats();
                                     return *r;  // return immediately when first result is ready
                                 }
                             }
@@ -171,6 +174,7 @@ class graph_oriented_layout_design_hex_impl
 
                         if (ps.return_first)
                         {
+                            update_search_stats();
                             return *result;
                         }
                     }
@@ -219,9 +223,11 @@ class graph_oriented_layout_design_hex_impl
         if (improve_area_solution || improve_wire_solution || improve_crossing_solution || improve_acp_solution ||
             improve_custom_solution)
         {
+            update_search_stats();
             return best_lyt;
         }
 
+        update_search_stats();
         return std::nullopt;
     }
 
@@ -608,11 +614,21 @@ class graph_oriented_layout_design_hex_impl
     void update_stats(const Lyt& best_lyt)
     {
         // Statistical information
-        pst.x_size        = best_lyt.x() + 1;
-        pst.y_size        = best_lyt.y() + 1;
-        pst.num_gates     = best_lyt.num_gates();
-        pst.num_wires     = best_lyt.num_wires();
-        pst.num_crossings = best_lyt.num_crossings();
+        pst.x_size                  = best_lyt.x() + 1;
+        pst.y_size                  = best_lyt.y() + 1;
+        pst.num_gates               = best_lyt.num_gates();
+        pst.num_wires               = best_lyt.num_wires();
+        pst.num_crossings           = best_lyt.num_crossings();
+        pst.max_placed_nodes        = max_placed_nodes.load();
+        pst.num_search_space_graphs = num_search_space_graphs;
+    }
+    /**
+     * Updates search-progress statistics that are meaningful even without a final layout.
+     */
+    void update_search_stats() noexcept
+    {
+        pst.max_placed_nodes        = max_placed_nodes.load();
+        pst.num_search_space_graphs = num_search_space_graphs;
     }
     /**
      * Checks if there is a path between the source and destination tiles in the given layout.
@@ -688,6 +704,40 @@ class graph_oriented_layout_design_hex_impl
         }
 
         return false;
+    }
+    /**
+     * Enumerates x coordinates in increasing distance from a preferred position.
+     *
+     * Native hex GOLD benefits strongly from trying positions near the source fanins before scanning unrelated far-left
+     * columns. This keeps the small `num_vertex_expansions` budget focused on geometrically plausible placements.
+     *
+     * @param max_x Maximum x coordinate on the current search canvas.
+     * @param preferred_x Preferred x coordinate around which candidates should be explored.
+     * @return X coordinates ordered by increasing distance from `preferred_x`.
+     */
+    [[nodiscard]] static std::vector<uint64_t> preferred_x_order(const uint64_t max_x,
+                                                                 const uint64_t preferred_x) noexcept
+    {
+        std::vector<uint64_t> ordered_x{};
+        ordered_x.reserve(max_x + 1u);
+
+        const auto clamped_preferred = std::min(preferred_x, max_x);
+        ordered_x.push_back(clamped_preferred);
+
+        for (uint64_t delta = 1u; delta <= max_x; ++delta)
+        {
+            if (clamped_preferred >= delta)
+            {
+                ordered_x.push_back(clamped_preferred - delta);
+            }
+
+            if (clamped_preferred + delta <= max_x)
+            {
+                ordered_x.push_back(clamped_preferred + delta);
+            }
+        }
+
+        return ordered_x;
     }
     [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions_pis(ObstrLyt&                     layout,
                                                                       search_space_graph<ObstrLyt>& ssg,
@@ -973,16 +1023,26 @@ class graph_oriented_layout_design_hex_impl
 
         if constexpr (is_hexagonal_layout_v<ObstrLyt>)
         {
+            const auto candidate_x      = preferred_x_order(layout.x(), pre_t.x);
+            const auto first_hex_y      = pre_t.y + 1u;
+            const auto expansion_budget = std::min<uint64_t>(
+                layout.x() + 1u, std::max<uint64_t>(ps.num_vertex_expansions, 2u * ps.num_vertex_expansions + 2u));
             for (uint64_t y = pre_t.y + 1; y <= layout.y(); ++y)
             {
-                for (uint64_t x = 0u; x <= layout.x(); ++x)
+                for (const auto x : candidate_x)
                 {
                     check_tile({x, y, 0});
-                    if (count_expansions >= ps.num_vertex_expansions)
+                    if (y != first_hex_y && count_expansions >= expansion_budget)
                     {
                         layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
                         return possible_positions;
                     }
+                }
+
+                if (count_expansions >= expansion_budget)
+                {
+                    layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
+                    return possible_positions;
                 }
             }
 
@@ -1031,15 +1091,16 @@ class graph_oriented_layout_design_hex_impl
         const auto& pre1 = fc.fanin_nodes[0];
         const auto& pre2 = fc.fanin_nodes[1];
 
-        const auto pre1_t = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre1]);
-        const auto pre2_t = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre2]);
+        const auto     pre1_t     = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre1]);
+        const auto     pre2_t     = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre2]);
+        const uint64_t fanin_span = pre1_t.x > pre2_t.x ? pre1_t.x - pre2_t.x : pre2_t.x - pre1_t.x;
 
         const auto min_x = std::max(pre1_t.x, pre2_t.x) + (pre1_t.x == pre2_t.x ? 1 : 0);
         const auto min_y = std::max(pre1_t.y, pre2_t.y) + (pre1_t.y == pre2_t.y ? 1 : 0);
 
         if constexpr (is_hexagonal_layout_v<ObstrLyt>)
         {
-            resize = std::max<uint64_t>(1u, ps.num_vertex_expansions);
+            resize = std::max<uint64_t>(1u, std::max<uint64_t>(ps.num_vertex_expansions, (fanin_span + 1u) / 2u));
             layout.resize({layout.x() + resize, layout.y() + resize, layout.z()});
         }
 
@@ -1078,17 +1139,29 @@ class graph_oriented_layout_design_hex_impl
 
         if constexpr (is_hexagonal_layout_v<ObstrLyt>)
         {
-            const auto min_hex_y = std::max(pre1_t.y, pre2_t.y) + 1;
+            const auto min_hex_y        = std::max(pre1_t.y, pre2_t.y) + 1;
+            const auto preferred_x      = (pre1_t.x + pre2_t.x) / 2u;
+            const auto candidate_x      = preferred_x_order(layout.x(), preferred_x);
+            const auto expansion_budget = std::min<uint64_t>(
+                layout.x() + 1u,
+                std::max<uint64_t>(ps.num_vertex_expansions,
+                                   std::max<uint64_t>(2u * ps.num_vertex_expansions + 2u, fanin_span + 1u)));
             for (uint64_t y = min_hex_y; y <= layout.y(); ++y)
             {
-                for (uint64_t x = 0u; x <= layout.x(); ++x)
+                for (const auto x : candidate_x)
                 {
                     check_tile({x, y, 0});
-                    if (count_expansions >= ps.num_vertex_expansions)
+                    if (y != min_hex_y && count_expansions >= expansion_budget)
                     {
                         layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
                         return possible_positions;
                     }
+                }
+
+                if (count_expansions >= expansion_budget)
+                {
+                    layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
+                    return possible_positions;
                 }
             }
 
@@ -1239,8 +1312,9 @@ class graph_oriented_layout_design_hex_impl
      * @param node2pos A dictionary mapping nodes from the network to signals in the layout.
      * @param fc A vector of nodes that precede the single fanin node.
      */
-    void route_single_input_node(const tile<ObstrLyt>& position, ObstrLyt& layout,
-                                 node_dict_type<ObstrLyt, tec_nt>& node2pos, const fanin_container<tec_nt>& fc) noexcept
+    [[nodiscard]] bool route_single_input_node(const tile<ObstrLyt>& position, ObstrLyt& layout,
+                                               node_dict_type<ObstrLyt, tec_nt>& node2pos,
+                                               const fanin_container<tec_nt>&    fc) noexcept
     {
         const auto& pre  = fc.fanin_nodes[0];
         auto        src  = node2pos[pre];
@@ -1250,7 +1324,10 @@ class graph_oriented_layout_design_hex_impl
         layout.move_node(layout.get_node(position), position, {});
 
         const auto path = check_path(layout, pre_t, position, new_gate_location::NONE);
-        assert(!path.empty());
+        if (path.empty())
+        {
+            return false;
+        }
 
         route_path(layout, src, path);
 
@@ -1258,6 +1335,8 @@ class graph_oriented_layout_design_hex_impl
         {
             layout.obstruct_coordinate(el);
         }
+
+        return true;
     }
     /**
      * Places a node with two inputs in the layout and routes it.
@@ -1267,8 +1346,9 @@ class graph_oriented_layout_design_hex_impl
      * @param node2pos A dictionary mapping nodes from the network to signals in the layout.
      * @param fc A vector of nodes that precede the double fanin node.
      */
-    void route_double_input_node(const tile<ObstrLyt>& position, ObstrLyt& layout,
-                                 node_dict_type<ObstrLyt, tec_nt>& node2pos, const fanin_container<tec_nt>& fc) noexcept
+    [[nodiscard]] bool route_double_input_node(const tile<ObstrLyt>& position, ObstrLyt& layout,
+                                               node_dict_type<ObstrLyt, tec_nt>& node2pos,
+                                               const fanin_container<tec_nt>&    fc) noexcept
     {
         const auto& pre1 = fc.fanin_nodes[0];
         const auto& pre2 = fc.fanin_nodes[1];
@@ -1284,7 +1364,10 @@ class graph_oriented_layout_design_hex_impl
         layout.move_node(layout.get_node(position), position, {});
 
         const auto path_1 = check_path(layout, pre1_t, position, new_gate_location::NONE);
-        assert(!path_1.empty());
+        if (path_1.empty())
+        {
+            return false;
+        }
 
         for (const auto& el : path_1)
         {
@@ -1292,7 +1375,14 @@ class graph_oriented_layout_design_hex_impl
         }
 
         const auto path_2 = check_path(layout, pre2_t, position, new_gate_location::NONE);
-        assert(!path_2.empty());
+        if (path_2.empty())
+        {
+            for (const auto& el : path_1)
+            {
+                layout.clear_obstructed_coordinate(el);
+            }
+            return false;
+        }
 
         for (const auto& el : path_2)
         {
@@ -1301,6 +1391,8 @@ class graph_oriented_layout_design_hex_impl
 
         route_path(layout, src1, path_1);
         route_path(layout, src2, path_2);
+
+        return true;
     }
     /**
      * Executes a single placement step in the layout for the given network node. It determines the type of the node,
@@ -1313,8 +1405,9 @@ class graph_oriented_layout_design_hex_impl
      * @param ssg The search space graph.
      * @return A boolean indicating if a solution was found.
      */
-    [[nodiscard]] bool place_and_route(const tile<ObstrLyt>& position, ObstrLyt& layout,
-                                       search_space_graph<ObstrLyt>& ssg, placement_info<ObstrLyt>& place_info) noexcept
+    [[nodiscard]] std::optional<bool> place_and_route(const tile<ObstrLyt>& position, ObstrLyt& layout,
+                                                      search_space_graph<ObstrLyt>& ssg,
+                                                      placement_info<ObstrLyt>&     place_info) noexcept
     {
         // vector to store preceding nodes
         const auto fc = fanins(ssg.network, ssg.nodes_to_place[place_info.current_node]);
@@ -1352,7 +1445,10 @@ class graph_oriented_layout_design_hex_impl
                     place(layout, position, ssg.network, ssg.nodes_to_place[place_info.current_node], src);
             }
 
-            route_single_input_node(position, layout, place_info.node2pos, fc);
+            if (!route_single_input_node(position, layout, place_info.node2pos, fc))
+            {
+                return std::nullopt;
+            }
         }
         else
         {
@@ -1368,7 +1464,10 @@ class graph_oriented_layout_design_hex_impl
             place_info.node2pos[ssg.nodes_to_place[place_info.current_node]] = place(
                 layout, position, ssg.network, ssg.nodes_to_place[place_info.current_node], a1, a2, fc.constant_fanin);
 
-            route_double_input_node(position, layout, place_info.node2pos, fc);
+            if (!route_double_input_node(position, layout, place_info.node2pos, fc))
+            {
+                return std::nullopt;
+            }
         }
 
         place_info.current_node++;
@@ -1752,7 +1851,13 @@ class graph_oriented_layout_design_hex_impl
         {
             const auto position = ssg.current_vertex[idx];
 
-            bool found_solution = place_and_route(position, layout, ssg, place_info);
+            const auto placement_result = place_and_route(position, layout, ssg, place_info);
+            if (!placement_result.has_value())
+            {
+                return {{}, std::nullopt};
+            }
+
+            const bool found_solution = *placement_result;
 
             uint64_t cost         = 0ul;
             uint64_t desired_cost = 0ul;
@@ -1999,18 +2104,50 @@ class graph_oriented_layout_design_hex_impl
         // helper function to prepare nodes to place
         const auto prepare_nodes_to_place = [](auto& network, auto& nodes_to_place) noexcept
         {
+            using network_type = std::decay_t<decltype(network)>;
+            using node_type    = mockturtle::node<network_type>;
+
             nodes_to_place.reserve(network.size());
-            network.foreach_node(
-                [&nodes_to_place, &network](const auto& n)
+            std::unordered_set<node_type> scheduled_nodes{};
+            scheduled_nodes.reserve(network.size());
+
+            const auto schedule_node = [&nodes_to_place, &network, &scheduled_nodes](const auto& n) noexcept
+            {
+                if (network.is_constant(n))
                 {
-                    if (!network.is_constant(n) && !network.is_po(n))
+                    return;
+                }
+
+                if (const auto [_, inserted] = scheduled_nodes.insert(n); inserted)
+                {
+                    nodes_to_place.push_back(n);
+                }
+            };
+
+            network.foreach_node(
+                [&nodes_to_place, &network, &schedule_node](const auto& n)
+                {
+                    if (network.is_constant(n) || network.is_pi(n) || network.is_po(n))
                     {
-                        nodes_to_place.push_back(n);
+                        return;
                     }
+
+                    network.foreach_fanin(n,
+                                          [&network, &schedule_node](const auto& fi)
+                                          {
+                                              const auto fin = network.get_node(fi);
+
+                                              if (network.is_pi(fin))
+                                              {
+                                                  schedule_node(fin);
+                                              }
+                                          });
+
+                    schedule_node(n);
                 });
 
-            network.foreach_co([&nodes_to_place, &network](const auto& f)
-                               { nodes_to_place.push_back(network.get_node(f)); });
+            network.foreach_pi([&schedule_node](const auto& pi) { schedule_node(pi); });
+            network.foreach_co([&network, &schedule_node](const auto& f) { schedule_node(network.get_node(f)); });
         };
         // helper function to prioritize preferred network PI order at the beginning of the placement list
         const auto reorder_pi_nodes = [&](const auto& network, auto& nodes_to_place) noexcept
@@ -2033,25 +2170,29 @@ class graph_oriented_layout_design_hex_impl
                     pi_ranks[pi] = input_pin_order_ranks[declaration_index++];
                 });
 
-            std::stable_sort(nodes_to_place.begin(), nodes_to_place.end(),
+            std::vector<node_t> ordered_pis{};
+            ordered_pis.reserve(pi_ranks.size());
+
+            for (const auto& n : nodes_to_place)
+            {
+                if (pi_ranks.find(n) != pi_ranks.cend())
+                {
+                    ordered_pis.push_back(n);
+                }
+            }
+
+            std::stable_sort(ordered_pis.begin(), ordered_pis.end(),
                              [&pi_ranks](const auto& lhs, const auto& rhs) noexcept
-                             {
-                                 const auto lhs_it    = pi_ranks.find(lhs);
-                                 const auto rhs_it    = pi_ranks.find(rhs);
-                                 const bool lhs_is_pi = lhs_it != pi_ranks.cend();
-                                 const bool rhs_is_pi = rhs_it != pi_ranks.cend();
+                             { return pi_ranks.at(lhs) < pi_ranks.at(rhs); });
 
-                                 if (lhs_is_pi != rhs_is_pi)
-                                 {
-                                     return lhs_is_pi;
-                                 }
-                                 if (lhs_is_pi && rhs_is_pi)
-                                 {
-                                     return lhs_it->second < rhs_it->second;
-                                 }
-
-                                 return false;
-                             });
+            auto ordered_pi_it = ordered_pis.cbegin();
+            for (auto& n : nodes_to_place)
+            {
+                if (pi_ranks.find(n) != pi_ranks.cend())
+                {
+                    n = *ordered_pi_it++;
+                }
+            }
         };
         // set cost objectives based on effort mode and cost objective
         const auto set_costs = [&](const uint64_t start_idx, const uint64_t end_idx, const auto cost_objective)

@@ -264,6 +264,14 @@ struct graph_oriented_layout_design_stats
      */
     uint64_t num_crossings{0ull};
     /**
+     * Maximum number of nodes that were placed in any explored partial layout.
+     */
+    uint64_t max_placed_nodes{0ull};
+    /**
+     * Number of search-space graphs instantiated for the current run.
+     */
+    uint64_t num_search_space_graphs{0ull};
+    /**
      * Reports the statistics to the given output stream.
      *
      * @param out Output stream.
@@ -275,6 +283,8 @@ struct graph_oriented_layout_design_stats
         out << fmt::format("[i] num. gates      = {}\n", num_gates);
         out << fmt::format("[i] num. wires      = {}\n", num_wires);
         out << fmt::format("[i] num. crossings  = {}\n", num_crossings);
+        out << fmt::format("[i] max placed      = {}\n", max_placed_nodes);
+        out << fmt::format("[i] SSGs            = {}\n", num_search_space_graphs);
     }
 };
 
@@ -820,6 +830,7 @@ class graph_oriented_layout_design_impl
                                             }
                                         }
                                     }
+                                    update_search_stats();
                                     return *r;  // return immediately when first result is ready
                                 }
                             }
@@ -855,6 +866,7 @@ class graph_oriented_layout_design_impl
 
                         if (ps.return_first)
                         {
+                            update_search_stats();
                             return *result;
                         }
                     }
@@ -903,8 +915,10 @@ class graph_oriented_layout_design_impl
         if (improve_area_solution || improve_wire_solution || improve_crossing_solution || improve_acp_solution ||
             improve_custom_solution)
         {
+            update_search_stats();
             return best_lyt;
         }
+        update_search_stats();
         return std::nullopt;
     }
 
@@ -1095,11 +1109,21 @@ class graph_oriented_layout_design_impl
     void update_stats(const Lyt& best_lyt)
     {
         // Statistical information
-        pst.x_size        = best_lyt.x() + 1;
-        pst.y_size        = best_lyt.y() + 1;
-        pst.num_gates     = best_lyt.num_gates();
-        pst.num_wires     = best_lyt.num_wires();
-        pst.num_crossings = best_lyt.num_crossings();
+        pst.x_size                  = best_lyt.x() + 1;
+        pst.y_size                  = best_lyt.y() + 1;
+        pst.num_gates               = best_lyt.num_gates();
+        pst.num_wires               = best_lyt.num_wires();
+        pst.num_crossings           = best_lyt.num_crossings();
+        pst.max_placed_nodes        = max_placed_nodes.load();
+        pst.num_search_space_graphs = num_search_space_graphs;
+    }
+    /**
+     * Updates search-progress statistics that are meaningful even without a final layout.
+     */
+    void update_search_stats() noexcept
+    {
+        pst.max_placed_nodes        = max_placed_nodes.load();
+        pst.num_search_space_graphs = num_search_space_graphs;
     }
     /**
      * Checks if there is a path between the source and destination tiles in the given layout.

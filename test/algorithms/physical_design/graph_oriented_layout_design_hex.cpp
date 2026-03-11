@@ -19,13 +19,17 @@
 #include <fiction/layouts/gate_level_layout.hpp>
 #include <fiction/layouts/hexagonal_layout.hpp>
 #include <fiction/layouts/tile_based_layout.hpp>
+#include <fiction/networks/netlist.hpp>
+#include <fiction/utils/truth_table_utils.hpp>
 
 #include <mockturtle/networks/aig.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -37,6 +41,56 @@ using namespace fiction;
 using cart_gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
 using hex_gate_layout =
     gate_level_layout<clocked_layout<tile_based_layout<hexagonal_layout<offset::ucoord_t, even_row_hex>>>>;
+
+mockturtle::names_view<fiction::netlist> multioutput_half_adder_fanout_network()
+{
+    mockturtle::names_view<fiction::netlist> ntk{};
+
+    const auto a = ntk.create_pi("a");
+    const auto b = ntk.create_pi("b");
+    const auto c = ntk.create_pi("c");
+    const auto d = ntk.create_pi("d");
+
+    const auto ha = static_cast<mockturtle::block_network&>(ntk).create_node({a, b}, create_half_adder_tt());
+
+    auto sum_output         = ha;
+    sum_output.output       = 1u;
+    const auto carry_output = ha;
+
+    const auto sum_and_c = ntk.create_and(sum_output, c);
+    const auto sum_or_d  = ntk.create_or(sum_output, d);
+    const auto sum_xor_c = ntk.create_xor(sum_output, c);
+    const auto sum_and_d = ntk.create_and(sum_output, d);
+
+    ntk.create_po(sum_and_c, "sum_and_c");
+    ntk.create_po(sum_or_d, "sum_or_d");
+    ntk.create_po(sum_xor_c, "sum_xor_c");
+    ntk.create_po(sum_and_d, "sum_and_d");
+    ntk.create_po(carry_output, "carry");
+
+    return ntk;
+}
+
+mockturtle::names_view<fiction::netlist> wide_shallow_pairwise_and_network(const uint64_t num_pairs)
+{
+    mockturtle::names_view<fiction::netlist> ntk{};
+
+    std::vector<fiction::netlist::signal> pis{};
+    pis.reserve(num_pairs * 2u);
+
+    for (uint64_t i = 0u; i < num_pairs * 2u; ++i)
+    {
+        pis.push_back(ntk.create_pi(fmt::format("i{}", i)));
+    }
+
+    for (uint64_t pair = 0u; pair < num_pairs; ++pair)
+    {
+        const auto gate = ntk.create_and(pis[pair * 2u], pis[pair * 2u + 1u]);
+        ntk.create_po(gate, fmt::format("o{}", pair));
+    }
+
+    return ntk;
+}
 
 void check_hex_io_placement(const hex_gate_layout& lyt)
 {
@@ -76,6 +130,111 @@ void check_projected_hex_port_legality(const hex_gate_layout& lyt)
 
     INFO(os.str());
     CHECK(violations.empty());
+}
+
+std::vector<std::string> collect_multioutput_projected_launch_violations(const hex_gate_layout& lyt)
+{
+    std::vector<std::string> violations{};
+
+    lyt.foreach_gate(
+        [&lyt, &violations](const auto& gate)
+        {
+            if (!lyt.is_multioutput(gate))
+            {
+                return;
+            }
+
+            const auto gate_tile = lyt.get_tile(gate);
+
+            std::set<uint8_t>           used_output_pins{};
+            std::array<std::string, 2u> pin_sides{};
+            uint32_t                    south_west_fanouts = 0u;
+            uint32_t                    south_east_fanouts = 0u;
+            uint32_t                    other_fanouts      = 0u;
+            bool                        inconsistent_pin_launch{false};
+
+            lyt.foreach_fanout(
+                gate,
+                [&lyt, &used_output_pins, &pin_sides, &south_west_fanouts, &south_east_fanouts, &other_fanouts,
+                 &inconsistent_pin_launch, &gate_tile](const auto& fout)
+                {
+                    const auto fanout_tile = lyt.get_tile(fout);
+
+                    lyt.foreach_fanin(
+                        fout,
+                        [&lyt, &used_output_pins, &pin_sides, &south_west_fanouts, &south_east_fanouts, &other_fanouts,
+                         &inconsistent_pin_launch, &gate_tile, &fanout_tile](const auto& fin)
+                        {
+                            if (static_cast<tile<hex_gate_layout>>(fin) != gate_tile)
+                            {
+                                return;
+                            }
+
+                            used_output_pins.insert(fin.output);
+
+                            std::string side = "other";
+
+                            if (const auto projected_side =
+                                    test::hex_layout_port_legality::outgoing_side(lyt, gate_tile, fanout_tile);
+                                projected_side.has_value())
+                            {
+                                switch (*projected_side)
+                                {
+                                    case test::hex_layout_port_legality::projected_port_side::south_west:
+                                        ++south_west_fanouts;
+                                        side = "SW";
+                                        break;
+                                    case test::hex_layout_port_legality::projected_port_side::south_east:
+                                        ++south_east_fanouts;
+                                        side = "SE";
+                                        break;
+                                    default: ++other_fanouts; break;
+                                }
+                            }
+                            else
+                            {
+                                ++other_fanouts;
+                            }
+
+                            if (fin.output < pin_sides.size())
+                            {
+                                if (pin_sides[fin.output].empty())
+                                {
+                                    pin_sides[fin.output] = side;
+                                }
+                                else if (pin_sides[fin.output] != side)
+                                {
+                                    inconsistent_pin_launch = true;
+                                }
+                            }
+                            else
+                            {
+                                inconsistent_pin_launch = true;
+                            }
+                        });
+                });
+
+            if (used_output_pins.empty())
+            {
+                return;
+            }
+
+            const bool invalid_counts =
+                (other_fanouts != 0u) || (south_west_fanouts > 1u) || (south_east_fanouts > 1u) ||
+                ((used_output_pins.size() == 2u) && (south_west_fanouts != 1u || south_east_fanouts != 1u));
+
+            if (inconsistent_pin_launch || invalid_counts)
+            {
+                std::ostringstream os{};
+                os << "multi-output gate at (" << gate_tile.x << ", " << gate_tile.y << ", " << gate_tile.z
+                   << ") uses invalid projected launch pattern: SW=" << south_west_fanouts
+                   << ", SE=" << south_east_fanouts << ", other=" << other_fanouts
+                   << ", inconsistent_pin_launch=" << inconsistent_pin_launch;
+                violations.push_back(os.str());
+            }
+        });
+
+    return violations;
 }
 
 template <typename Ntk>
@@ -119,6 +278,101 @@ TEST_CASE("Mapped half adder flow on hexagonal grid",
         });
     CHECK(layout_num_ha_gates == 1);
     CHECK(layout->num_pos() == 2u);
+    check_eq(mapped_ha, *layout);
+    CHECK(collect_multioutput_projected_launch_violations(*layout).empty());
+}
+
+TEST_CASE("Mapped half adder flow on hexagonal grid with multithreading",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    const auto aig_ha = blueprints::half_adder_network<mockturtle::aig_network>();
+
+    technology_mapping_stats mapping_stats{};
+    const auto               mapped_ha = technology_mapping(aig_ha, all_standard_2_input_functions(), &mapping_stats);
+    REQUIRE(!mapping_stats.mapper_stats.mapping_error);
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                  = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    params.enable_multithreading = true;
+    params.return_first          = false;
+    params.seed                  = 0u;
+    params.timeout               = 100000u;
+    params.cost                  = graph_oriented_layout_design_params::cost_objective::WIRES;
+
+    const auto layout = run_gold_hex_native(mapped_ha, params, &stats);
+    REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
+    check_eq(mapped_ha, *layout);
+    CHECK(collect_multioutput_projected_launch_violations(*layout).empty());
+}
+
+TEST_CASE("Native hex GOLD supports high-fanout multi-output gates",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    const auto ntk = multioutput_half_adder_fanout_network();
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode         = graph_oriented_layout_design_params::effort_mode::HIGH_EFFORT;
+    params.return_first = true;
+    params.seed         = 0u;
+    params.timeout      = 100000u;
+    params.cost         = graph_oriented_layout_design_params::cost_objective::WIRES;
+
+    const auto layout = run_gold_hex_native(ntk, params, &stats);
+    REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
+
+    uint64_t layout_num_multioutput_gates = 0u;
+    layout->foreach_gate(
+        [&layout, &layout_num_multioutput_gates](const auto& g)
+        {
+            if (layout->is_multioutput(g))
+            {
+                ++layout_num_multioutput_gates;
+            }
+        });
+
+    CHECK(layout->num_pis() == ntk.num_pis());
+    CHECK(layout->num_pos() == ntk.num_pos());
+    CHECK(layout_num_multioutput_gates == 1u);
+    check_eq(ntk, *layout);
+    CHECK(collect_multioutput_projected_launch_violations(*layout).empty());
+}
+
+TEST_CASE("Native hex GOLD handles wide shallow many-PI networks with PI gap",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    const auto ntk = wide_shallow_pairwise_and_network(12u);
+
+    graph_oriented_layout_design_stats  cart_stats{};
+    graph_oriented_layout_design_stats  hex_stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                      = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    params.return_first              = true;
+    params.seed                      = 0u;
+    params.timeout                   = 15000u;
+    params.cost                      = graph_oriented_layout_design_params::cost_objective::AREA;
+    params.num_vertex_expansions     = 1u;
+    params.tiles_to_skip_between_pis = 2u;
+    params.prefer_input_pin_order    = true;
+    params.prefer_output_pin_order   = true;
+
+    const auto cart_layout = graph_oriented_layout_design<cart_gate_layout>(ntk, params, &cart_stats);
+    REQUIRE(cart_layout.has_value());
+    check_eq(ntk, *cart_layout);
+
+    const auto hex_layout = run_gold_hex_native(ntk, params, &hex_stats);
+    INFO("cart max_placed=" << cart_stats.max_placed_nodes << " cart_ssgs=" << cart_stats.num_search_space_graphs
+                            << " hex max_placed=" << hex_stats.max_placed_nodes
+                            << " hex_ssgs=" << hex_stats.num_search_space_graphs);
+    REQUIRE(hex_layout.has_value());
+    check_hex_io_placement(*hex_layout);
+    check_projected_hex_port_legality(*hex_layout);
+    check_eq(ntk, *hex_layout);
 }
 
 TEST_CASE("Projected port legality flags same-side stacked outputs on native hex GOLD layouts",
@@ -276,8 +530,11 @@ TEST_CASE("Custom cost objective wiring for hex flow",
 
     const auto layout = run_gold_hex_native(mapped_ha, params, &stats, custom_cost_objective);
     REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
     check_projected_hex_port_legality(*layout);
-    CHECK(layout->num_gates() >= mapped_ha.num_gates());
+    CHECK(layout->num_pos() == 2u);
+    check_eq(mapped_ha, *layout);
+    CHECK(collect_multioutput_projected_launch_violations(*layout).empty());
 }
 
 TEST_CASE("Mapped RCA2 with skipped PIs remains placeable on hex grid",
