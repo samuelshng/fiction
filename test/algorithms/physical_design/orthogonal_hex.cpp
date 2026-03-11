@@ -12,6 +12,7 @@
 
 #include <fiction/algorithms/network_transformation/technology_mapping.hpp>
 #include <fiction/algorithms/physical_design/orthogonal_hex.hpp>
+#include <fiction/algorithms/physical_design/post_layout_optimization_hex.hpp>
 #include <fiction/io/network_reader.hpp>
 #include <fiction/layouts/clocked_layout.hpp>
 #include <fiction/layouts/gate_level_layout.hpp>
@@ -23,6 +24,7 @@
 #include <mockturtle/networks/mig.hpp>
 #include <mockturtle/views/names_view.hpp>
 
+#include <optional>
 #include <sstream>
 
 namespace
@@ -118,6 +120,34 @@ void check_native_hex_ortho_equiv(const Ntk& ntk)
     check_eq(ntk, layout);
 }
 
+template <typename Ntk>
+[[nodiscard]] tec_nt map_with_standard_two_input_gates(const Ntk& ntk)
+{
+    technology_mapping_params map_params{};
+    map_params.ha   = true;
+    map_params.and2 = true;
+    map_params.or2  = true;
+    map_params.xor2 = true;
+    map_params.inv  = true;
+
+    return technology_mapping(ntk, map_params);
+}
+
+[[nodiscard]] tec_nt load_mapped_rca2()
+{
+    const auto rca2_file_name = test::benchmark_path_utils::resolve("benchmarks/TOY/RCA2.v");
+
+    std::ostringstream      os{};
+    network_reader<aig_ptr> reader{rca2_file_name, os};
+
+    REQUIRE(os.str().empty());
+
+    const auto networks = reader.get_networks();
+    REQUIRE(networks.size() == 1u);
+
+    return map_with_standard_two_input_gates(*networks.front());
+}
+
 }  // namespace
 
 TEST_CASE("Native hexagonal orthogonal layout equivalence", "[orthogonal][orthogonal-hex]")
@@ -187,7 +217,8 @@ TEST_CASE("Name conservation after native hexagonal orthogonal physical design",
     CHECK(layout.get_output_name(0) == "f");
 }
 
-TEST_CASE("Native hexagonal orthogonal layout stays compact on RCA2", "[orthogonal][orthogonal-hex]")
+TEST_CASE("Native hexagonal orthogonal RCA2 compactness regression remains visible",
+          "[orthogonal][orthogonal-hex][known-issue]")
 {
     using gate_layout =
         gate_level_layout<clocked_layout<tile_based_layout<hexagonal_layout<offset::ucoord_t, even_row_hex>>>>;
@@ -222,4 +253,63 @@ TEST_CASE("Native hexagonal orthogonal layout stays compact on RCA2", "[orthogon
     check_projected_hex_port_legality(layout);
     check_eq(mapped, layout);
     check_eq(*networks.front(), layout);
+}
+
+TEST_CASE("Native hexagonal orthogonal even-row full adder regression remains visible",
+          "[orthogonal][orthogonal-hex][known-issue]")
+{
+    using gate_layout =
+        gate_level_layout<clocked_layout<tile_based_layout<hexagonal_layout<offset::ucoord_t, even_row_hex>>>>;
+
+    const auto mapped_fa = map_with_standard_two_input_gates(blueprints::full_adder_network<technology_network>());
+
+    std::optional<gate_layout> layout{};
+
+    REQUIRE_NOTHROW(layout = orthogonal_hex<gate_layout>(mapped_fa));
+    REQUIRE(layout.has_value());
+
+    check_hex_border_io_placement(*layout);
+    check_hex_downward_data_flow(*layout);
+    check_projected_hex_port_legality(*layout);
+    check_eq(mapped_fa, *layout);
+}
+
+TEST_CASE("Native hexagonal orthogonal RCA2 bottom-border routing regression remains visible",
+          "[orthogonal][orthogonal-hex][known-issue]")
+{
+    using gate_layout =
+        gate_level_layout<clocked_layout<tile_based_layout<hexagonal_layout<offset::ucoord_t, even_row_hex>>>>;
+
+    const auto mapped_rca2 = load_mapped_rca2();
+
+    std::optional<gate_layout> layout{};
+
+    REQUIRE_NOTHROW(layout = orthogonal_hex<gate_layout>(mapped_rca2));
+    REQUIRE(layout.has_value());
+
+    check_hex_border_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
+    check_eq(mapped_rca2, *layout);
+}
+
+TEST_CASE("Native hexagonal orthogonal RCA2 downstream compatibility regression remains visible",
+          "[orthogonal][orthogonal-hex][known-issue]")
+{
+    using gate_layout =
+        gate_level_layout<clocked_layout<tile_based_layout<hexagonal_layout<offset::ucoord_t, even_row_hex>>>>;
+
+    const auto mapped_rca2 = load_mapped_rca2();
+
+    std::optional<gate_layout> layout{};
+
+    REQUIRE_NOTHROW(layout = orthogonal_hex<gate_layout>(mapped_rca2));
+    REQUIRE(layout.has_value());
+
+    const auto extracted = detail::extract_structural_hex_network(*layout);
+    check_eq(mapped_rca2, extracted);
+
+    const auto rebuilt = detail::try_hex_gold_rebuild(*layout, {});
+    REQUIRE(rebuilt.has_value());
+    check_projected_hex_port_legality(*rebuilt);
+    check_eq(mapped_rca2, *rebuilt);
 }
