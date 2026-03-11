@@ -346,33 +346,49 @@ TEST_CASE("Native hex GOLD supports high-fanout multi-output gates",
 TEST_CASE("Native hex GOLD handles wide shallow many-PI networks with PI gap",
           "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
 {
-    const auto ntk = wide_shallow_pairwise_and_network(12u);
+    const auto run_case =
+        [](const uint64_t num_pairs, const uint64_t skip_tiles, const bool randomize_skip, const uint64_t timeout_ms)
+    {
+        const auto ntk = wide_shallow_pairwise_and_network(num_pairs);
 
-    graph_oriented_layout_design_stats  cart_stats{};
-    graph_oriented_layout_design_stats  hex_stats{};
-    graph_oriented_layout_design_params params{};
-    params.mode                      = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
-    params.return_first              = true;
-    params.seed                      = 0u;
-    params.timeout                   = 15000u;
-    params.cost                      = graph_oriented_layout_design_params::cost_objective::AREA;
-    params.num_vertex_expansions     = 1u;
-    params.tiles_to_skip_between_pis = 2u;
-    params.prefer_input_pin_order    = true;
-    params.prefer_output_pin_order   = true;
+        graph_oriented_layout_design_stats  cart_stats{};
+        graph_oriented_layout_design_stats  hex_stats{};
+        graph_oriented_layout_design_params params{};
+        params.mode                                = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+        params.return_first                        = true;
+        params.seed                                = 0u;
+        params.timeout                             = timeout_ms;
+        params.cost                                = graph_oriented_layout_design_params::cost_objective::AREA;
+        params.num_vertex_expansions               = 1u;
+        params.tiles_to_skip_between_pis           = skip_tiles;
+        params.randomize_tiles_to_skip_between_pis = randomize_skip;
+        params.prefer_input_pin_order              = true;
+        params.prefer_output_pin_order             = true;
 
-    const auto cart_layout = graph_oriented_layout_design<cart_gate_layout>(ntk, params, &cart_stats);
-    REQUIRE(cart_layout.has_value());
-    check_eq(ntk, *cart_layout);
+        const auto cart_layout = graph_oriented_layout_design<cart_gate_layout>(ntk, params, &cart_stats);
+        REQUIRE(cart_layout.has_value());
+        check_eq(ntk, *cart_layout);
 
-    const auto hex_layout = run_gold_hex_native(ntk, params, &hex_stats);
-    INFO("cart max_placed=" << cart_stats.max_placed_nodes << " cart_ssgs=" << cart_stats.num_search_space_graphs
-                            << " hex max_placed=" << hex_stats.max_placed_nodes
-                            << " hex_ssgs=" << hex_stats.num_search_space_graphs);
-    REQUIRE(hex_layout.has_value());
-    check_hex_io_placement(*hex_layout);
-    check_projected_hex_port_legality(*hex_layout);
-    check_eq(ntk, *hex_layout);
+        const auto hex_layout = run_gold_hex_native(ntk, params, &hex_stats);
+        INFO("pairs=" << num_pairs << " skip=" << skip_tiles << " randomize=" << randomize_skip << " cart max_placed="
+                      << cart_stats.max_placed_nodes << " cart_ssgs=" << cart_stats.num_search_space_graphs
+                      << " hex max_placed=" << hex_stats.max_placed_nodes
+                      << " hex_ssgs=" << hex_stats.num_search_space_graphs);
+        REQUIRE(hex_layout.has_value());
+        check_hex_io_placement(*hex_layout);
+        check_projected_hex_port_legality(*hex_layout);
+        check_eq(ntk, *hex_layout);
+    };
+
+    SECTION("12 pairs with gap 2")
+    {
+        run_case(12u, 2u, false, 15000u);
+    }
+
+    SECTION("16 pairs with randomized gap 1")
+    {
+        run_case(16u, 1u, true, 20000u);
+    }
 }
 
 TEST_CASE("Projected port legality flags same-side stacked outputs on native hex GOLD layouts",

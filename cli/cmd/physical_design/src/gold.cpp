@@ -305,6 +305,8 @@ nlohmann::json gold_command::log() const
                           {"number of gates", st.num_gates},
                           {"number of wires", st.num_wires},
                           {"number of crossings", st.num_crossings},
+                          {"max placed nodes", st.max_placed_nodes},
+                          {"num search space graphs", st.num_search_space_graphs},
                           {"layout", {{"x-size", st.x_size}, {"y-size", st.y_size}, {"area", st.x_size * st.y_size}}}};
 }
 
