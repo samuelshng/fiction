@@ -9030,7 +9030,34 @@ Parameter ``new_gate_loc``:
 Returns:
     A path from `src` to `dest` if one exists.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_collect_multioutput_launch_usage =
+R"doc(Collects immediate launch usage for a placed multi-output gate.
+
+Parameter ``layout``:
+    Layout containing the gate.
+
+Parameter ``source``:
+    Tile of the placed gate.
+
+Returns:
+    Summary of currently used launch sides and output pins.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_custom_cost_objective = R"doc(Custom cost objective.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_determine_launch_side =
+R"doc(Determines on which outgoing side a route leaves a source tile.
+
+Parameter ``layout``:
+    Layout containing the route.
+
+Parameter ``source``:
+    Source tile.
+
+Parameter ``successor``:
+    First successor tile of the route.
+
+Returns:
+    Launch side of the step from `source` to `successor`.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_possible_positions =
 R"doc(Retrieves the possible positions for a given node in the layout based
@@ -9142,6 +9169,17 @@ Parameter ``num_expansions``:
 Returns:
     A vector of tiles representing the possible positions for PIs.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_has_valid_multioutput_launches =
+R"doc(Checks whether all placed multi-output gates use valid immediate
+launch patterns.
+
+Parameter ``layout``:
+    Layout to validate.
+
+Returns:
+    `true` iff all multi-output gates launch on at most one south-west
+    and one south-east branch.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_improve_acp_solution =
 R"doc(Flag indicating that an initial solution has been found with the area-
 crossings product as cost objective. When set to `true`, subsequent
@@ -9210,7 +9248,48 @@ reordering.
 The value at index `i` stores the preferred rank of the `i`-th PI in
 declaration order.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_launch_side =
+R"doc(Distinguishes direct launch directions for two-output gates in
+projected pointy-top hex layouts.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_launch_side_NONE = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_launch_side_OTHER = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_launch_side_SOUTH_EAST = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_launch_side_SOUTH_WEST = R"doc()doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_max_placed_nodes = R"doc(Keep track of the maximum number of placed nodes.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_multioutput_launch_usage = R"doc(Summarizes immediate launch usage of a placed multi-output gate.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_multioutput_launch_usage_inconsistent_pin_launch = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_multioutput_launch_usage_other_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_multioutput_launch_usage_pin_sides = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_multioutput_launch_usage_south_east_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_multioutput_launch_usage_south_west_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_multioutput_launch_usage_used_output_pins = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_node_num_outputs =
+R"doc(Returns the number of outputs of a network node.
+
+Template parameter ``Network``:
+    Network type.
+
+Parameter ``ntk``:
+    Network instance.
+
+Parameter ``n``:
+    Node in `ntk`.
+
+Returns:
+    Number of outputs of `n`.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_ntk = R"doc(The network to be placed and routed.)doc";
 
@@ -9285,6 +9364,24 @@ Parameter ``ssg``:
 Returns:
     A boolean indicating if a solution was found.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_preferred_x_order =
+R"doc(Enumerates x coordinates in increasing distance from a preferred
+position.
+
+Native hex GOLD benefits strongly from trying positions near the
+source fanins before scanning unrelated far-left columns. This keeps
+the small `num_vertex_expansions` budget focused on geometrically
+plausible placements.
+
+Parameter ``max_x``:
+    Maximum x coordinate on the current search canvas.
+
+Parameter ``preferred_x``:
+    Preferred x coordinate around which candidates should be explored.
+
+Returns:
+    X coordinates ordered by increasing distance from `preferred_x`.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_print_placement_info =
 R"doc(Outputs placement information, including the current runtime, the
 number of evaluated paths in the search space graphs and the layout
@@ -9348,11 +9445,34 @@ static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_ti
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_timeout_limit_reached = R"doc(Timeout limit reached.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_update_search_stats =
+R"doc(Updates search-progress statistics that are meaningful even without a
+final layout.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_update_stats =
 R"doc(This function updates statistical metrics.
 
 Parameter ``best_lyt``:
     The new best layout found.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_uses_legal_multioutput_launch_side =
+R"doc(Checks whether a candidate path uses a legal immediate launch side for
+a two-output source gate.
+
+Parameter ``layout``:
+    Layout in which the path is considered.
+
+Parameter ``source``:
+    Source tile of the path.
+
+Parameter ``output_pin``:
+    Output pin launched by the path.
+
+Parameter ``path``:
+    Candidate route from `source`.
+
+Returns:
+    `true` iff the first routed step is legal.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_valid_layout =
 R"doc(Validates the given layout based on the nodes in the network and their
@@ -9805,6 +9925,10 @@ static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_start 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_timeout = R"doc(Timeout limit (in ms).)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_timeout_limit_reached = R"doc(Timeout limit reached.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_update_search_stats =
+R"doc(Updates search-progress statistics that are meaningful even without a
+final layout.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_update_stats =
 R"doc(This function updates statistical metrics.
@@ -17932,9 +18056,15 @@ process.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_stats_duration = R"doc(Runtime of the graph-oriented layout design process.)doc";
 
+static const char *__doc_fiction_graph_oriented_layout_design_stats_max_placed_nodes =
+R"doc(Maximum number of nodes that were placed in any explored partial
+layout.)doc";
+
 static const char *__doc_fiction_graph_oriented_layout_design_stats_num_crossings = R"doc(Number of crossings.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_stats_num_gates = R"doc(Number of gates.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_num_search_space_graphs = R"doc(Number of search-space graphs instantiated for the current run.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_stats_num_wires = R"doc(Number of wires.)doc";
 
