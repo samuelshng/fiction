@@ -191,7 +191,7 @@ Changes:
 Outcome:
 
 - Structural extraction is now correct for orthogonal native-hex RCA2.
-- The original “cannot reconstruct PO/source information” blocker is resolved.
+- The original "cannot reconstruct PO/source information" blocker is resolved.
 
 ### 14. GOLD fallback revival with bounded area-vs-wire acceptance
 
@@ -202,7 +202,7 @@ Changes:
 - Aligned the fallback GOLD parameter set with the existing stable mapped-RCA2 native-hex GOLD test configuration:
   `MAXIMUM_EFFORT`, `return_first = true`, multithreading enabled, `seed = 0`, and `tiles_to_skip_between_pis = 1`.
 - Added a dedicated regression proving the fallback is safe and equivalent on orthogonal RCA2.
-- Switched final candidate selection from a strict “never increase wires” rule to a bounded area-vs-wire tradeoff
+- Switched final candidate selection from a strict "never increase wires" rule to a bounded area-vs-wire tradeoff
   (`area + 16 * internal_wires`) so strongly more compact layouts are no longer rejected solely for a very small wire
   increase.
 
@@ -233,7 +233,7 @@ Outcome:
 
 The biggest remaining difference from cartesian optimize is not candidate enumeration but reroute sophistication.
 Cartesian relocation succeeds because it can locally rip up, test, and roll back paths under obstructions.
-Native hex still largely relies on whole-layout or neighborhood A* rebuilds on the concrete layout.
+Native hex still largely relies on whole-layout or neighborhood A\* rebuilds on the concrete layout.
 
 ### H2. Candidate screening in hex is still too geometry-agnostic
 
@@ -249,8 +249,8 @@ GOLD placer on the extracted structural network and then compare its result with
 ### H4. The remaining optimization gap is now mostly about crossings
 
 The new `9 x 20` RCA2 result shows that height reduction is possible, but the accepted compact solution pays for that
-with more crossings. The next quality improvement is therefore not “find any shorter solution” but “preserve as much of
-that height gain while reducing crossings and excess wire overhead”.
+with more crossings. The next quality improvement is therefore not "find any shorter solution" but "preserve as much of
+that height gain while reducing crossings and excess wire overhead".
 
 ## Next Steps
 
