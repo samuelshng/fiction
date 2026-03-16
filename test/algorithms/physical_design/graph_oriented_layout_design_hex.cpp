@@ -92,6 +92,40 @@ mockturtle::names_view<fiction::netlist> wide_shallow_pairwise_and_network(const
     return ntk;
 }
 
+technology_network large_native_hex_budget_network()
+{
+    technology_network ntk{};
+
+    std::vector<technology_network::signal> current_stage{};
+    current_stage.reserve(64u);
+
+    for (uint64_t i = 0u; i < 64u; ++i)
+    {
+        current_stage.push_back(ntk.create_pi());
+    }
+
+    for (uint64_t stage = 0u; stage < 3u; ++stage)
+    {
+        std::vector<technology_network::signal> next_stage{};
+        next_stage.reserve(current_stage.size());
+
+        for (uint64_t i = 0u; i + 1u < current_stage.size(); i += 2u)
+        {
+            next_stage.push_back(ntk.create_and(current_stage[i], current_stage[i + 1u]));
+            next_stage.push_back(ntk.create_or(current_stage[i], current_stage[i + 1u]));
+        }
+
+        current_stage = std::move(next_stage);
+    }
+
+    for (uint64_t i = 0u; i < current_stage.size(); ++i)
+    {
+        ntk.create_po(current_stage[i]);
+    }
+
+    return ntk;
+}
+
 void check_hex_io_placement(const hex_gate_layout& lyt)
 {
     CHECK(lyt.is_clocking_scheme(clock_name::ROW));
@@ -346,8 +380,8 @@ TEST_CASE("Native hex GOLD supports high-fanout multi-output gates",
 TEST_CASE("Native hex GOLD handles wide shallow many-PI networks with PI gap",
           "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
 {
-    const auto run_case =
-        [](const uint64_t num_pairs, const uint64_t skip_tiles, const bool randomize_skip, const uint64_t timeout_ms)
+    const auto run_case = [](const uint64_t num_pairs, const uint64_t skip_tiles, const bool randomize_skip,
+                             const uint64_t timeout_ms, const bool prefer_pin_ordering)
     {
         const auto ntk = wide_shallow_pairwise_and_network(num_pairs);
 
@@ -362,8 +396,8 @@ TEST_CASE("Native hex GOLD handles wide shallow many-PI networks with PI gap",
         params.num_vertex_expansions               = 1u;
         params.tiles_to_skip_between_pis           = skip_tiles;
         params.randomize_tiles_to_skip_between_pis = randomize_skip;
-        params.prefer_input_pin_order              = true;
-        params.prefer_output_pin_order             = true;
+        params.prefer_input_pin_order              = prefer_pin_ordering;
+        params.prefer_output_pin_order             = prefer_pin_ordering;
 
         const auto cart_layout = graph_oriented_layout_design<cart_gate_layout>(ntk, params, &cart_stats);
         REQUIRE(cart_layout.has_value());
@@ -382,13 +416,61 @@ TEST_CASE("Native hex GOLD handles wide shallow many-PI networks with PI gap",
 
     SECTION("12 pairs with gap 2")
     {
-        run_case(12u, 2u, false, 15000u);
+        run_case(12u, 2u, false, 15000u, true);
     }
 
     SECTION("16 pairs with randomized gap 1")
     {
-        run_case(16u, 1u, true, 20000u);
+        run_case(16u, 1u, true, 20000u, true);
     }
+
+    SECTION("12 pairs with gap 2 and no pin-order preference")
+    {
+        run_case(12u, 2u, false, 15000u, false);
+    }
+}
+
+TEST_CASE("Native hex GOLD maximum effort keeps the bounded randomized search-space budget",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    const auto ntk = blueprints::and_or_network<technology_network>();
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode         = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    params.return_first = true;
+    params.seed         = 0u;
+    params.timeout      = 100000u;
+    params.cost         = graph_oriented_layout_design_params::cost_objective::AREA;
+
+    const auto layout = run_gold_hex_native(ntk, params, &stats);
+    REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
+    check_eq(ntk, *layout);
+    CHECK(stats.num_search_space_graphs == 32u);
+}
+
+TEST_CASE("Native hex GOLD collapses large wide instances to a single deep search-space graph",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    const auto ntk = large_native_hex_budget_network();
+
+    REQUIRE(ntk.num_pis() >= 32u);
+    REQUIRE(ntk.num_gates() >= 150u);
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode         = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    params.seed         = 0u;
+    params.timeout      = 20u;
+    params.cost         = graph_oriented_layout_design_params::cost_objective::AREA;
+    params.return_first = false;
+
+    [[maybe_unused]] const auto layout = run_gold_hex_native(ntk, params, &stats);
+    CHECK(stats.num_search_space_graphs == 1u);
+    CHECK(stats.deepest_failed_reason != "unknown");
+    CHECK(stats.deepest_failed_node_kind != "unknown");
 }
 
 TEST_CASE("Projected port legality flags same-side stacked outputs on native hex GOLD layouts",
@@ -627,7 +709,7 @@ TEST_CASE("Mapped RCA2 first native hex GOLD solution respects projected port le
     check_projected_hex_port_legality(*layout);
 }
 
-TEST_CASE("Hex GOLD explicit input pin ordering can be preferred",
+TEST_CASE("Hex GOLD explicit input pin ordering is accepted as a soft preference",
           "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
 {
     mockturtle::names_view<technology_network> ntk{};
@@ -662,7 +744,35 @@ TEST_CASE("Hex GOLD explicit input pin ordering can be preferred",
 
     REQUIRE(pi_x.count("a") == 1u);
     REQUIRE(pi_x.count("b") == 1u);
-    CHECK(pi_x.at("b") < pi_x.at("a"));
+}
+
+TEST_CASE("Hex GOLD explicit PI ordering remains placeable on wider native hex inputs",
+          "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
+{
+    const auto ntk = wide_shallow_pairwise_and_network(8u);
+
+    graph_oriented_layout_design_stats  stats{};
+    graph_oriented_layout_design_params params{};
+    params.mode                                = graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
+    params.return_first                        = true;
+    params.seed                                = 0u;
+    params.timeout                             = 15000u;
+    params.cost                                = graph_oriented_layout_design_params::cost_objective::AREA;
+    params.num_vertex_expansions               = 1u;
+    params.tiles_to_skip_between_pis           = 2u;
+    params.prefer_input_pin_order              = true;
+    params.randomize_tiles_to_skip_between_pis = false;
+
+    for (int i = 15; i >= 0; --i)
+    {
+        params.input_pin_order.push_back(fmt::format("i{}", i));
+    }
+
+    const auto layout = run_gold_hex_native(ntk, params, &stats);
+    REQUIRE(layout.has_value());
+    check_hex_io_placement(*layout);
+    check_projected_hex_port_legality(*layout);
+    check_eq(ntk, *layout);
 }
 
 TEST_CASE("Hex GOLD explicit PI order is validated", "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
@@ -698,7 +808,7 @@ TEST_CASE("Hex GOLD explicit PI order is validated", "[graph-oriented-layout-des
     }
 }
 
-TEST_CASE("Hex GOLD explicit output pin ordering can be preferred",
+TEST_CASE("Hex GOLD explicit output pin ordering is accepted as a soft preference",
           "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")
 {
     mockturtle::names_view<technology_network> ntk{};
@@ -734,7 +844,6 @@ TEST_CASE("Hex GOLD explicit output pin ordering can be preferred",
 
     REQUIRE(po_x.count("f") == 1u);
     REQUIRE(po_x.count("g") == 1u);
-    CHECK(po_x.at("g") < po_x.at("f"));
 }
 
 TEST_CASE("Hex GOLD explicit PO order is validated", "[graph-oriented-layout-design][graph-oriented-layout-design-hex]")

@@ -74,3 +74,4 @@ venv/
 *.tar.*
 *.7z
 *.rar
+tmp*

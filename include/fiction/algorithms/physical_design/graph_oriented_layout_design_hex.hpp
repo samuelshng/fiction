@@ -7,6 +7,9 @@
 
 #include "fiction/algorithms/physical_design/graph_oriented_layout_design.hpp"
 
+#include <cstring>
+#include <numeric>
+#include <tuple>
 #include <unordered_set>
 
 namespace fiction
@@ -197,13 +200,18 @@ class graph_oriented_layout_design_hex_impl
                 }
             }
 
-            // check if timeout is reached or solution found
-            timeout_limit_reached =
-                std::none_of(ssg_vec.cbegin(), ssg_vec.cend(), [](const auto& ssg) { return ssg.frontier_flag; });
-
             const auto end = std::chrono::high_resolution_clock::now();
             const auto duration_ms =
                 static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+
+            if (duration_ms >= calculate_search_depth_pilot_timeout())
+            {
+                prune_to_best_search_space_graph();
+            }
+
+            // check if timeout is reached or solution found
+            timeout_limit_reached =
+                std::none_of(ssg_vec.cbegin(), ssg_vec.cend(), [](const auto& ssg) { return ssg.frontier_flag; });
 
             if (duration_ms >= timeout)
             {
@@ -281,6 +289,10 @@ class graph_oriented_layout_design_hex_impl
      */
     uint64_t num_search_space_graphs{0};
     /**
+     * Indicates whether the large-instance pilot run has already been pruned to a single search-space graph.
+     */
+    bool search_depth_pruned = false;
+    /**
      * Vector of search space graphs.
      */
     std::vector<search_space_graph<ObstrLyt>> ssg_vec;
@@ -288,6 +300,113 @@ class graph_oriented_layout_design_hex_impl
      * Keep track of the maximum number of placed nodes.
      */
     std::atomic<uint64_t> max_placed_nodes{0ul};
+    /**
+     * Counts how often PI candidate generation ran out of feasible positions.
+     */
+    std::atomic<uint64_t> zero_candidate_pis{0ul};
+    /**
+     * Counts how often gate candidate generation ran out of feasible positions.
+     */
+    std::atomic<uint64_t> zero_candidate_gates{0ul};
+    /**
+     * Counts how often PO candidate generation ran out of feasible positions.
+     */
+    std::atomic<uint64_t> zero_candidate_pos{0ul};
+    /**
+     * Counts how often routing failed while placing a gate.
+     */
+    std::atomic<uint64_t> route_failures_gates{0ul};
+    /**
+     * Counts how often routing failed while placing a PO.
+     */
+    std::atomic<uint64_t> route_failures_pos{0ul};
+    /**
+     * Counts how often a partially placed layout failed the structural feasibility checks.
+     */
+    std::atomic<uint64_t> invalid_layout_prunes{0ul};
+    /**
+     * Synchronizes updates of the deepest failed-branch snapshot.
+     */
+    mutable std::mutex failure_snapshot_mutex{};
+    /**
+     * Reason why a branch expansion failed.
+     */
+    enum class branch_failure_reason : std::uint8_t
+    {
+        ZERO_CANDIDATES,
+        ROUTE_FAILURE,
+        INVALID_LAYOUT
+    };
+    /**
+     * Snapshot of the deepest failed expansion seen so far.
+     */
+    struct failure_snapshot
+    {
+        /**
+         * Zero-based index of the node whose expansion failed.
+         */
+        uint64_t node_index{0ull};
+        /**
+         * Number of already placed nodes before the failure.
+         */
+        uint64_t placed_nodes{0ull};
+        /**
+         * Fanin count of the failed node.
+         */
+        uint64_t fanin_count{0ull};
+        /**
+         * High-level kind of the failed node.
+         */
+        std::string node_kind{"unknown"};
+        /**
+         * Function or subtype of the failed node.
+         */
+        std::string node_function{"unknown"};
+        /**
+         * Failure reason.
+         */
+        std::string reason{"unknown"};
+        /**
+         * More specific explanation of the failing feasibility condition.
+         */
+        std::string detail{"unknown"};
+        /**
+         * Kind of the next node to place when the failure was observed.
+         */
+        std::string frontier_kind{"unknown"};
+        /**
+         * Function of the next node to place when the failure was observed.
+         */
+        std::string frontier_function{"unknown"};
+        /**
+         * Number of consecutive PI nodes starting at the frontier when the failure was observed.
+         */
+        uint64_t frontier_pi_run_length{0ull};
+        /**
+         * Kind of the immediate driver of the failed node.
+         */
+        std::string driver_kind{"unknown"};
+        /**
+         * Function of the immediate driver of the failed node.
+         */
+        std::string driver_function{"unknown"};
+        /**
+         * Total number of fanouts of the failed node in the scheduled network.
+         */
+        uint64_t total_successors{0ull};
+        /**
+         * Number of already placed fanouts of the failed node when the failure was observed.
+         */
+        uint64_t placed_successors{0ull};
+        /**
+         * Label of the search-space graph where the failure occurred.
+         */
+        std::string ssg_label{"unknown"};
+    };
+    /**
+     * Deepest failed branch observed during the search.
+     */
+    failure_snapshot deepest_failure{};
     /**
      * The current best solution with respect to area, initialized to the maximum possible value.
      * This value will be updated as better solutions are found.
@@ -365,8 +484,12 @@ class graph_oriented_layout_design_hex_impl
     /**
      * In maximum-effort mode, 32 search space graphs are used.
      *
-     * It adds another 16 search space graphs to the 16 search space graphs from highest-effort mode using randomized
-     * fanout substitution strategies and random topological orderings.
+     * It adds another 16 search space graphs to the 16 search space graphs from highest-effort mode using
+     * randomized fanout substitution strategies and random topological orderings.
+     *
+     * Unlike the cartesian variant, native hex keeps a smaller search-space budget because all SSGs share a single
+     * global timeout. More SSGs dilute search depth on hard instances such as ``w4a4``. Diversity is instead
+     * increased by using a distinct random seed for each extra objective slot.
      */
     const uint64_t num_search_space_graphs_maximum_effort = 2u * num_search_space_graphs_highest_effort;
     /**
@@ -580,6 +703,47 @@ class graph_oriented_layout_design_hex_impl
         }
     }
     /**
+     * Determines whether the current native-hex benchmark should spend its budget on depth instead of diversity.
+     *
+     * Large wide-frontier mapped networks such as ``w4a4`` were spending the timeout on 16 or 32 shallow search
+     * space graphs and consistently timing out before any single search could get close to completion. For those
+     * instances, native hex GOLD performs materially better when it commits to one deep search-space graph.
+     *
+     * @return ``true`` if native-hex search-space diversity should be reduced in favor of a deeper search.
+     */
+    [[nodiscard]] bool should_prioritize_search_depth() const noexcept
+    {
+        return ntk.num_pis() >= 32u && ntk.num_gates() >= 150u;
+    }
+    /**
+     * Determines whether the current run should start with a short large-instance pilot before pruning to one SSG.
+     *
+     * @return ``true`` if a large native-hex benchmark should use the pilot-and-prune strategy.
+     */
+    [[nodiscard]] bool should_use_search_depth_pilot() const noexcept
+    {
+        return false;
+    }
+    /**
+     * Determines how long the large-instance pilot should run before pruning to the strongest search-space graph.
+     *
+     * @return Pilot budget in milliseconds.
+     */
+    [[nodiscard]] uint64_t calculate_search_depth_pilot_timeout() const noexcept
+    {
+        if (!should_use_search_depth_pilot())
+        {
+            return 0u;
+        }
+
+        if (timeout == std::numeric_limits<uint64_t>::max())
+        {
+            return 5000u;
+        }
+
+        return std::clamp<uint64_t>(timeout / 16u, 3000u, 15000u);
+    }
+    /**
      * Determines the number of search space graphs to generate based on the selected effort mode and cost objective.
      *
      * @param mode The effort mode chosen for the layout design, determining the level of computational effort.
@@ -590,6 +754,10 @@ class graph_oriented_layout_design_hex_impl
     calculate_num_search_space_graphs(graph_oriented_layout_design_params::effort_mode    mode,
                                       graph_oriented_layout_design_params::cost_objective cost) noexcept
     {
+        if (should_prioritize_search_depth())
+        {
+            return num_search_space_graphs_high_efficiency;
+        }
         if (mode == graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT)
         {
             return (cost == graph_oriented_layout_design_params::cost_objective::CUSTOM) ?
@@ -621,6 +789,7 @@ class graph_oriented_layout_design_hex_impl
         pst.num_crossings           = best_lyt.num_crossings();
         pst.max_placed_nodes        = max_placed_nodes.load();
         pst.num_search_space_graphs = num_search_space_graphs;
+        populate_failure_stats();
     }
     /**
      * Updates search-progress statistics that are meaningful even without a final layout.
@@ -629,6 +798,370 @@ class graph_oriented_layout_design_hex_impl
     {
         pst.max_placed_nodes        = max_placed_nodes.load();
         pst.num_search_space_graphs = num_search_space_graphs;
+        populate_failure_stats();
+    }
+    /**
+     * Copies the accumulated failed-branch diagnostics into the public statistics object.
+     */
+    void populate_failure_stats() noexcept
+    {
+        pst.zero_candidate_pis    = zero_candidate_pis.load();
+        pst.zero_candidate_gates  = zero_candidate_gates.load();
+        pst.zero_candidate_pos    = zero_candidate_pos.load();
+        pst.route_failures_gates  = route_failures_gates.load();
+        pst.route_failures_pos    = route_failures_pos.load();
+        pst.invalid_layout_prunes = invalid_layout_prunes.load();
+
+        std::lock_guard<std::mutex> guard{failure_snapshot_mutex};
+        pst.deepest_failed_node_index             = deepest_failure.node_index;
+        pst.deepest_failed_placed_nodes           = deepest_failure.placed_nodes;
+        pst.deepest_failed_fanin_count            = deepest_failure.fanin_count;
+        pst.deepest_failed_node_kind              = deepest_failure.node_kind;
+        pst.deepest_failed_node_function          = deepest_failure.node_function;
+        pst.deepest_failed_reason                 = deepest_failure.reason;
+        pst.deepest_failed_detail                 = deepest_failure.detail;
+        pst.deepest_failed_frontier_kind          = deepest_failure.frontier_kind;
+        pst.deepest_failed_frontier_function      = deepest_failure.frontier_function;
+        pst.deepest_failed_frontier_pi_run_length = deepest_failure.frontier_pi_run_length;
+        pst.deepest_failed_driver_kind            = deepest_failure.driver_kind;
+        pst.deepest_failed_driver_function        = deepest_failure.driver_function;
+        pst.deepest_failed_total_successors       = deepest_failure.total_successors;
+        pst.deepest_failed_placed_successors      = deepest_failure.placed_successors;
+        pst.deepest_failed_ssg                    = deepest_failure.ssg_label;
+    }
+    /**
+     * Converts a failed-branch reason to a stable string representation.
+     *
+     * @param reason Failure reason.
+     * @return Human-readable failure reason.
+     */
+    [[nodiscard]] static const char* to_string(const branch_failure_reason reason) noexcept
+    {
+        switch (reason)
+        {
+            case branch_failure_reason::ZERO_CANDIDATES: return "zero_candidates";
+            case branch_failure_reason::ROUTE_FAILURE: return "route_failure";
+            case branch_failure_reason::INVALID_LAYOUT: return "invalid_layout";
+            default: return "unknown";
+        }
+    }
+    /**
+     * Classifies a network node into ``pi``, ``po``, or ``gate`` for diagnostic reporting.
+     *
+     * @param network Network that owns the node.
+     * @param node Node to classify.
+     * @return Coarse node kind.
+     */
+    [[nodiscard]] static const char* classify_node_kind(const tec_nt&                   network,
+                                                        const mockturtle::node<tec_nt>& node) noexcept
+    {
+        if (network.is_pi(node))
+        {
+            return "pi";
+        }
+        if (network.is_po(node))
+        {
+            return "po";
+        }
+        return "gate";
+    }
+    /**
+     * Classifies a network node function into a small set of stable diagnostic labels.
+     *
+     * @param network Network that owns the node.
+     * @param node Node to classify.
+     * @return Function label for the node.
+     */
+    [[nodiscard]] static const char* classify_node_function(const tec_nt&                   network,
+                                                            const mockturtle::node<tec_nt>& node) noexcept
+    {
+        if (network.is_pi(node))
+        {
+            return "pi";
+        }
+        if (network.is_po(node))
+        {
+            return "po";
+        }
+        if constexpr (has_is_fanout_v<tec_nt>)
+        {
+            if (network.is_fanout(node))
+            {
+                return "fanout";
+            }
+        }
+        if constexpr (has_is_ha_v<tec_nt>)
+        {
+            if (network.is_ha(node))
+            {
+                return "ha";
+            }
+        }
+        if constexpr (has_is_buf_v<tec_nt>)
+        {
+            if (network.is_buf(node))
+            {
+                return "buf";
+            }
+        }
+        if constexpr (has_is_inv_v<tec_nt>)
+        {
+            if (network.is_inv(node))
+            {
+                return "inv";
+            }
+        }
+        if (network.is_and(node))
+        {
+            return "and";
+        }
+        if (network.is_or(node))
+        {
+            return "or";
+        }
+        if (network.is_xor(node))
+        {
+            return "xor";
+        }
+        if constexpr (has_is_nand_v<tec_nt>)
+        {
+            if (network.is_nand(node))
+            {
+                return "nand";
+            }
+        }
+        if constexpr (has_is_nor_v<tec_nt>)
+        {
+            if (network.is_nor(node))
+            {
+                return "nor";
+            }
+        }
+        if constexpr (has_is_xnor_v<tec_nt>)
+        {
+            if (network.is_xnor(node))
+            {
+                return "xnor";
+            }
+        }
+        return "gate";
+    }
+    /**
+     * Counts the consecutive PI nodes starting at the current frontier position.
+     *
+     * @param ssg Search-space graph whose schedule is inspected.
+     * @param frontier_index Zero-based frontier index.
+     * @return Number of consecutive PI nodes beginning at ``frontier_index``.
+     */
+    [[nodiscard]] uint64_t count_frontier_pi_run_length(const search_space_graph<ObstrLyt>& ssg,
+                                                        const uint64_t frontier_index) const noexcept
+    {
+        uint64_t pi_run_length = 0u;
+
+        for (uint64_t idx = frontier_index; idx < ssg.nodes_to_place.size(); ++idx)
+        {
+            if (!ssg.network.is_pi(ssg.nodes_to_place[idx]))
+            {
+                break;
+            }
+
+            ++pi_run_length;
+        }
+
+        return pi_run_length;
+    }
+    /**
+     * Counts how many fanouts of a node have already been scheduled before the current frontier.
+     *
+     * @param ssg Search-space graph whose schedule is inspected.
+     * @param node Node whose successors are counted.
+     * @param frontier_index Zero-based frontier index.
+     * @return Pair ``{placed, total}`` describing the scheduled and total successors.
+     */
+    [[nodiscard]] std::pair<uint64_t, uint64_t> count_scheduled_successors(const search_space_graph<ObstrLyt>& ssg,
+                                                                           const mockturtle::node<tec_nt>&     node,
+                                                                           const uint64_t frontier_index) const noexcept
+    {
+        uint64_t placed_successors = 0u;
+        uint64_t total_successors  = 0u;
+
+        for (uint64_t successor_index = 0u; successor_index < ssg.nodes_to_place.size(); ++successor_index)
+        {
+            const auto successor = ssg.nodes_to_place[successor_index];
+            if (successor == node || ssg.network.is_constant(successor))
+            {
+                continue;
+            }
+
+            const auto successor_fanins = fanins(ssg.network, successor);
+            const auto drives_successor =
+                std::any_of(successor_fanins.fanin_nodes.cbegin(), successor_fanins.fanin_nodes.cend(),
+                            [&node](const auto& fanin) noexcept { return fanin == node; });
+
+            if (!drives_successor)
+            {
+                continue;
+            }
+
+            ++total_successors;
+            if (successor_index < frontier_index)
+            {
+                ++placed_successors;
+            }
+        }
+
+        return {placed_successors, total_successors};
+    }
+    /**
+     * Records why a branch expansion failed and updates the deepest observed failure snapshot.
+     *
+     * @param ssg Search-space graph whose branch failed.
+     * @param place_info Placement context at the failure point.
+     * @param reason Failure reason.
+     */
+    void record_failure_snapshot(const search_space_graph<ObstrLyt>& ssg, const uint64_t placed_nodes,
+                                 const mockturtle::node<tec_nt>& node, const mockturtle::node<tec_nt>& frontier_node,
+                                 const branch_failure_reason reason, const std::string& detail = "unknown") noexcept
+    {
+        std::lock_guard<std::mutex> guard{failure_snapshot_mutex};
+        if (placed_nodes < deepest_failure.placed_nodes)
+        {
+            return;
+        }
+
+        deepest_failure.node_index             = placed_nodes;
+        deepest_failure.placed_nodes           = placed_nodes;
+        deepest_failure.fanin_count            = fanins(ssg.network, node).fanin_nodes.size();
+        deepest_failure.node_kind              = classify_node_kind(ssg.network, node);
+        deepest_failure.node_function          = classify_node_function(ssg.network, node);
+        deepest_failure.reason                 = to_string(reason);
+        deepest_failure.detail                 = detail;
+        deepest_failure.frontier_kind          = classify_node_kind(ssg.network, frontier_node);
+        deepest_failure.frontier_function      = classify_node_function(ssg.network, frontier_node);
+        deepest_failure.frontier_pi_run_length = count_frontier_pi_run_length(ssg, placed_nodes);
+
+        const auto failing_fanins = fanins(ssg.network, node).fanin_nodes;
+        if (!failing_fanins.empty())
+        {
+            deepest_failure.driver_kind     = classify_node_kind(ssg.network, failing_fanins.front());
+            deepest_failure.driver_function = classify_node_function(ssg.network, failing_fanins.front());
+        }
+        else
+        {
+            deepest_failure.driver_kind     = "none";
+            deepest_failure.driver_function = "none";
+        }
+
+        const auto [placed_successors, total_successors] = count_scheduled_successors(ssg, node, placed_nodes);
+        deepest_failure.placed_successors                = placed_successors;
+        deepest_failure.total_successors                 = total_successors;
+        deepest_failure.ssg_label                        = ssg.debug_label;
+    }
+    /**
+     * Records why a branch expansion failed and updates the deepest observed failure snapshot.
+     *
+     * @param ssg Search-space graph whose branch failed.
+     * @param place_info Placement context at the failure point.
+     * @param reason Failure reason.
+     * @param failing_node Optional node that triggered the failure. Defaults to the next node to place.
+     * @param detail More specific explanation of the failing condition.
+     */
+    void record_branch_failure(const search_space_graph<ObstrLyt>& ssg, const placement_info<ObstrLyt>& place_info,
+                               const branch_failure_reason                    reason,
+                               const std::optional<mockturtle::node<tec_nt>>& failing_node = std::nullopt,
+                               const std::string&                             detail       = "unknown") noexcept
+    {
+        if (place_info.current_node >= ssg.nodes_to_place.size())
+        {
+            return;
+        }
+
+        const auto current_node = failing_node.value_or(ssg.nodes_to_place[place_info.current_node]);
+        const auto node_kind    = classify_node_kind(ssg.network, current_node);
+
+        switch (reason)
+        {
+            case branch_failure_reason::ZERO_CANDIDATES:
+            {
+                if (std::strcmp(node_kind, "pi") == 0)
+                {
+                    ++zero_candidate_pis;
+                }
+                else if (std::strcmp(node_kind, "po") == 0)
+                {
+                    ++zero_candidate_pos;
+                }
+                else
+                {
+                    ++zero_candidate_gates;
+                }
+                break;
+            }
+            case branch_failure_reason::ROUTE_FAILURE:
+            {
+                if (std::strcmp(node_kind, "po") == 0)
+                {
+                    ++route_failures_pos;
+                }
+                else if (std::strcmp(node_kind, "gate") == 0)
+                {
+                    ++route_failures_gates;
+                }
+                break;
+            }
+            case branch_failure_reason::INVALID_LAYOUT:
+            {
+                ++invalid_layout_prunes;
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+        record_failure_snapshot(ssg, place_info.current_node, current_node, ssg.nodes_to_place[place_info.current_node],
+                                reason, detail);
+    }
+    /**
+     * Prunes the large-instance pilot batch to the deepest-running search-space graph.
+     */
+    void prune_to_best_search_space_graph() noexcept
+    {
+        if (search_depth_pruned || ssg_vec.size() <= num_search_space_graphs_high_efficiency)
+        {
+            return;
+        }
+
+        const auto best_ssg_it = std::max_element(
+            ssg_vec.begin(), ssg_vec.end(),
+            [](const auto& lhs, const auto& rhs) noexcept
+            {
+                const auto lhs_score = std::make_tuple(lhs.frontier_flag, lhs.max_placed_nodes,
+                                                       lhs.current_vertex.size(), lhs.cost_so_far.size());
+                const auto rhs_score = std::make_tuple(rhs.frontier_flag, rhs.max_placed_nodes,
+                                                       rhs.current_vertex.size(), rhs.cost_so_far.size());
+                return lhs_score < rhs_score;
+            });
+
+        if (best_ssg_it == ssg_vec.end())
+        {
+            return;
+        }
+
+        for (auto& ssg : ssg_vec)
+        {
+            if (&ssg == &(*best_ssg_it))
+            {
+                continue;
+            }
+
+            ssg.frontier_flag = false;
+            ssg.frontier      = detail::priority_queue<ObstrLyt>{};
+            ssg.current_vertex.clear();
+            ssg.cost_so_far.clear();
+        }
+
+        search_depth_pruned = true;
     }
     /**
      * Checks if there is a path between the source and destination tiles in the given layout.
@@ -710,6 +1243,15 @@ class graph_oriented_layout_design_hex_impl
         uint32_t                    other_fanouts{0u};
         uint32_t                    used_output_pins{0u};
         bool                        inconsistent_pin_launch{false};
+    };
+    /**
+     * Summarizes immediate launch usage of a placed fanout.
+     */
+    struct fanout_launch_usage
+    {
+        uint32_t south_west_fanouts{0u};
+        uint32_t south_east_fanouts{0u};
+        uint32_t other_fanouts{0u};
     };
     /**
      * Returns the number of outputs of a network node.
@@ -825,6 +1367,39 @@ class graph_oriented_layout_design_hex_impl
         usage.used_output_pins =
             static_cast<uint32_t>(std::count_if(usage.pin_sides.cbegin(), usage.pin_sides.cend(),
                                                 [](const auto side) { return side != launch_side::NONE; }));
+
+        return usage;
+    }
+    /**
+     * Collects immediate launch usage for a placed fanout.
+     *
+     * @param layout Layout containing the fanout.
+     * @param source Tile of the placed fanout.
+     * @return Summary of currently used launch sides.
+     */
+    [[nodiscard]] static fanout_launch_usage collect_fanout_launch_usage(const ObstrLyt&       layout,
+                                                                         const tile<ObstrLyt>& source) noexcept
+    {
+        fanout_launch_usage usage{};
+
+        if (layout.is_empty_tile(source))
+        {
+            return usage;
+        }
+
+        layout.foreach_fanout(layout.get_node(source),
+                              [&layout, &source, &usage](const auto& fout) noexcept
+                              {
+                                  const auto launch = determine_launch_side(layout, source, layout.get_tile(fout));
+
+                                  switch (launch)
+                                  {
+                                      case launch_side::SOUTH_WEST: ++usage.south_west_fanouts; break;
+                                      case launch_side::SOUTH_EAST: ++usage.south_east_fanouts; break;
+                                      case launch_side::OTHER: ++usage.other_fanouts; break;
+                                      case launch_side::NONE: break;
+                                  }
+                              });
 
         return usage;
     }
@@ -984,8 +1559,106 @@ class graph_oriented_layout_design_hex_impl
 
         return ordered_x;
     }
-    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions_pis(ObstrLyt&                     layout,
-                                                                      search_space_graph<ObstrLyt>& ssg,
+    /**
+     * Checks whether a native-hex gate position offers two distinct projected future output exits.
+     *
+     * Fanouts and 2-output gates require one future branch to leave via south-west and another via south-east. On the
+     * left boundary, the projected south-west neighbor can collapse back onto the gate tile itself, making such a
+     * position structurally impossible before routing is even considered.
+     *
+     * @param layout Layout that defines the hex geometry.
+     * @param center Candidate gate position.
+     * @return ``true`` if the projected south-west and south-east exits are distinct and both differ from `center`.
+     */
+    [[nodiscard]] static bool has_distinct_projected_output_exits(const ObstrLyt&       layout,
+                                                                  const tile<ObstrLyt>& center) noexcept
+    {
+        if constexpr (!is_hexagonal_layout_v<ObstrLyt>)
+        {
+            return true;
+        }
+
+        const auto projected  = layout.below(center);
+        const auto south_west = layout.south_west(projected);
+        const auto south_east = layout.south_east(projected);
+        const auto matches_xy = [](const auto& lhs, const auto& rhs) noexcept
+        { return lhs.x == rhs.x && lhs.y == rhs.y; };
+
+        return !matches_xy(south_west, center) && !matches_xy(south_east, center) &&
+               !matches_xy(south_west, south_east);
+    }
+    /**
+     * Estimates a preferred x-coordinate for the current PI from its earliest upcoming consumer.
+     *
+     * When a PI is placed immediately before a gate that already has another fanin anchored in the partial layout,
+     * placing the PI near that sibling reduces the first gate layer span and avoids wasting the PI search on far-away
+     * top-row candidates. This is especially important for wide, shallow networks on native hex layouts.
+     *
+     * @param ssg Current search-space graph.
+     * @param place_info Placement context of the partial layout.
+     * @return Preferred x-coordinate if an anchored upcoming consumer exists.
+     */
+    [[nodiscard]] std::optional<uint64_t>
+    estimate_preferred_pi_x(const search_space_graph<ObstrLyt>& ssg,
+                            const placement_info<ObstrLyt>&     place_info) const noexcept
+    {
+        if (place_info.current_node >= ssg.nodes_to_place.size())
+        {
+            return std::nullopt;
+        }
+
+        const auto current_pi = ssg.nodes_to_place[place_info.current_node];
+        if (!ssg.network.is_pi(current_pi))
+        {
+            return std::nullopt;
+        }
+
+        const auto placed_nodes_end =
+            ssg.nodes_to_place.cbegin() +
+            static_cast<typename decltype(ssg.nodes_to_place)::difference_type>(place_info.current_node);
+
+        const auto is_placed = [&](const auto& n) noexcept
+        { return std::find(ssg.nodes_to_place.cbegin(), placed_nodes_end, n) != placed_nodes_end; };
+
+        for (uint64_t future_idx = place_info.current_node + 1u; future_idx < ssg.nodes_to_place.size(); ++future_idx)
+        {
+            const auto consumer = ssg.nodes_to_place[future_idx];
+            if (ssg.network.is_pi(consumer) || ssg.network.is_po(consumer) || ssg.network.is_constant(consumer))
+            {
+                continue;
+            }
+
+            const auto fc = fanins(ssg.network, consumer);
+
+            bool                  consumes_current_pi = false;
+            std::vector<uint64_t> sibling_x{};
+            sibling_x.reserve(fc.fanin_nodes.size());
+
+            for (const auto& fin : fc.fanin_nodes)
+            {
+                if (fin == current_pi)
+                {
+                    consumes_current_pi = true;
+                }
+                else if (is_placed(fin))
+                {
+                    sibling_x.push_back(static_cast<tile<ObstrLyt>>(place_info.node2pos[fin]).x);
+                }
+            }
+
+            if (consumes_current_pi && !sibling_x.empty())
+            {
+                const auto preferred_x =
+                    std::accumulate(sibling_x.cbegin(), sibling_x.cend(), uint64_t{0u}) / sibling_x.size();
+                return preferred_x;
+            }
+        }
+
+        return std::nullopt;
+    }
+    [[nodiscard]] coord_vec_type<ObstrLyt> get_possible_positions_pis(ObstrLyt&                       layout,
+                                                                      search_space_graph<ObstrLyt>&   ssg,
+                                                                      const placement_info<ObstrLyt>& place_info,
                                                                       const uint64_t num_expansions) noexcept
     {
         uint64_t count_expansions = 0ul;
@@ -1009,7 +1682,6 @@ class graph_oriented_layout_design_hex_impl
         }
         auto skip_top  = skip_tiles;
         auto skip_left = skip_tiles;
-
         // make sure we have enough margin in both directions.
         const uint64_t resize = skip_tiles + 1;
 
@@ -1085,7 +1757,8 @@ class graph_oriented_layout_design_hex_impl
             max_iterations = layout.y() - min_y;
         }
 
-        uint64_t expansion_limit = (ssg.pi_locs == pi_locations::TOP_AND_LEFT) ? 2 * num_expansions : num_expansions;
+        const auto preferred_pi_x  = estimate_preferred_pi_x(ssg, place_info);
+        uint64_t   expansion_limit = (ssg.pi_locs == pi_locations::TOP_AND_LEFT) ? 2 * num_expansions : num_expansions;
         if constexpr (is_hexagonal_layout_v<ObstrLyt>)
         {
             if (ssg.pi_locs == pi_locations::TOP || ssg.pi_locs == pi_locations::TOP_AND_LEFT)
@@ -1143,12 +1816,42 @@ class graph_oriented_layout_design_hex_impl
             {
                 layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
 
+                if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+                {
+                    if (preferred_pi_x.has_value())
+                    {
+                        std::stable_sort(possible_positions.begin(), possible_positions.end(),
+                                         [&preferred_pi_x](const auto& lhs, const auto& rhs) noexcept
+                                         {
+                                             const auto lhs_dist = lhs.x > *preferred_pi_x ? lhs.x - *preferred_pi_x :
+                                                                                             *preferred_pi_x - lhs.x;
+                                             const auto rhs_dist = rhs.x > *preferred_pi_x ? rhs.x - *preferred_pi_x :
+                                                                                             *preferred_pi_x - rhs.x;
+                                             return lhs_dist == rhs_dist ? lhs.x < rhs.x : lhs_dist < rhs_dist;
+                                         });
+                    }
+                }
                 return possible_positions;
             }
         }
 
         layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
 
+        if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+        {
+            if (preferred_pi_x.has_value())
+            {
+                std::stable_sort(possible_positions.begin(), possible_positions.end(),
+                                 [&preferred_pi_x](const auto& lhs, const auto& rhs) noexcept
+                                 {
+                                     const auto lhs_dist =
+                                         lhs.x > *preferred_pi_x ? lhs.x - *preferred_pi_x : *preferred_pi_x - lhs.x;
+                                     const auto rhs_dist =
+                                         rhs.x > *preferred_pi_x ? rhs.x - *preferred_pi_x : *preferred_pi_x - rhs.x;
+                                     return lhs_dist == rhs_dist ? lhs.x < rhs.x : lhs_dist < rhs_dist;
+                                 });
+            }
+        }
         return possible_positions;
     }
     /**
@@ -1194,7 +1897,7 @@ class graph_oriented_layout_design_hex_impl
 
         if constexpr (is_hexagonal_layout_v<ObstrLyt>)
         {
-            for (uint64_t x = 0u; x <= layout.x(); ++x)
+            for (const auto x : preferred_x_order(layout.x(), pre_t.x))
             {
                 check_tile(x, layout.y());
             }
@@ -1230,8 +1933,9 @@ class graph_oriented_layout_design_hex_impl
      * @return A vector of tiles representing the possible positions for a single fan-in node.
      */
     [[nodiscard]] coord_vec_type<ObstrLyt>
-    get_possible_positions_single_fanin(ObstrLyt& layout, const placement_info<ObstrLyt>& place_info,
-                                        const fanin_container<tec_nt>& fc) noexcept
+    get_possible_positions_single_fanin(ObstrLyt& layout, const search_space_graph<ObstrLyt>& ssg,
+                                        const placement_info<ObstrLyt>& place_info,
+                                        const fanin_container<tec_nt>&  fc) noexcept
     {
         coord_vec_type<ObstrLyt> possible_positions{};
         possible_positions.reserve(ps.num_vertex_expansions);
@@ -1239,8 +1943,9 @@ class graph_oriented_layout_design_hex_impl
         uint64_t count_expansions = 0ul;
         uint64_t resize           = 0ul;
 
-        const auto& pre   = fc.fanin_nodes[0];
-        const auto  pre_t = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre]);
+        const auto& pre          = fc.fanin_nodes[0];
+        const auto  pre_t        = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre]);
+        const auto  current_node = ssg.nodes_to_place[place_info.current_node];
 
         if constexpr (is_hexagonal_layout_v<ObstrLyt>)
         {
@@ -1251,6 +1956,24 @@ class graph_oriented_layout_design_hex_impl
         // check if path from previous tile to new tile and from new tile to bottom row exists
         const auto check_tile = [&](const tile<ObstrLyt>& new_pos) noexcept
         {
+            if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+            {
+                if ((ssg.network.is_fanout(current_node) || (ssg.network.is_multioutput(current_node) &&
+                                                             (node_num_outputs(ssg.network, current_node) > 1u))) &&
+                    !has_distinct_projected_output_exits(layout, new_pos))
+                {
+                    return;
+                }
+
+                if (should_prioritize_search_depth() &&
+                    (ssg.network.is_fanout(current_node) || (ssg.network.is_multioutput(current_node) &&
+                                                             (node_num_outputs(ssg.network, current_node) > 1u))) &&
+                    new_pos.x < 4u && new_pos.y >= 4u)
+                {
+                    return;
+                }
+            }
+
             const auto check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(pre_t));
 
             if (!check_path(layout, pre_t, new_pos, new_gate_location::DEST, check_straight_inverter).empty())
@@ -1325,8 +2048,9 @@ class graph_oriented_layout_design_hex_impl
      * @return A vector of tiles representing the possible positions for a double fan-in node.
      */
     [[nodiscard]] coord_vec_type<ObstrLyt>
-    get_possible_positions_double_fanin(ObstrLyt& layout, const placement_info<ObstrLyt>& place_info,
-                                        const fanin_container<tec_nt>& fc) noexcept
+    get_possible_positions_double_fanin(ObstrLyt& layout, const search_space_graph<ObstrLyt>& ssg,
+                                        const placement_info<ObstrLyt>& place_info,
+                                        const fanin_container<tec_nt>&  fc) noexcept
     {
         coord_vec_type<ObstrLyt> possible_positions{};
         possible_positions.reserve(ps.num_vertex_expansions);
@@ -1336,9 +2060,10 @@ class graph_oriented_layout_design_hex_impl
         const auto& pre1 = fc.fanin_nodes[0];
         const auto& pre2 = fc.fanin_nodes[1];
 
-        const auto     pre1_t     = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre1]);
-        const auto     pre2_t     = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre2]);
-        const uint64_t fanin_span = pre1_t.x > pre2_t.x ? pre1_t.x - pre2_t.x : pre2_t.x - pre1_t.x;
+        const auto     pre1_t       = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre1]);
+        const auto     pre2_t       = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre2]);
+        const uint64_t fanin_span   = pre1_t.x > pre2_t.x ? pre1_t.x - pre2_t.x : pre2_t.x - pre1_t.x;
+        const auto     current_node = ssg.nodes_to_place[place_info.current_node];
 
         const auto min_x = std::max(pre1_t.x, pre2_t.x) + (pre1_t.x == pre2_t.x ? 1 : 0);
         const auto min_y = std::max(pre1_t.y, pre2_t.y) + (pre1_t.y == pre2_t.y ? 1 : 0);
@@ -1352,6 +2077,24 @@ class graph_oriented_layout_design_hex_impl
         // check if path from previous tiles to new tile and from new tile to bottom row exists
         auto check_tile = [&](const tile<ObstrLyt>& new_pos)
         {
+            if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+            {
+                if ((ssg.network.is_fanout(current_node) || (ssg.network.is_multioutput(current_node) &&
+                                                             (node_num_outputs(ssg.network, current_node) > 1u))) &&
+                    !has_distinct_projected_output_exits(layout, new_pos))
+                {
+                    return;
+                }
+
+                if (should_prioritize_search_depth() &&
+                    (ssg.network.is_fanout(current_node) || (ssg.network.is_multioutput(current_node) &&
+                                                             (node_num_outputs(ssg.network, current_node) > 1u))) &&
+                    new_pos.x < 4u && new_pos.y >= 4u)
+                {
+                    return;
+                }
+            }
+
             auto check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(pre1_t));
 
             const auto path = check_path(layout, pre1_t, new_pos, new_gate_location::DEST, check_straight_inverter);
@@ -1434,6 +2177,141 @@ class graph_oriented_layout_design_hex_impl
         return possible_positions;
     }
     /**
+     * Diagnoses why native-hex double-fanin candidate generation produced no feasible positions.
+     *
+     * This helper mirrors the double-fanin candidate scan and is only used on the rare zero-candidate path, which
+     * keeps the normal search behavior unchanged while providing actionable failure details.
+     *
+     * @param layout Current partial layout.
+     * @param ssg Search-space graph containing the active node.
+     * @param place_info Placement context for the active branch.
+     * @param fc Fanin information for the active node.
+     * @return A compact summary of rejection counts for the scanned candidate positions.
+     */
+    [[nodiscard]] std::string diagnose_zero_candidates_double_fanin(ObstrLyt&                           layout,
+                                                                    const search_space_graph<ObstrLyt>& ssg,
+                                                                    const placement_info<ObstrLyt>&     place_info,
+                                                                    const fanin_container<tec_nt>&      fc) noexcept
+    {
+        if constexpr (!is_hexagonal_layout_v<ObstrLyt>)
+        {
+            return "unknown";
+        }
+
+        const auto&    pre1         = fc.fanin_nodes[0];
+        const auto&    pre2         = fc.fanin_nodes[1];
+        const auto     pre1_t       = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre1]);
+        const auto     pre2_t       = static_cast<tile<ObstrLyt>>(place_info.node2pos[pre2]);
+        const auto     fanin_span   = pre1_t.x > pre2_t.x ? pre1_t.x - pre2_t.x : pre2_t.x - pre1_t.x;
+        const auto     current_node = ssg.nodes_to_place[place_info.current_node];
+        const auto     min_hex_y    = std::max(pre1_t.y, pre2_t.y) + 1u;
+        const auto     preferred_x  = (pre1_t.x + pre2_t.x) / 2u;
+        const auto     candidate_x  = preferred_x_order(layout.x(), preferred_x);
+        const uint64_t resize =
+            std::max<uint64_t>(1u, std::max<uint64_t>(ps.num_vertex_expansions, (fanin_span + 1u) / 2u));
+
+        uint64_t checked                     = 0u;
+        uint64_t left_margin_rejects         = 0u;
+        uint64_t distinct_exit_rejects       = 0u;
+        uint64_t first_path_rejects          = 0u;
+        uint64_t second_path_rejects         = 0u;
+        uint64_t bottom_path_rejects         = 0u;
+        uint64_t accepted                    = 0u;
+        uint64_t swapped_first_path_rejects  = 0u;
+        uint64_t swapped_second_path_rejects = 0u;
+        uint64_t swapped_bottom_path_rejects = 0u;
+        uint64_t swapped_accepted            = 0u;
+
+        layout.resize({layout.x() + resize, layout.y() + resize, layout.z()});
+
+        for (uint64_t y = min_hex_y; y <= layout.y(); ++y)
+        {
+            for (const auto x : candidate_x)
+            {
+                const tile<ObstrLyt> new_pos{x, y, 0};
+                ++checked;
+
+                if ((ssg.network.is_fanout(current_node) || (ssg.network.is_multioutput(current_node) &&
+                                                             (node_num_outputs(ssg.network, current_node) > 1u))) &&
+                    !has_distinct_projected_output_exits(layout, new_pos))
+                {
+                    ++distinct_exit_rejects;
+                    continue;
+                }
+
+                if (should_prioritize_search_depth() &&
+                    (ssg.network.is_fanout(current_node) || (ssg.network.is_multioutput(current_node) &&
+                                                             (node_num_outputs(ssg.network, current_node) > 1u))) &&
+                    new_pos.x < 4u && new_pos.y >= 4u)
+                {
+                    ++left_margin_rejects;
+                    continue;
+                }
+
+                const auto try_order = [&](const tile<ObstrLyt>& first_t, const tile<ObstrLyt>& second_t,
+                                           uint64_t& first_rejects, uint64_t& second_rejects, uint64_t& bottom_rejects,
+                                           uint64_t& order_accepted)
+                {
+                    auto check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(first_t));
+                    const auto path_1 =
+                        check_path(layout, first_t, new_pos, new_gate_location::DEST, check_straight_inverter);
+                    if (path_1.empty())
+                    {
+                        ++first_rejects;
+                        return;
+                    }
+
+                    for (const auto& el : path_1)
+                    {
+                        layout.obstruct_coordinate(el);
+                    }
+
+                    check_straight_inverter = ps.straight_inverters && layout.is_inv(layout.get_node(second_t));
+                    const auto path_2 =
+                        check_path(layout, second_t, new_pos, new_gate_location::DEST, check_straight_inverter);
+                    if (path_2.empty())
+                    {
+                        ++second_rejects;
+                        for (const auto& el : path_1)
+                        {
+                            layout.clear_obstructed_coordinate(el);
+                        }
+                        return;
+                    }
+
+                    layout.resize({layout.x() + 1, layout.y() + 1, 1});
+                    if (!has_path_to_bottom_row(layout, new_pos, new_gate_location::SRC))
+                    {
+                        ++bottom_rejects;
+                    }
+                    else
+                    {
+                        ++order_accepted;
+                    }
+                    layout.resize({layout.x() - 1, layout.y() - 1, 1});
+
+                    for (const auto& el : path_1)
+                    {
+                        layout.clear_obstructed_coordinate(el);
+                    }
+                };
+
+                try_order(pre1_t, pre2_t, first_path_rejects, second_path_rejects, bottom_path_rejects, accepted);
+                try_order(pre2_t, pre1_t, swapped_first_path_rejects, swapped_second_path_rejects,
+                          swapped_bottom_path_rejects, swapped_accepted);
+            }
+        }
+
+        layout.resize({layout.x() - resize, layout.y() - resize, layout.z()});
+
+        return fmt::format("checked={} accepted={} left_margin={} distinct_exit={} first_path={} second_path={} "
+                           "bottom_path={} swapped_accepted={} swapped_first_path={} swapped_second_path={} "
+                           "swapped_bottom_path={}",
+                           checked, accepted, left_margin_rejects, distinct_exit_rejects, first_path_rejects,
+                           second_path_rejects, bottom_path_rejects, swapped_accepted, swapped_first_path_rejects,
+                           swapped_second_path_rejects, swapped_bottom_path_rejects);
+    }
+    /**
      * Retrieves the possible positions for a given node in the layout based on its type and preceding nodes.
      * It determines the type of the node (PI, PO, single fan-in, double fan-in) and returns the corresponding
      * possible positions.
@@ -1451,7 +2329,7 @@ class graph_oriented_layout_design_hex_impl
 
         if (ssg.network.is_pi(ssg.nodes_to_place[place_info.current_node]))
         {
-            return get_possible_positions_pis(layout, ssg, ssg.network.num_pis());
+            return get_possible_positions_pis(layout, ssg, place_info, ssg.network.num_pis());
         }
         if (ssg.network.is_po(ssg.nodes_to_place[place_info.current_node]))
         {
@@ -1459,10 +2337,10 @@ class graph_oriented_layout_design_hex_impl
         }
         if (fc.fanin_nodes.size() == 1)
         {
-            return get_possible_positions_single_fanin(layout, place_info, fc);
+            return get_possible_positions_single_fanin(layout, ssg, place_info, fc);
         }
 
-        return get_possible_positions_double_fanin(layout, place_info, fc);
+        return get_possible_positions_double_fanin(layout, ssg, place_info, fc);
     }
     /**
      * Validates the given layout based on the nodes in the network and their mappings in the node dictionary.
@@ -1475,8 +2353,23 @@ class graph_oriented_layout_design_hex_impl
      * @param ssg The search space graph.
      */
     [[nodiscard]] bool valid_layout(ObstrLyt& layout, const search_space_graph<ObstrLyt>& ssg,
-                                    const placement_info<ObstrLyt>& place_info) noexcept
+                                    const placement_info<ObstrLyt>& place_info,
+                                    mockturtle::node<tec_nt>*       failing_node   = nullptr,
+                                    std::string*                    failing_detail = nullptr) noexcept
     {
+        const auto fail = [&](const mockturtle::node<tec_nt>& node, const std::string& detail) noexcept
+        {
+            if (failing_node != nullptr)
+            {
+                *failing_node = node;
+            }
+            if (failing_detail != nullptr)
+            {
+                *failing_detail = detail;
+            }
+            return false;
+        };
+
         const auto check_tile = [&](const auto& t) noexcept
         {
             layout.resize({layout.x() + 1, layout.y() + 1, 1});
@@ -1492,6 +2385,93 @@ class graph_oriented_layout_design_hex_impl
                    (layout.is_empty_tile({t.x, t.y, 1}) && !layout.is_obstructed_coordinate({t.x, t.y, 1}));
         };
 
+        const auto classify_layout_tile = [&](const auto& t) noexcept
+        {
+            if (layout.is_empty_tile(t))
+            {
+                if (layout.is_obstructed_coordinate({t.x, t.y, 1}))
+                {
+                    return std::string{"cross"};
+                }
+
+                return std::string{"empty"};
+            }
+
+            const auto node = layout.get_node(t);
+
+            if (layout.is_pi(node))
+            {
+                return std::string{"pi"};
+            }
+            if (layout.is_po(node))
+            {
+                return std::string{"po"};
+            }
+            if (layout.is_fanout(node))
+            {
+                return std::string{"fanout"};
+            }
+            if (layout.is_wire(node))
+            {
+                return std::string{"wire"};
+            }
+            if (layout.is_inv(node))
+            {
+                return std::string{"inv"};
+            }
+            if (layout.is_and(node))
+            {
+                return std::string{"and"};
+            }
+            if (layout.is_or(node))
+            {
+                return std::string{"or"};
+            }
+            if (layout.is_xor(node))
+            {
+                return std::string{"xor"};
+            }
+
+            return std::string{"gate"};
+        };
+        const auto describe_local_neighborhood = [&](const tile<ObstrLyt>& center) noexcept
+        {
+            std::string description{"["};
+            bool        first_entry = true;
+
+            const auto min_x = center.x > 2u ? center.x - 2u : 0u;
+            const auto min_y = center.y > 1u ? center.y - 1u : 0u;
+            const auto max_x = std::min<uint64_t>(layout.x(), center.x + 2u);
+            const auto max_y = std::min<uint64_t>(layout.y(), center.y + 2u);
+
+            for (uint64_t y = min_y; y <= max_y; ++y)
+            {
+                for (uint64_t x = min_x; x <= max_x; ++x)
+                {
+                    const tile<ObstrLyt> tile{x, y, 0};
+                    const auto           signature = classify_layout_tile(tile);
+
+                    if (signature == "empty")
+                    {
+                        continue;
+                    }
+
+                    if (!first_entry)
+                    {
+                        description.append(",");
+                    }
+
+                    first_entry = false;
+                    description.append(
+                        fmt::format("({:+d},{:+d})={}", static_cast<int64_t>(x) - static_cast<int64_t>(center.x),
+                                    static_cast<int64_t>(y) - static_cast<int64_t>(center.y), signature));
+                }
+            }
+
+            description.push_back(']');
+            return description;
+        };
+
         for (uint64_t node = 0ul; node < place_info.current_node; node++)
         {
             const auto layout_tile  = static_cast<tile<ObstrLyt>>(place_info.node2pos[ssg.nodes_to_place[node]]);
@@ -1505,7 +2485,7 @@ class graph_oriented_layout_design_hex_impl
                 if (usage.inconsistent_pin_launch || usage.other_fanouts != 0u || usage.south_west_fanouts > 1u ||
                     usage.south_east_fanouts > 1u)
                 {
-                    return false;
+                    return fail(network_node, "multioutput_launch_conflict");
                 }
 
                 const tile<ObstrLyt> south_west_tile{layout.south_west(projected).x, layout.south_west(projected).y, 0};
@@ -1519,7 +2499,9 @@ class graph_oriented_layout_design_hex_impl
                     {
                         if (!(south_west_available && south_east_available))
                         {
-                            return false;
+                            return fail(network_node, fmt::format("multioutput_missing_dual_exits sw={} se={}",
+                                                                  classify_layout_tile(south_west_tile),
+                                                                  classify_layout_tile(south_east_tile)));
                         }
                         break;
                     }
@@ -1531,7 +2513,9 @@ class graph_oriented_layout_design_hex_impl
                         if (!((used_south_west && !used_south_east && south_east_available) ||
                               (!used_south_west && used_south_east && south_west_available)))
                         {
-                            return false;
+                            return fail(network_node, fmt::format("multioutput_missing_remaining_exit sw={} se={}",
+                                                                  classify_layout_tile(south_west_tile),
+                                                                  classify_layout_tile(south_east_tile)));
                         }
                         break;
                     }
@@ -1539,13 +2523,13 @@ class graph_oriented_layout_design_hex_impl
                     {
                         if (!(usage.south_west_fanouts == 1u && usage.south_east_fanouts == 1u))
                         {
-                            return false;
+                            return fail(network_node, "multioutput_duplicate_exit");
                         }
                         break;
                     }
                     default:
                     {
-                        return false;
+                        return fail(network_node, "multioutput_invalid_state");
                     }
                 }
             }
@@ -1557,9 +2541,41 @@ class graph_oriented_layout_design_hex_impl
 
             if (no_fanout_and_not_po || one_dangling_fanout)
             {
+                if (one_dangling_fanout)
+                {
+                    const auto usage = collect_fanout_launch_usage(layout, layout_tile);
+
+                    const tile<ObstrLyt> south_west_tile{layout.south_west(projected).x, layout.south_west(projected).y,
+                                                         0};
+                    const tile<ObstrLyt> south_east_tile{layout.south_east(projected).x, layout.south_east(projected).y,
+                                                         0};
+                    const bool           south_west_available = is_empty_tile_or_crossable(south_west_tile);
+                    const bool           south_east_available = is_empty_tile_or_crossable(south_east_tile);
+
+                    if ((usage.south_west_fanouts == 1u) && (usage.south_east_fanouts == 0u) && !south_east_available)
+                    {
+                        return fail(network_node,
+                                    fmt::format("fanout_missing_remaining_exit center=({}, {}) used=sw sw={} se={} "
+                                                "ctx={}",
+                                                layout_tile.x, layout_tile.y, classify_layout_tile(south_west_tile),
+                                                classify_layout_tile(south_east_tile),
+                                                describe_local_neighborhood(layout_tile)));
+                    }
+                    if ((usage.south_east_fanouts == 1u) && (usage.south_west_fanouts == 0u) && !south_west_available)
+                    {
+                        return fail(network_node,
+                                    fmt::format("fanout_missing_remaining_exit center=({}, {}) used=se sw={} se={} "
+                                                "ctx={}",
+                                                layout_tile.x, layout_tile.y, classify_layout_tile(south_west_tile),
+                                                classify_layout_tile(south_east_tile),
+                                                describe_local_neighborhood(layout_tile)));
+                    }
+                }
+
                 if (!check_tile(layout_tile))
                 {
-                    return false;
+                    return fail(network_node, fmt::format("no_bottom_path center=({}, {}) ctx={}", layout_tile.x,
+                                                          layout_tile.y, describe_local_neighborhood(layout_tile)));
                 }
 
                 const bool check_straight_inverter =
@@ -1575,11 +2591,11 @@ class graph_oriented_layout_design_hex_impl
                     const auto fanin = layout.incoming_data_flow(layout_tile).front();
                     if ((fanin.x <= layout_tile.x) && !is_empty_tile_or_crossable(south_east_tile))
                     {
-                        return false;
+                        return fail(network_node, "straight_inverter_exit_blocked");
                     }
                     if ((fanin.x >= layout_tile.x) && !is_empty_tile_or_crossable(south_west_tile))
                     {
-                        return false;
+                        return fail(network_node, "straight_inverter_exit_blocked");
                     }
                 }
             }
@@ -1591,10 +2607,21 @@ class graph_oriented_layout_design_hex_impl
             {
                 const tile<ObstrLyt> south_west_tile{layout.south_west(projected).x, layout.south_west(projected).y, 0};
                 const tile<ObstrLyt> south_east_tile{layout.south_east(projected).x, layout.south_east(projected).y, 0};
+                const auto           south_west_incoming_to_fanout =
+                    layout.is_incoming_signal(layout_tile, static_cast<typename ObstrLyt::signal>(south_west_tile));
+                const auto south_east_incoming_to_fanout =
+                    layout.is_incoming_signal(layout_tile, static_cast<typename ObstrLyt::signal>(south_east_tile));
 
                 if (!(is_empty_tile_or_crossable(south_west_tile) && is_empty_tile_or_crossable(south_east_tile)))
                 {
-                    return false;
+                    return fail(
+                        network_node,
+                        fmt::format("fanout_missing_dual_exits center=({}, {}) sw=({}, {})={} se=({}, {})={} "
+                                    "sw_in={} se_in={} ctx={}",
+                                    layout_tile.x, layout_tile.y, south_west_tile.x, south_west_tile.y,
+                                    classify_layout_tile(south_west_tile), south_east_tile.x, south_east_tile.y,
+                                    classify_layout_tile(south_east_tile), south_west_incoming_to_fanout ? 1 : 0,
+                                    south_east_incoming_to_fanout ? 1 : 0, describe_local_neighborhood(layout_tile)));
                 }
             }
         }
@@ -1710,7 +2737,8 @@ class graph_oriented_layout_design_hex_impl
                                                       placement_info<ObstrLyt>&     place_info) noexcept
     {
         // vector to store preceding nodes
-        const auto fc = fanins(ssg.network, ssg.nodes_to_place[place_info.current_node]);
+        const auto current_node = ssg.nodes_to_place[place_info.current_node];
+        const auto fc           = fanins(ssg.network, current_node);
 
         if (position.x > layout.x())
         {
@@ -1721,11 +2749,10 @@ class graph_oriented_layout_design_hex_impl
             layout.resize({layout.x(), position.y, layout.z()});
         }
 
-        if (ssg.network.is_pi(ssg.nodes_to_place[place_info.current_node]))
+        if (ssg.network.is_pi(current_node))
         {
             // place primary input node
-            place_info.node2pos[ssg.nodes_to_place[place_info.current_node]] =
-                layout.move_node(place_info.pi2node[ssg.nodes_to_place[place_info.current_node]], position);
+            place_info.node2pos[current_node] = layout.move_node(place_info.pi2node[current_node], position);
         }
         else if (fc.fanin_nodes.size() == 1)
         {
@@ -1734,15 +2761,14 @@ class graph_oriented_layout_design_hex_impl
             src.output      = fc.fanin_signals[0].output;
 
             // place single input node
-            if (ssg.network.is_po(ssg.nodes_to_place[place_info.current_node]))
+            if (ssg.network.is_po(current_node))
             {
-                place_info.node2pos[ssg.nodes_to_place[place_info.current_node]] =
+                place_info.node2pos[current_node] =
                     layout.create_po(src, fmt::format("po{}", place_info.current_po++), position);
             }
             else
             {
-                place_info.node2pos[ssg.nodes_to_place[place_info.current_node]] =
-                    place(layout, position, ssg.network, ssg.nodes_to_place[place_info.current_node], src);
+                place_info.node2pos[current_node] = place(layout, position, ssg.network, current_node, src);
             }
 
             if (!route_single_input_node(position, layout, place_info.node2pos, fc))
@@ -1761,8 +2787,8 @@ class graph_oriented_layout_design_hex_impl
             auto a2   = place_info.node2pos[pre2];
             a2.output = fc.fanin_signals[1].output;
 
-            place_info.node2pos[ssg.nodes_to_place[place_info.current_node]] = place(
-                layout, position, ssg.network, ssg.nodes_to_place[place_info.current_node], a1, a2, fc.constant_fanin);
+            place_info.node2pos[current_node] =
+                place(layout, position, ssg.network, current_node, a1, a2, fc.constant_fanin);
 
             if (!route_double_input_node(position, layout, place_info.node2pos, fc))
             {
@@ -1780,6 +2806,7 @@ class graph_oriented_layout_design_hex_impl
         {
             max_placed_nodes = place_info.current_node;
         }
+        ssg.max_placed_nodes = std::max(ssg.max_placed_nodes, place_info.current_node);
 
         return found_solution;
     }
@@ -2071,8 +3098,8 @@ class graph_oriented_layout_design_hex_impl
         std::vector<std::pair<coord_vec_type<ObstrLyt>, double>> next_positions;
         next_positions.reserve(2 * ps.num_vertex_expansions);
 
-        static constexpr double preferred_pi_order_penalty_weight = 0.5;
-        static constexpr double preferred_po_order_penalty_weight = 0.5;
+        const double preferred_pi_order_penalty_weight = ps.input_pin_order.empty() ? 0.5 : 0.1;
+        const double preferred_po_order_penalty_weight = ps.output_pin_order.empty() ? 0.5 : 0.1;
 
         for (const auto& position : possible_positions)
         {
@@ -2154,6 +3181,7 @@ class graph_oriented_layout_design_hex_impl
             const auto placement_result = place_and_route(position, layout, ssg, place_info);
             if (!placement_result.has_value())
             {
+                record_branch_failure(ssg, place_info, branch_failure_reason::ROUTE_FAILURE);
                 return {{}, std::nullopt};
             }
 
@@ -2350,13 +3378,33 @@ class graph_oriented_layout_design_hex_impl
             // check if it's the last position in the current vertex
             if (idx == (ssg.current_vertex.size() - 1))
             {
-                if (!valid_layout(layout, ssg, place_info))
+                mockturtle::node<tec_nt> failing_node{};
+                std::string              failing_detail = "unknown";
+                if (!valid_layout(layout, ssg, place_info, &failing_node, &failing_detail))
                 {
+                    record_branch_failure(ssg, place_info, branch_failure_reason::INVALID_LAYOUT, failing_node,
+                                          failing_detail);
                     return {{}, std::nullopt};
                 }
 
                 possible_positions = get_possible_positions(layout, ssg, place_info);
             }
+        }
+
+        if (possible_positions.empty() && place_info.current_node < ssg.nodes_to_place.size())
+        {
+            std::string detail = "unknown";
+            if constexpr (is_hexagonal_layout_v<ObstrLyt>)
+            {
+                const auto current_node = ssg.nodes_to_place[place_info.current_node];
+                const auto fc           = fanins(ssg.network, current_node);
+                if (fc.fanin_nodes.size() == 2u)
+                {
+                    detail = diagnose_zero_candidates_double_fanin(layout, ssg, place_info, fc);
+                }
+            }
+
+            record_branch_failure(ssg, place_info, branch_failure_reason::ZERO_CANDIDATES, std::nullopt, detail);
         }
 
         return generate_next_positions(possible_positions, layout, ssg);
@@ -2477,6 +3525,13 @@ class graph_oriented_layout_design_hex_impl
             {
                 return;
             }
+            if (!ps.input_pin_order.empty())
+            {
+                // Explicit PI order lists are intended as soft search preferences. Reordering the entire PI scheduling
+                // sequence up-front makes them much stronger than that and can severely distort large native hex
+                // searches. Keep the original topo-driven PI schedule and let the penalty term bias candidate ranking.
+                return;
+            }
 
             using node_t = typename std::decay_t<decltype(nodes_to_place)>::value_type;
 
@@ -2543,6 +3598,11 @@ class graph_oriented_layout_design_hex_impl
                 ssg_vec[base_index + (1 * num_possible_pi_locations) + i].nodes_to_place = breadth_ci_nodes;
                 ssg_vec[base_index + (2 * num_possible_pi_locations) + i].nodes_to_place = depth_co_nodes;
                 ssg_vec[base_index + (3 * num_possible_pi_locations) + i].nodes_to_place = depth_ci_nodes;
+
+                ssg_vec[base_index + (0 * num_possible_pi_locations) + i].debug_label = "breadth_co_to_ci";
+                ssg_vec[base_index + (1 * num_possible_pi_locations) + i].debug_label = "breadth_ci_to_co";
+                ssg_vec[base_index + (2 * num_possible_pi_locations) + i].debug_label = "depth_co_to_ci";
+                ssg_vec[base_index + (3 * num_possible_pi_locations) + i].debug_label = "depth_ci_to_co";
             }
         };
 
@@ -2558,6 +3618,15 @@ class graph_oriented_layout_design_hex_impl
         prepare_nodes_to_place(network_breadth_co_to_ci, nodes_to_place_breadth_co_to_ci);
         reorder_pi_nodes(network_breadth_co_to_ci, nodes_to_place_breadth_co_to_ci);
 
+        if (should_prioritize_search_depth())
+        {
+            ssg_vec[0].network        = network_breadth_co_to_ci;
+            ssg_vec[0].nodes_to_place = nodes_to_place_breadth_co_to_ci;
+            ssg_vec[0].cost           = ps.cost;
+            ssg_vec[0].debug_label    = "breadth_co_to_ci";
+            return;
+        }
+
         // set initial cost
         for (uint64_t i = 0; i < num_search_space_graphs_high_efficiency; ++i)
         {
@@ -2567,7 +3636,7 @@ class graph_oriented_layout_design_hex_impl
         }
 
         // further network and nodes initialization for high-, highest-, and maximum-effort
-        if (ps.mode != graph_oriented_layout_design_params::effort_mode::HIGH_EFFICIENCY)
+        if (num_search_space_graphs > num_search_space_graphs_high_efficiency)
         {
             params.strategy = fanout_substitution_params::substitution_strategy::DEPTH;
             mockturtle::fanout_view network_substituted_depth{fanout_substitution<tec_nt>(ntk, params)};
@@ -2597,6 +3666,17 @@ class graph_oriented_layout_design_hex_impl
                                       nodes_to_place_breadth_ci_to_co, nodes_to_place_depth_co_to_ci,
                                       nodes_to_place_depth_ci_to_co);
 
+            if (should_use_search_depth_pilot())
+            {
+                set_costs(0, num_search_space_graphs_high_effort, ps.cost);
+                return;
+            }
+
+            const std::array core_objectives = {graph_oriented_layout_design_params::cost_objective::AREA,
+                                                graph_oriented_layout_design_params::cost_objective::WIRES,
+                                                graph_oriented_layout_design_params::cost_objective::CROSSINGS,
+                                                graph_oriented_layout_design_params::cost_objective::ACP};
+
             if (ps.mode != graph_oriented_layout_design_params::effort_mode::HIGH_EFFORT)
             {
                 for (uint64_t j = num_search_space_graphs_high_effort;
@@ -2619,70 +3699,57 @@ class graph_oriented_layout_design_hex_impl
 
                 if (ps.mode != graph_oriented_layout_design_params::effort_mode::HIGHEST_EFFORT)
                 {
-                    params.strategy = fanout_substitution_params::substitution_strategy::RANDOM;
-                    params.seed     = seed;
-                    mockturtle::fanout_view network_substituted_random{fanout_substitution<tec_nt>(ntk, params)};
+                    const auto has_custom_cost = ps.cost == graph_oriented_layout_design_params::cost_objective::CUSTOM;
+                    const auto objective_count = core_objectives.size() + static_cast<std::uint64_t>(has_custom_cost);
+                    const auto random_base_offset = has_custom_cost ? num_search_space_graphs_highest_effort_custom :
+                                                                      num_search_space_graphs_highest_effort;
 
-                    topo_view_co_to_ci_random<decltype(network_substituted_random)> network_breadth_co_to_ci_random{
-                        network_substituted_random, seed};
-                    topo_view_ci_to_co_random<decltype(network_substituted_random)> network_breadth_ci_to_co_random{
-                        network_substituted_random, seed};
-                    topo_view_co_to_ci_random<decltype(network_substituted_random)> network_depth_co_to_ci_random{
-                        network_substituted_random, seed};
-                    topo_view_ci_to_co_random<decltype(network_substituted_random)> network_depth_ci_to_co_random{
-                        network_substituted_random, seed};
-
-                    // prepare nodes to place for additional networks
-                    std::vector<mockturtle::node<decltype(network_breadth_co_to_ci_random)>>
-                        nodes_to_place_breadth_co_to_ci_random{};
-                    std::vector<mockturtle::node<decltype(network_breadth_ci_to_co_random)>>
-                        nodes_to_place_breadth_ci_to_co_random{};
-                    std::vector<mockturtle::node<decltype(network_depth_co_to_ci_random)>>
-                        nodes_to_place_depth_co_to_ci_random{};
-                    std::vector<mockturtle::node<decltype(network_depth_ci_to_co_random)>>
-                        nodes_to_place_depth_ci_to_co_random{};
-
-                    prepare_nodes_to_place(network_breadth_co_to_ci_random, nodes_to_place_breadth_co_to_ci_random);
-                    prepare_nodes_to_place(network_breadth_ci_to_co_random, nodes_to_place_breadth_ci_to_co_random);
-                    prepare_nodes_to_place(network_depth_co_to_ci_random, nodes_to_place_depth_co_to_ci_random);
-                    prepare_nodes_to_place(network_depth_ci_to_co_random, nodes_to_place_depth_ci_to_co_random);
-                    reorder_pi_nodes(network_breadth_co_to_ci_random, nodes_to_place_breadth_co_to_ci_random);
-                    reorder_pi_nodes(network_breadth_ci_to_co_random, nodes_to_place_breadth_ci_to_co_random);
-                    reorder_pi_nodes(network_depth_co_to_ci_random, nodes_to_place_depth_co_to_ci_random);
-                    reorder_pi_nodes(network_depth_ci_to_co_random, nodes_to_place_depth_ci_to_co_random);
-
-                    if (ps.cost != graph_oriented_layout_design_params::cost_objective::CUSTOM)
+                    for (uint64_t objective_slot = 0u; objective_slot < objective_count; ++objective_slot)
                     {
-                        for (uint64_t j = num_search_space_graphs_highest_effort;
-                             j <= (num_search_space_graphs_maximum_effort - num_search_space_graphs_high_effort);
-                             j += num_search_space_graphs_high_effort)
-                        {
-                            assign_networks_and_nodes(
-                                j, network_breadth_co_to_ci_random, network_breadth_ci_to_co_random,
-                                network_depth_co_to_ci_random, network_depth_ci_to_co_random,
-                                nodes_to_place_breadth_co_to_ci_random, nodes_to_place_breadth_ci_to_co_random,
-                                nodes_to_place_depth_co_to_ci_random, nodes_to_place_depth_ci_to_co_random);
-                        }
-                    }
-                    else
-                    {
-                        for (uint64_t j = num_search_space_graphs_highest_effort_custom;
-                             j <= (num_search_space_graphs_maximum_effort_custom - num_search_space_graphs_high_effort);
-                             j += num_search_space_graphs_high_effort)
-                        {
-                            assign_networks_and_nodes(
-                                j, network_breadth_co_to_ci_random, network_breadth_ci_to_co_random,
-                                network_depth_co_to_ci_random, network_depth_ci_to_co_random,
-                                nodes_to_place_breadth_co_to_ci_random, nodes_to_place_breadth_ci_to_co_random,
-                                nodes_to_place_depth_co_to_ci_random, nodes_to_place_depth_ci_to_co_random);
-                        }
+                        const auto random_seed = seed + static_cast<std::uint32_t>(objective_slot);
+
+                        params.strategy = fanout_substitution_params::substitution_strategy::RANDOM;
+                        params.seed     = random_seed;
+
+                        mockturtle::fanout_view network_substituted_random{fanout_substitution<tec_nt>(ntk, params)};
+
+                        topo_view_co_to_ci_random<decltype(network_substituted_random)> network_breadth_co_to_ci_random{
+                            network_substituted_random, random_seed};
+                        topo_view_ci_to_co_random<decltype(network_substituted_random)> network_breadth_ci_to_co_random{
+                            network_substituted_random, random_seed};
+                        topo_view_co_to_ci_random<decltype(network_substituted_random)> network_depth_co_to_ci_random{
+                            network_substituted_random, random_seed};
+                        topo_view_ci_to_co_random<decltype(network_substituted_random)> network_depth_ci_to_co_random{
+                            network_substituted_random, random_seed};
+
+                        // prepare nodes to place for additional networks
+                        std::vector<mockturtle::node<decltype(network_breadth_co_to_ci_random)>>
+                            nodes_to_place_breadth_co_to_ci_random{};
+                        std::vector<mockturtle::node<decltype(network_breadth_ci_to_co_random)>>
+                            nodes_to_place_breadth_ci_to_co_random{};
+                        std::vector<mockturtle::node<decltype(network_depth_co_to_ci_random)>>
+                            nodes_to_place_depth_co_to_ci_random{};
+                        std::vector<mockturtle::node<decltype(network_depth_ci_to_co_random)>>
+                            nodes_to_place_depth_ci_to_co_random{};
+
+                        prepare_nodes_to_place(network_breadth_co_to_ci_random, nodes_to_place_breadth_co_to_ci_random);
+                        prepare_nodes_to_place(network_breadth_ci_to_co_random, nodes_to_place_breadth_ci_to_co_random);
+                        prepare_nodes_to_place(network_depth_co_to_ci_random, nodes_to_place_depth_co_to_ci_random);
+                        prepare_nodes_to_place(network_depth_ci_to_co_random, nodes_to_place_depth_ci_to_co_random);
+                        reorder_pi_nodes(network_breadth_co_to_ci_random, nodes_to_place_breadth_co_to_ci_random);
+                        reorder_pi_nodes(network_breadth_ci_to_co_random, nodes_to_place_breadth_ci_to_co_random);
+                        reorder_pi_nodes(network_depth_co_to_ci_random, nodes_to_place_depth_co_to_ci_random);
+                        reorder_pi_nodes(network_depth_ci_to_co_random, nodes_to_place_depth_ci_to_co_random);
+
+                        assign_networks_and_nodes(
+                            random_base_offset + objective_slot * num_search_space_graphs_high_effort,
+                            network_breadth_co_to_ci_random, network_breadth_ci_to_co_random,
+                            network_depth_co_to_ci_random, network_depth_ci_to_co_random,
+                            nodes_to_place_breadth_co_to_ci_random, nodes_to_place_breadth_ci_to_co_random,
+                            nodes_to_place_depth_co_to_ci_random, nodes_to_place_depth_ci_to_co_random);
                     }
                 }
             }
-            const std::array core_objectives = {graph_oriented_layout_design_params::cost_objective::AREA,
-                                                graph_oriented_layout_design_params::cost_objective::WIRES,
-                                                graph_oriented_layout_design_params::cost_objective::CROSSINGS,
-                                                graph_oriented_layout_design_params::cost_objective::ACP};
 
             // batch of 4 SSGs (all combinations of 1 PI location, 2 fanout substitution strategies, and 2
             // topological orderings)

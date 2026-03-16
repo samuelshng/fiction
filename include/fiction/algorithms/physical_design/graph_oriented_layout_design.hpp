@@ -272,6 +272,90 @@ struct graph_oriented_layout_design_stats
      */
     uint64_t num_search_space_graphs{0ull};
     /**
+     * Number of branches that ran out of PI candidate positions.
+     */
+    uint64_t zero_candidate_pis{0ull};
+    /**
+     * Number of branches that ran out of gate candidate positions.
+     */
+    uint64_t zero_candidate_gates{0ull};
+    /**
+     * Number of branches that ran out of PO candidate positions.
+     */
+    uint64_t zero_candidate_pos{0ull};
+    /**
+     * Number of branches that failed while routing a gate.
+     */
+    uint64_t route_failures_gates{0ull};
+    /**
+     * Number of branches that failed while routing a PO.
+     */
+    uint64_t route_failures_pos{0ull};
+    /**
+     * Number of branches pruned because the partial layout violated structural feasibility checks.
+     */
+    uint64_t invalid_layout_prunes{0ull};
+    /**
+     * Zero-based index of the deepest node whose expansion failed.
+     */
+    uint64_t deepest_failed_node_index{0ull};
+    /**
+     * Number of already placed nodes at the deepest failed expansion.
+     */
+    uint64_t deepest_failed_placed_nodes{0ull};
+    /**
+     * Fanin count of the deepest failed node.
+     */
+    uint64_t deepest_failed_fanin_count{0ull};
+    /**
+     * Kind of the deepest failed node, e.g., ``pi``, ``gate``, or ``po``.
+     */
+    std::string deepest_failed_node_kind{"unknown"};
+    /**
+     * Function or subtype of the deepest failed node, e.g., ``and`` or ``fanout``.
+     */
+    std::string deepest_failed_node_function{"unknown"};
+    /**
+     * Reason why the deepest failed expansion was rejected.
+     */
+    std::string deepest_failed_reason{"unknown"};
+    /**
+     * More specific detail about the deepest failed expansion.
+     */
+    std::string deepest_failed_detail{"unknown"};
+    /**
+     * Kind of the frontier node that the search had advanced to when the deepest failure was detected.
+     */
+    std::string deepest_failed_frontier_kind{"unknown"};
+    /**
+     * Function of the frontier node that the search had advanced to when the deepest failure was detected.
+     */
+    std::string deepest_failed_frontier_function{"unknown"};
+    /**
+     * Number of consecutive PI nodes starting at the frontier when the deepest failure was detected.
+     */
+    uint64_t deepest_failed_frontier_pi_run_length{0ull};
+    /**
+     * Kind of the immediate driver of the deepest failed node.
+     */
+    std::string deepest_failed_driver_kind{"unknown"};
+    /**
+     * Function of the immediate driver of the deepest failed node.
+     */
+    std::string deepest_failed_driver_function{"unknown"};
+    /**
+     * Total number of fanouts of the deepest failed node in the scheduled network.
+     */
+    uint64_t deepest_failed_total_successors{0ull};
+    /**
+     * Number of fanouts of the deepest failed node that were already scheduled before the failure point.
+     */
+    uint64_t deepest_failed_placed_successors{0ull};
+    /**
+     * Label of the search-space graph variant in which the deepest failure occurred.
+     */
+    std::string deepest_failed_ssg{"unknown"};
+    /**
      * Reports the statistics to the given output stream.
      *
      * @param out Output stream.
@@ -285,6 +369,24 @@ struct graph_oriented_layout_design_stats
         out << fmt::format("[i] num. crossings  = {}\n", num_crossings);
         out << fmt::format("[i] max placed      = {}\n", max_placed_nodes);
         out << fmt::format("[i] SSGs            = {}\n", num_search_space_graphs);
+        out << fmt::format("[i] zero cand. PIs  = {}\n", zero_candidate_pis);
+        out << fmt::format("[i] zero cand. gates= {}\n", zero_candidate_gates);
+        out << fmt::format("[i] zero cand. POs  = {}\n", zero_candidate_pos);
+        out << fmt::format("[i] route fails gate= {}\n", route_failures_gates);
+        out << fmt::format("[i] route fails PO  = {}\n", route_failures_pos);
+        out << fmt::format("[i] invalid prunes  = {}\n", invalid_layout_prunes);
+        out << fmt::format("[i] deepest fail    = idx {} after {} placed ({} / {}), fanins {}, in '{}'\n",
+                           deepest_failed_node_index, deepest_failed_placed_nodes, deepest_failed_node_kind,
+                           deepest_failed_reason, deepest_failed_fanin_count, deepest_failed_ssg);
+        out << fmt::format("[i] deepest func.   = {}\n", deepest_failed_node_function);
+        out << fmt::format("[i] deepest detail  = {}\n", deepest_failed_detail);
+        out << fmt::format("[i] deepest next    = {} / {}\n", deepest_failed_frontier_kind,
+                           deepest_failed_frontier_function);
+        out << fmt::format("[i] deepest next PI = {}\n", deepest_failed_frontier_pi_run_length);
+        out << fmt::format("[i] deepest driver  = {} / {}\n", deepest_failed_driver_kind,
+                           deepest_failed_driver_function);
+        out << fmt::format("[i] deepest succ.   = {}/{}\n", deepest_failed_placed_successors,
+                           deepest_failed_total_successors);
     }
 };
 
@@ -440,6 +542,14 @@ struct search_space_graph
      * Flag indicating if this graph's frontier is active.
      */
     bool frontier_flag = true;
+    /**
+     * Maximum number of nodes placed by any partial layout explored in this search-space graph.
+     */
+    uint64_t max_placed_nodes = 0ull;
+    /**
+     * Descriptive label of the network/order variant used by this search-space graph.
+     */
+    std::string debug_label{"unlabeled"};
     /**
      * The cost so far for reaching each vertex in the layout.
      */
