@@ -8961,6 +8961,14 @@ R"doc(The current best solution with respect to the number of wire segments,
 initialized to the maximum possible value. This value will be updated
 as better solutions are found.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_branch_failure_reason = R"doc(Reason why a branch expansion failed.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_branch_failure_reason_INVALID_LAYOUT = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_branch_failure_reason_ROUTE_FAILURE = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_branch_failure_reason_ZERO_CANDIDATES = R"doc()doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_calculate_cost = R"doc()doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_calculate_num_search_space_graphs =
@@ -9010,6 +9018,13 @@ Parameter ``candidate``:
 Returns:
     Normalized penalty contribution to the expansion priority.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_calculate_search_depth_pilot_timeout =
+R"doc(Determines how long the large-instance pilot should run before pruning
+to the strongest search-space graph.
+
+Returns:
+    Pilot budget in milliseconds.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_check_path =
 R"doc(Checks if there is a path between the source and destination tiles in
 the given layout.
@@ -9030,6 +9045,44 @@ Parameter ``new_gate_loc``:
 Returns:
     A path from `src` to `dest` if one exists.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_classify_node_function =
+R"doc(Classifies a network node function into a small set of stable
+diagnostic labels.
+
+Parameter ``network``:
+    Network that owns the node.
+
+Parameter ``node``:
+    Node to classify.
+
+Returns:
+    Function label for the node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_classify_node_kind =
+R"doc(Classifies a network node into ``pi``, ``po``, or ``gate`` for
+diagnostic reporting.
+
+Parameter ``network``:
+    Network that owns the node.
+
+Parameter ``node``:
+    Node to classify.
+
+Returns:
+    Coarse node kind.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_collect_fanout_launch_usage =
+R"doc(Collects immediate launch usage for a placed fanout.
+
+Parameter ``layout``:
+    Layout containing the fanout.
+
+Parameter ``source``:
+    Tile of the placed fanout.
+
+Returns:
+    Summary of currently used launch sides.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_collect_multioutput_launch_usage =
 R"doc(Collects immediate launch usage for a placed multi-output gate.
 
@@ -9042,7 +9095,39 @@ Parameter ``source``:
 Returns:
     Summary of currently used launch sides and output pins.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_count_frontier_pi_run_length =
+R"doc(Counts the consecutive PI nodes starting at the current frontier
+position.
+
+Parameter ``ssg``:
+    Search-space graph whose schedule is inspected.
+
+Parameter ``frontier_index``:
+    Zero-based frontier index.
+
+Returns:
+    Number of consecutive PI nodes beginning at ``frontier_index``.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_count_scheduled_successors =
+R"doc(Counts how many fanouts of a node have already been scheduled before
+the current frontier.
+
+Parameter ``ssg``:
+    Search-space graph whose schedule is inspected.
+
+Parameter ``node``:
+    Node whose successors are counted.
+
+Parameter ``frontier_index``:
+    Zero-based frontier index.
+
+Returns:
+    Pair ``{placed, total}`` describing the scheduled and total
+    successors.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_custom_cost_objective = R"doc(Custom cost objective.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_deepest_failure = R"doc(Deepest failed branch observed during the search.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_determine_launch_side =
 R"doc(Determines on which outgoing side a route leaves a source tile.
@@ -9058,6 +9143,95 @@ Parameter ``successor``:
 
 Returns:
     Launch side of the step from `source` to `successor`.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_diagnose_zero_candidates_double_fanin =
+R"doc(Diagnoses why native-hex double-fanin candidate generation produced no
+feasible positions.
+
+This helper mirrors the double-fanin candidate scan and is only used
+on the rare zero-candidate path, which keeps the normal search
+behavior unchanged while providing actionable failure details.
+
+Parameter ``layout``:
+    Current partial layout.
+
+Parameter ``ssg``:
+    Search-space graph containing the active node.
+
+Parameter ``place_info``:
+    Placement context for the active branch.
+
+Parameter ``fc``:
+    Fanin information for the active node.
+
+Returns:
+    A compact summary of rejection counts for the scanned candidate
+    positions.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_estimate_preferred_pi_x =
+R"doc(Estimates a preferred x-coordinate for the current PI from its
+earliest upcoming consumer.
+
+When a PI is placed immediately before a gate that already has another
+fanin anchored in the partial layout, placing the PI near that sibling
+reduces the first gate layer span and avoids wasting the PI search on
+far-away top-row candidates. This is especially important for wide,
+shallow networks on native hex layouts.
+
+Parameter ``ssg``:
+    Current search-space graph.
+
+Parameter ``place_info``:
+    Placement context of the partial layout.
+
+Returns:
+    Preferred x-coordinate if an anchored upcoming consumer exists.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot = R"doc(Snapshot of the deepest failed expansion seen so far.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_detail = R"doc(More specific explanation of the failing feasibility condition.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_driver_function = R"doc(Function of the immediate driver of the failed node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_driver_kind = R"doc(Kind of the immediate driver of the failed node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_fanin_count = R"doc(Fanin count of the failed node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_frontier_function = R"doc(Function of the next node to place when the failure was observed.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_frontier_kind = R"doc(Kind of the next node to place when the failure was observed.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_frontier_pi_run_length =
+R"doc(Number of consecutive PI nodes starting at the frontier when the
+failure was observed.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_mutex = R"doc(Synchronizes updates of the deepest failed-branch snapshot.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_node_function = R"doc(Function or subtype of the failed node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_node_index = R"doc(Zero-based index of the node whose expansion failed.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_node_kind = R"doc(High-level kind of the failed node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_placed_nodes = R"doc(Number of already placed nodes before the failure.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_placed_successors =
+R"doc(Number of already placed fanouts of the failed node when the failure
+was observed.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_reason = R"doc(Failure reason.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_ssg_label = R"doc(Label of the search-space graph where the failure occurred.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_failure_snapshot_total_successors = R"doc(Total number of fanouts of the failed node in the scheduled network.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_fanout_launch_usage = R"doc(Summarizes immediate launch usage of a placed fanout.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_fanout_launch_usage_other_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_fanout_launch_usage_south_east_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_fanout_launch_usage_south_west_fanouts = R"doc()doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_get_possible_positions =
 R"doc(Retrieves the possible positions for a given node in the layout based
@@ -9149,6 +9323,26 @@ Parameter ``p``:
 
 Parameter ``st``:
     The statistics object to record execution details.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_has_distinct_projected_output_exits =
+R"doc(Checks whether a native-hex gate position offers two distinct
+projected future output exits.
+
+Fanouts and 2-output gates require one future branch to leave via
+south-west and another via south-east. On the left boundary, the
+projected south-west neighbor can collapse back onto the gate tile
+itself, making such a position structurally impossible before routing
+is even considered.
+
+Parameter ``layout``:
+    Layout that defines the hex geometry.
+
+Parameter ``center``:
+    Candidate gate position.
+
+Returns:
+    ``True`` if the projected south-west and south-east exits are
+    distinct and both differ from `center`.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_has_path_to_bottom_row =
 R"doc(Retrieves the possible positions for Primary Inputs (PIs) in the given
@@ -9248,6 +9442,10 @@ reordering.
 The value at index `i` stores the preferred rank of the `i`-th PI in
 declaration order.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_invalid_layout_prunes =
+R"doc(Counts how often a partially placed layout failed the structural
+feasibility checks.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_launch_side =
 R"doc(Distinguishes direct launch directions for two-output gates in
 projected pointy-top hex layouts.)doc";
@@ -9323,7 +9521,13 @@ R"doc(In maximum-effort mode, 32 search space graphs are used.
 
 It adds another 16 search space graphs to the 16 search space graphs
 from highest-effort mode using randomized fanout substitution
-strategies and random topological orderings.)doc";
+strategies and random topological orderings.
+
+Unlike the cartesian variant, native hex keeps a smaller search-space
+budget because all SSGs share a single global timeout. More SSGs
+dilute search depth on hard instances such as ``w4a4``. Diversity is
+instead increased by using a distinct random seed for each extra
+objective slot.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_num_search_space_graphs_maximum_effort_custom =
 R"doc(In maximum-effort mode with a custom cost function, 40 search space
@@ -9364,6 +9568,10 @@ Parameter ``ssg``:
 Returns:
     A boolean indicating if a solution was found.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_populate_failure_stats =
+R"doc(Copies the accumulated failed-branch diagnostics into the public
+statistics object.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_preferred_x_order =
 R"doc(Enumerates x coordinates in increasing distance from a preferred
 position.
@@ -9390,9 +9598,46 @@ dimensions.
 Parameter ``lyt``:
     Current layout.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_prune_to_best_search_space_graph =
+R"doc(Prunes the large-instance pilot batch to the deepest-running search-
+space graph.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_ps = R"doc(Parameters.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_pst = R"doc(Statistics.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_record_branch_failure =
+R"doc(Records why a branch expansion failed and updates the deepest observed
+failure snapshot.
+
+Parameter ``ssg``:
+    Search-space graph whose branch failed.
+
+Parameter ``place_info``:
+    Placement context at the failure point.
+
+Parameter ``reason``:
+    Failure reason.
+
+Parameter ``failing_node``:
+    Optional node that triggered the failure. Defaults to the next
+    node to place.
+
+Parameter ``detail``:
+    More specific explanation of the failing condition.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_record_failure_snapshot =
+R"doc(Records why a branch expansion failed and updates the deepest observed
+failure snapshot.
+
+Parameter ``ssg``:
+    Search-space graph whose branch failed.
+
+Parameter ``place_info``:
+    Placement context at the failure point.
+
+Parameter ``reason``:
+    Failure reason.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_route_double_input_node =
 R"doc(Places a node with two inputs in the layout and routes it.
@@ -9409,6 +9654,10 @@ Parameter ``node2pos``:
 
 Parameter ``fc``:
     A vector of nodes that precede the double fanin node.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_route_failures_gates = R"doc(Counts how often routing failed while placing a gate.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_route_failures_pos = R"doc(Counts how often routing failed while placing a PO.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_route_single_input_node =
 R"doc(Places a node with a single input in the layout and routes it.
@@ -9433,9 +9682,35 @@ best found layout.
 Returns:
     The best layout found by the algorithm.)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_search_depth_pruned =
+R"doc(Indicates whether the large-instance pilot run has already been pruned
+to a single search-space graph.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_seed =
 R"doc(Random seed used for random fanout substitution and random topological
 ordering in maximum-effort mode.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_should_prioritize_search_depth =
+R"doc(Determines whether the current native-hex benchmark should spend its
+budget on depth instead of diversity.
+
+Large wide-frontier mapped networks such as ``w4a4`` were spending the
+timeout on 16 or 32 shallow search space graphs and consistently
+timing out before any single search could get close to completion. For
+those instances, native hex GOLD performs materially better when it
+commits to one deep search-space graph.
+
+Returns:
+    ``True`` if native-hex search-space diversity should be reduced in
+    favor of a deeper search.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_should_use_search_depth_pilot =
+R"doc(Determines whether the current run should start with a short large-
+instance pilot before pruning to one SSG.
+
+Returns:
+    ``True`` if a large native-hex benchmark should use the pilot-and-
+    prune strategy.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_ssg_vec = R"doc(Vector of search space graphs.)doc";
 
@@ -9444,6 +9719,15 @@ static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_st
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_timeout = R"doc(Timeout limit (in ms).)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_timeout_limit_reached = R"doc(Timeout limit reached.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_to_string =
+R"doc(Converts a failed-branch reason to a stable string representation.
+
+Parameter ``reason``:
+    Failure reason.
+
+Returns:
+    Human-readable failure reason.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_update_search_stats =
 R"doc(Updates search-progress statistics that are meaningful even without a
@@ -9489,6 +9773,18 @@ Parameter ``place_info``:
 
 Parameter ``ssg``:
     The search space graph.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_zero_candidate_gates =
+R"doc(Counts how often gate candidate generation ran out of feasible
+positions.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_zero_candidate_pis =
+R"doc(Counts how often PI candidate generation ran out of feasible
+positions.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_hex_impl_zero_candidate_pos =
+R"doc(Counts how often PO candidate generation ran out of feasible
+positions.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl =
 R"doc(Implementation of the graph-oriented layout design algorithm. This
@@ -13782,9 +14078,17 @@ static const char *__doc_fiction_detail_search_space_graph_cost = R"doc(The cost
 
 static const char *__doc_fiction_detail_search_space_graph_current_vertex = R"doc(The current vertex in the search space graph.)doc";
 
+static const char *__doc_fiction_detail_search_space_graph_debug_label =
+R"doc(Descriptive label of the network/order variant used by this search-
+space graph.)doc";
+
 static const char *__doc_fiction_detail_search_space_graph_frontier = R"doc(Priority queue containing vertices of the search space graph.)doc";
 
 static const char *__doc_fiction_detail_search_space_graph_frontier_flag = R"doc(Flag indicating if this graph's frontier is active.)doc";
+
+static const char *__doc_fiction_detail_search_space_graph_max_placed_nodes =
+R"doc(Maximum number of nodes placed by any partial layout explored in this
+search-space graph.)doc";
 
 static const char *__doc_fiction_detail_search_space_graph_network = R"doc(The network associated with this search space graph.)doc";
 
@@ -18054,7 +18358,55 @@ static const char *__doc_fiction_graph_oriented_layout_design_stats =
 R"doc(This struct stores statistics about the graph-oriented layout design
 process.)doc";
 
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_detail = R"doc(More specific detail about the deepest failed expansion.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_driver_function = R"doc(Function of the immediate driver of the deepest failed node.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_driver_kind = R"doc(Kind of the immediate driver of the deepest failed node.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_fanin_count = R"doc(Fanin count of the deepest failed node.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_frontier_function =
+R"doc(Function of the frontier node that the search had advanced to when the
+deepest failure was detected.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_frontier_kind =
+R"doc(Kind of the frontier node that the search had advanced to when the
+deepest failure was detected.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_frontier_pi_run_length =
+R"doc(Number of consecutive PI nodes starting at the frontier when the
+deepest failure was detected.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_node_function =
+R"doc(Function or subtype of the deepest failed node, e.g., ``and`` or
+``fanout``.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_node_index = R"doc(Zero-based index of the deepest node whose expansion failed.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_node_kind = R"doc(Kind of the deepest failed node, e.g., ``pi``, ``gate``, or ``po``.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_placed_nodes = R"doc(Number of already placed nodes at the deepest failed expansion.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_placed_successors =
+R"doc(Number of fanouts of the deepest failed node that were already
+scheduled before the failure point.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_reason = R"doc(Reason why the deepest failed expansion was rejected.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_ssg =
+R"doc(Label of the search-space graph variant in which the deepest failure
+occurred.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_deepest_failed_total_successors =
+R"doc(Total number of fanouts of the deepest failed node in the scheduled
+network.)doc";
+
 static const char *__doc_fiction_graph_oriented_layout_design_stats_duration = R"doc(Runtime of the graph-oriented layout design process.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_invalid_layout_prunes =
+R"doc(Number of branches pruned because the partial layout violated
+structural feasibility checks.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_stats_max_placed_nodes =
 R"doc(Maximum number of nodes that were placed in any explored partial
@@ -18074,9 +18426,19 @@ R"doc(Reports the statistics to the given output stream.
 Parameter ``out``:
     Output stream.)doc";
 
+static const char *__doc_fiction_graph_oriented_layout_design_stats_route_failures_gates = R"doc(Number of branches that failed while routing a gate.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_route_failures_pos = R"doc(Number of branches that failed while routing a PO.)doc";
+
 static const char *__doc_fiction_graph_oriented_layout_design_stats_x_size = R"doc(Layout width.)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_stats_y_size = R"doc(Layout height.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_zero_candidate_gates = R"doc(Number of branches that ran out of gate candidate positions.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_zero_candidate_pis = R"doc(Number of branches that ran out of PI candidate positions.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_stats_zero_candidate_pos = R"doc(Number of branches that ran out of PO candidate positions.)doc";
 
 static const char *__doc_fiction_gray_code_iterator =
 R"doc(An iterator type that iterates over Gray code representations for
